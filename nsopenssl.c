@@ -16,7 +16,7 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000-2001 Scott S. Goodwin
+ * Copyright (C) 2000-2002 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 2000 Freddie Mendoza
  * Copyright (C) 1999 Stefan Arentz
