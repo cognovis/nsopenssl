@@ -9,13 +9,6 @@
 # the License for the specific language governing rights and limitations
 # under the License.
 #
-# The Original Code is AOLserver Code and related documentation
-# distributed by AOL.
-#
-# The Initial Developer of the Original Code is America Online,
-# Inc. Portions created by AOL are Copyright (C) 1999 America Online,
-# Inc. All Rights Reserved.
-#
 # Alternatively, the contents of this file may be used under the terms
 # of the GNU General Public License (the "GPL"), in which case the
 # provisions of GPL are applicable instead of those above.  If you wish
@@ -28,13 +21,7 @@
 #
 # Copyright (C) 2001-2003 Scott S. Goodwin
 #
-# Derived from http.tcl, originally written by AOL
-#
 # $Header$
-#
-# nsopenssl --
-#
-#      SSLv2, SSLv3, TLSv1 module using OpenSSL.
 #
 
 # XXX AOLserver 3.x defines this, but AOLserver 4.x uses the install binary
@@ -53,41 +40,25 @@ endif
 #
 VER_ = $(subst .,_,$(VER))
 
-#
-# Module Pretty-name
-#
 MODNAME  = nsopenssl
 
-#
-# Module name
-#
-MOD      =  nsopenssl.so
+LIB      = nsopenssl
+LIBOBJS  = sslcontext.o ssl.o tclcmds.o
+LIBLIBS  = -L$(OPENSSL)/lib -lssl -lcrypto 
 
-#
-# Objects to build
-#
-OBJS     =  nsopenssl.o init.o ssl.o tclcmds.o
+MOD      = nsopenssl.so
+OBJS     = nsopenssl.o
+HDRS     = nsopenssl.h
+MODLIBS  = -L$(OPENSSL)/lib -lssl -lcrypto
 
-#
-# Header files in THIS directory (included with your module)
-#
-HDRS     =  nsopenssl.h
+TCLMOD   = https.tcl
 
 # XXX take out the -g for production
 CFLAGS += -g
 
 #
-# If in TEST
-#
-ifdef TEST
-    OBJS  +=  test.o
-    CFLAGS += -DTEST
-endif
-
-#
 # Extra libraries required by your module (-L and -l go here)
 #
-MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
 
 # Add static compilation ability, per grax3272
 #MODLIBS  =  -L$(OPENSSL)/lib ../openssl-0.9.6g/libssl.a ../openssl-0.9.6g/libcrypto.a#-lssl -lcrypto
@@ -168,6 +139,8 @@ check-env:
 install: all
 	$(RM) $(INSTBIN)/$(MOD)
 	$(CP) $(MOD) $(INSTBIN)
+	$(MKDIR) $(INSTTCL)
+	$(CP) $(TCLMOD) $(INSTTCL)
 
 ## NOTES #################################################################################
 

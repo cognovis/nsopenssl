@@ -115,6 +115,71 @@ gmake CC="gcc -fPIC"
 Configuration Options
 ---------------------
 
+For nsopenssl 3.x, AOLserver 4.x:
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/sslcontexts"
+ns_param vs1_users_ctx        "SSL context used for regular user access"
+ns_param vs1_admins_ctx       "SSL context used for administrator access"
+#ns_param vs1_client_ctx       "SSL context used for outgoing script socket connections"
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/defaults"
+ns_param server               vs1_users_ctx
+#ns_param client               vs1_client_ctx
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/sslcontext/vs1_users_ctx"
+ns_param Role                  server
+#ns_param ModuleDir             /path/to/dir
+ns_param CertFile              server/server.crt
+ns_param KeyFile               server/server.key
+ns_param CADir                 ca-client/dir
+ns_param CAFile                ca-client/ca-client.crt
+ns_param Protocols             "SSLv3, TLSv1"
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param PeerVerify            false
+ns_param PeerVerifyDepth       3
+ns_param Trace                 true
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/sslcontext/vs1_admins_ctx"
+ns_param Role                  server
+#ns_param ModuleDir             /path/to/dir
+ns_param CertFile              server/server.crt
+ns_param KeyFile               server/server.key
+ns_param CADir                 ca-client/dir
+ns_param CAFile                ca-client/ca-client.crt
+#ns_param Protocols             "All"
+ns_param Protocols             "SSLv3, TLSv1"
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param PeerVerify            false
+ns_param PeerVerifyDepth       3
+ns_param Trace                 true
+
+# SSL drivers. Each driver defines a port and a named SSL context to associate
+# with it.
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/ssldrivers"
+ns_param vs1_users_drv            "Driver for vs1 regular user access"
+ns_param vs1_admins_drv           "Driver for vs1 administrator access"
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/ssldriver/vs1_users_drv"
+ns_param sslcontext            vs1_users_ctx
+ns_param port                  7001
+ns_param hostname              $hostname
+ns_param address               $address
+
+ns_section "ns/server/${vs1_servername}/module/nsopenssl/ssldriver/vs1_admins_drv"
+ns_param sslcontext            vs1_admins_ctx
+ns_param port                  7002
+ns_param hostname              $hostname
+ns_param address               $address
+
+#
+# Modules to load
+#
+ns_section "ns/server/${vs1_servername}/modules"
+ns_param   nssock          ${bindir}/nssock${ext}
+ns_param   nslog           ${bindir}/nslog${ext}
+ns_param   nscgi           ${bindir}/nscgi${ext}
+ns_param   nsopenssl       ${bindir}/nsopenssl${ext}
 For versions prior to 2.x:
 
 ns_section "ns/server/${servername}/module/nsopenssl"
@@ -137,8 +202,7 @@ ns_param RandomFile               /some/file
 ns_param SeedBytes                1024
 
 
-For 2.x and above:
-
+For nsopenssl 2.x, AOLserver 3.x:
 
 ns_section "ns/server/${servername}/module/nsopenssl"
 

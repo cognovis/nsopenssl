@@ -1,3 +1,52 @@
+2003-12-24  Scott Goodwin  <scott@scottg.net>
+
+      * all: Lots of cleanup, initializing function variables.
+
+      * sslcontext.c, nsopenssl.c, nsopenssl.h: Added names to mutexes. Added
+      MODULE_SHORT to nsopenssl.h as the mutex name length is limited.
+
+2003-12-13  Scott Goodwin  <scott@scottg.net>
+
+      * ssl.c: Changed NsOpenSSLConnSend to use BIO_write instead of
+      SSL_write. It's crucial that we call BIO_flush after every write or this
+      won't work.
+
+2003-11-24  Scott Goodwin  <scott@scottg.net>
+
+      * ssl.c, nsopenssl.c, tclcmds.c: Fixed problem with SSL conn reference
+      counting; conns are now free'd properly when NsOpenSSLDestroy is called
+      and the conn's reference count is 0. Tagged v3_0_beta_2.
+
+2003-11-22  Scott Goodwin  <scott@scottg.net>
+
+      * all: Stopped passing *module to all functions; nsopenssl must now be
+      called nsopenssl in the config file and nothing else. Merged sslconn.c
+      and sslsock.c into ssl.c. Lots of other cleanups.
+
+2003-11-09  Scott Goodwin  <scott@scottg.net>
+
+      * tclcmds.c: 'ns_openssl info' now returns a string instead of a list.
+
+2003-10-25  Scott Goodwin  <scott@scottg.net>
+
+      * All: Cleaned up SSL context handling, reintegrated
+      Ns_OpenSSLSockConnect, adding SSL context passing ability.
+
+2003-10-23  Scott Goodwin  <scott@scottg.net>
+
+      * https.tcl, Makefile: Added back to the code, modified Makefile to
+      install it.
+
+2003-10-19  Scott Goodwin  <scott@scottg.net>
+
+      * All: Lots of fixes, added mutexs around SSL contexts structures, fixed
+      session cache id generation to be specific to each virtual server.
+
+2003-10-11  Scott Goodwin  <scott@scottg.net>
+
+       * All: Refactored entire codebase by abstracting public functions into
+       libnsopenssl.so/dylib and an nsopenssl.so module.
+
 2003-09-30  Scott Goodwin  <scott@scottg.net>
 
         * All: ripped out all non-comm-driven stuff. nsopenssl module will now

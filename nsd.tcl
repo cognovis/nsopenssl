@@ -30,86 +30,98 @@ ns_param SeedBytes  1024
 # Virtual Server specific nsopenssl configurations
 #
 
-# SSL contexts. Each SSL context is intended to be a complete definition
-# of an SSL instance. An SSL context may be used by multiple drivers,
-# sockservers and sockclients.
+# SSL contexts. Each SSL context is a template that SSL connections are created
+# from.  A single SSL context may be used by multiple drivers, sockservers and
+# sockclients. 
 
-ns_section "ns/server/${servername}/module/nsopenssl/contexts"
-ns_param user                  "SSL context used for regular user access"
-ns_param admin                 "SSL context used for administrator access"
+ns_section "ns/server/${servername}/module/nsopenssl/sslcontexts"
+ns_param users        "SSL context used for regular user access"
+ns_param admins       "SSL context used for administrator access"
+ns_param client       "SSL context used for outgoing script socket connections"
 
-ns_section "ns/server/${servername}/module/nsopenssl/context/user"
-ns_param Role                  server                                             # mandatory
-ns_param ModuleDir             /path/to/dir                                       # default
-ns_param CertFile              servercertfile.pem                                 # mandatory
-ns_param KeyFile               serverkeyfile.pem                                  # mandatory
-ns_param CADir                 serverca                                           # default
-ns_param CAFile                serverca.pem                                       # default
-ns_param Protocols             "SSLv2, SSLv3, TLSv1"                              # default
-ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"  # default
-ns_param PeerVerify            false                                              # default
-ns_param PeerVerifyDepth       3                                                  # default
-ns_param Trace                 false                                              # default
-ns_param SessionCache          true                                               # default
-ns_param SessionCacheSize      128                                                # default
-ns_param SessionCacheTimeout   300                                                # default
+# We explicitly tell the server which SSL contexts to use as defaults when an
+# SSL context is not specified for a particular client or server SSL
+# connection. Driver connections do not use defaults; they must be explicitly
+# specificied in the driver section. The Tcl API will use the defaults as there
+# is currently no provision to specify which SSL context to use for a
+# particular connection via an ns_openssl Tcl command.
 
-ns_section "ns/server/${servername}/module/nsopenssl/context/admin"
+ns_section "ns/server/${servername}/module/nsopenssl/defaults"
+ns_param server               users
+ns_param client               client
+
+ns_section "ns/server/${servername}/module/nsopenssl/sslcontext/users"
 ns_param Role                  server
-ns_param ModuleDir             /path/to/dir
-ns_param CertFile              servercertfile.pem
-ns_param KeyFile               serverkeyfile.pem
-ns_param CADir                 serverca
-ns_param CAFile                serverca.pem
-ns_param Protocols             "SSLv2, SSLv3, TLSv1"
-ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+#ns_param ModuleDir             /path/to/dir
+ns_param CertFile              server/server.crt 
+ns_param KeyFile               server/server.key 
+ns_param CADir                 ca-client/dir
+ns_param CAFile                ca-client/ca-client.crt
+ns_param Protocols             "SSLv3, TLSv1" 
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP" 
 ns_param PeerVerify            false
 ns_param PeerVerifyDepth       3
 ns_param Trace                 false
-ns_param SessionCache          true
-ns_param SessionCacheSize      128
-ns_param SessionCacheTimeout   300
 
-ns_section "ns/server/${servername}/module/nsopenssl/context/sockclient"
-ns_param Role                  client
-ns_param ModuleDir             /path/to/dir
-ns_param CertFile              clientcertfile.pem
-ns_param KeyFile               clientkeyfile.pem
-ns_param CADir                 clientca
-ns_param CAFile                clientca.pem
-ns_param Protocols             "SSLv2, SSLv3, TLSv1"
-ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
-ns_param PeerVerify            true
+ns_section "ns/server/${servername}/module/nsopenssl/sslcontext/admins"
+ns_param Role                  server
+#ns_param ModuleDir             /path/to/dir
+ns_param CertFile              server/server.crt 
+ns_param KeyFile               server/server.key 
+ns_param CADir                 ca-client/dir 
+ns_param CAFile                ca-client/ca-client.crt
+ns_param Protocols             "All"
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP" 
+ns_param PeerVerify            false
 ns_param PeerVerifyDepth       3
 ns_param Trace                 false
-ns_param SessionCache          true
-ns_param SessionCacheSize      128
-ns_param SessionCacheTimeout   300
 
-# SSL drivers. Each driver defines a port and a named SSL context to associate
-# with it.
+ns_section "ns/server/${servername}/module/nsopenssl/sslcontext/client"
+ns_param Role                  client
+#ns_param ModuleDir             /path/to/dir
+ns_param CertFile              client/client.crt 
+ns_param KeyFile               client/client.key 
+ns_param CADir                 ca-server/dir 
+ns_param CAFile                ca-server/ca-server.crt
+ns_param Protocols             "SSLv2, SSLv3, TLSv1" 
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP" 
+ns_param PeerVerify            false
+ns_param PeerVerifyDepth       3
+ns_param Trace                 false
 
-ns_section "ns/server/${servername}/module/nsopenssl/contexts"
-ns_param users                 "Driver for regular user access"
-ns_param admins                "Driver for administrator access"
+# SSL drivers. Each driver defines a port to listen on and an explitictly named
+# SSL context to associate with it. Note that you can now have multiple driver
+# connections within a single virtual server, which can be tied to different
+# SSL contexts. Isn't that cool?
 
-ns_section "ns/server/${servername}/module/nsopenssl/driver/users"
-ns_param context               user
-ns_param port                  443
-ns_param hostname              127.0.0.1
-ns_param address               127.0.0.1
+ns_section "ns/server/${servername}/module/nsopenssl/ssldrivers"
+ns_param users         "Driver for regular user access"
+ns_param admins        "Driver for administrator access"
 
-ns_section "ns/server/${servername}/module/nsopenssl/driver/admins"
-ns_param context               admin
-ns_param port                  8443
-ns_param hostname              127.0.0.1
-ns_param address               127.0.0.1
+ns_section "ns/server/${servername}/module/nsopenssl/ssldriver/users"
+ns_param sslcontext            users
+ns_param port                  $httpsport_users
+ns_param hostname              $hostname
+ns_param address               $address
+
+ns_section "ns/server/${servername}/module/nsopenssl/ssldriver/admins"
+ns_param sslcontext            admins
+ns_param port                  $httpsport_admins
+ns_param hostname              $hostname
+ns_param address               $address
+
+#
+# Modules to load
+#
+ns_section "ns/server/${servername}/modules"
+...
+ns_param   nsopenssl       ${bindir}/nsopenssl${ext}
 
 
 
 ###############################################################################
 #
-# DEPRECATED: nsopenssl version 2.x configuration
+# nsopenssl version 2.x configuration
 #
 
 ns_section "ns/server/${servername}/module/nsopenssl"
