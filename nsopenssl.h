@@ -83,9 +83,10 @@ endif
 
 /*
  * Defaults
+ * XXX push this out to a separate defaults.h file ???
  */
 
-#define MODULE                   "nsopenssl"
+#define MODULE                         "nsopenssl"
 #define DEFAULT_PORT                   443
 #define DEFAULT_PROTOCOL               "https"
 #define ROLE_SERVER                    "server"
@@ -206,6 +207,8 @@ typedef struct Server {
     Tcl_HashTable      ssldrivers;
     Ns_OpenSSLConn    *firstOutgoingSSLConnPtr; /* Tcl API managed client conns */
     Ns_OpenSSLConn    *firstIncomingSSLConnPtr; /* Tcl API managed server conns */
+    char              *defaultservercontext;
+    char              *defaultclientcontext;
     Ns_Mutex          *lock;
 } Server;
 
@@ -269,7 +272,7 @@ extern int Ns_OpenSSLFetchURL (Ns_DString *page, char *url,
 		Ns_Set *headers);
 extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn);
 extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, 
-        int port, int async, int timeout);
+        int port, int async, int timeout, Ns_OpenSSLContext *sslcontext);
 extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
 extern SOCKET Ns_OpenSSLSockListen (char *addr, int port);
 extern int Ns_OpenSSLSockCallback (SOCKET sock, 

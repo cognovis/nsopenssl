@@ -52,14 +52,13 @@ typedef struct Callback {
 } Callback;
 
 /*
- * Local Functions
+ * Local functions defined in this file.
  */
 
 static void SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name);
 static void SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj);
 static char *ValidTime(ASN1_UTCTIME *tm);
 static char *PEMCertificate(X509 *peercert);
-static Ns_OpenSSLConn *NsOpenSSLGetConn(Tcl_Interp *interp);
 
 static int CreateTclChannel(Ns_OpenSSLConn *sslconn, Tcl_Interp *interp);
 static int ChanCloseProc(ClientData arg, Tcl_Interp *interp);
@@ -89,12 +88,17 @@ static void AppendReadyFiles(Tcl_Interp *interp, fd_set *pset, int write,
 static int SSLSockSetBlocking(char *value, Tcl_Interp *interp, int argc,
 			       char **argv);
 
-static Ns_SockProc NsTclSSLSockProc;
-static Ns_SockProc SSLSockListenCallback;
 static int NsTclEval(Tcl_Interp *interp, char *script);
 
+/*
+ * Local variables defined in this file.
+ */
+
+static Ns_SockProc NsTclSSLSockProc;
+static Ns_SockProc SSLSockListenCallback;
+
 /* 
- * We define our own Tcl channel so that we can use Tcl gets, puts and friends 
+ * Define our own Tcl channel; this let's us use Tcl gets, puts and friends 
  */
 
 static Tcl_ChannelType opensslChannelType = {
@@ -123,10 +127,12 @@ typedef struct TclCmd {
 static Ns_TclInterpInitProc AddCmds;
 
 /* XXX can i preload the iso8859-1 char set before any ns_openssl commands are called? */
-/* XXX if I don't, there is a slight delay while the server loads it */
+/* XXX if I don't, there is a slight delay while the server loads it on first conn */
 
 static TclCmd nsopensslCmds[] = {
+#if 0
     {"ns_openssl_conn", NsTclOpenSSLConnCmd, (ClientData) NULL},
+#endif
     {"ns_openssl", NsTclOpenSSLCmd, (ClientData) NULL},
     {"ns_openssl_sockopen", NsTclSSLSockOpenCmd, (ClientData) NULL},
     {"ns_openssl_geturl", NsTclSSLGetUrlCmd, (ClientData) NULL},
@@ -218,6 +224,8 @@ AddCmds(Tcl_Interp *interp, void *arg)
  *----------------------------------------------------------------------
  */
 
+#if 0
+
 int
 NsTclOpenSSLConnCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
 {
@@ -259,6 +267,7 @@ NsTclOpenSSLConnCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
         return TCL_ERROR;
     }
 }
+#endif
 
 
 /*
@@ -266,8 +275,8 @@ NsTclOpenSSLConnCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
  *
  * NsTclOpenSSLCmd --
  *
- *      Returns information about clients connected to the nsopenssl
- *      server, including client certificates.
+ *      Implements ns_openssl command, which returns information about clients
+ *      connected to the nsopenssl server, including client certificates.
  *
  * Results:
  *      Tcl string result.
@@ -281,16 +290,18 @@ NsTclOpenSSLConnCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
 int
 NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
 {
-    Ns_OpenSSLConn *sslconn;
-    X509 *peercert;
-    SSL_CIPHER *cipher;
-    char *string;
-    int integer;
-    int status = TCL_OK;
+    Ns_OpenSSLConn *sslconn = NULL;
+    X509 *peercert          = NULL;
+    SSL_CIPHER *cipher      = NULL;
+    Ns_Conn *conn           = NULL;
+    char *string            = NULL;
+    char *name              = NULL;
+    int integer             = 0;
+    int status              = TCL_OK;
 
     if (argc < 2) {
         Tcl_AppendResult(interp, "wrong # args:  should be \"",
-        argv[0], " command \"", NULL);
+            argv[0], " command \"", NULL);
         return TCL_ERROR;
     }
 
@@ -307,17 +318,28 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
     }
 
     /* 
-     * The rest of the commands require an active connection
+     * AOLserver stashes a pointer to the conn in the interp. We then use that
+     * to get a pointer to our SSL conn through the core driver's context.  At
+     * this moment, only comm-driven connections can use these commands. SSL
+     * connections that you generate with nsopenssl's Tcl API cannot use these
+     * commands. This will change in the next version.
      */
 
-    sslconn = NsOpenSSLGetConn(interp);
+    conn = Ns_TclGetConn(interp);
+    if (conn != NULL) {
+        name = Ns_ConnDriverName(conn);
+        if (name != NULL && STREQ(name, MODULE)) {
+            sslconn = (Ns_OpenSSLConn *) Ns_ConnDriverContext(conn);
+        }
+    }
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "no SSL connection", NULL);
         return TCL_ERROR;
     }
 
     /*
-     * ns_openssl module name
+     * Implement:
+     # ns_openssl module name
      * ns_openssl module port
      */
 
@@ -333,6 +355,7 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
         }
 
     /*
+     * Implement:
      * ns_openssl protocol
      */
 
@@ -354,6 +377,7 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
         Tcl_SetResult(interp, string, TCL_VOLATILE);
 
     /*
+     * Implement:
      * ns_openssl port
      * ns_openssl peerport
      */
@@ -362,6 +386,7 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
         sprintf(interp->result, "%d", sslconn->peerport);
 
     /*
+     * Implement:
      * ns_openssl cipher name
      * ns_openssl cipher strength
      */
@@ -390,6 +415,7 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
         }
 
     /*
+     * Implement:
      * ns_openssl clientcert exists
      * ns_openssl clientcert version
      * ns_openssl clientcert serial
@@ -552,7 +578,8 @@ NsTclOpenSSLCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
  *
  * NsTclSSLSockOpenCmd --
  *
- *	Open a tcp connection to a host/port via SSL. 
+ *	Implements ns_openssl_sockopen, which Opens a TCP/IP connection to the
+ *	given host and port via SSL. 
  *
  * Results:
  *	Tcl result. 
@@ -586,6 +613,7 @@ NsTclSSLSockOpenCmd(ClientData arg, Tcl_Interp* interp, int argc,
     if (argc == 4) {
 
         /*
+         * Implements:
          * ns_sockopen -nonblock host port
          */
 
@@ -598,17 +626,18 @@ NsTclSSLSockOpenCmd(ClientData arg, Tcl_Interp* interp, int argc,
         }
         first = 2;
         async = 1;
+
     } else if (argc == 5) {
 
         /*
+         * Implements:
          * ns_sockopen -timeout seconds host port
          */
 
         if (!STREQ(argv[1], "-timeout")) {
             Tcl_AppendResult(interp, "wrong # args: should be \"",
-            argv[0],
-            " ?-nonblock|-timeout seconds? host port\"",
-            NULL);
+                argv[0], " ?-nonblock|-timeout seconds? host port\"",
+                NULL);
             return TCL_ERROR;
         }
         if (Tcl_GetInt(interp, argv[2], &timeout) != TCL_OK) {
@@ -624,10 +653,10 @@ NsTclSSLSockOpenCmd(ClientData arg, Tcl_Interp* interp, int argc,
      * Perform the connection.
      */
 
-    sslconn = Ns_OpenSSLSockConnect(argv[first], port, async, timeout);
+    sslconn = Ns_OpenSSLSockConnect(argv[first], port, async, timeout, NULL);
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "could not connect to \"",
-        argv[first], ":", argv[first + 1], "\"", NULL);
+            argv[first], ":", argv[first + 1], "\"", NULL);
         return TCL_ERROR;
     }
 
@@ -656,7 +685,8 @@ NsTclSSLSockOpenCmd(ClientData arg, Tcl_Interp* interp, int argc,
  *
  * NsTclSSLSockListenCmd --
  *
- *      Listen on a TCP port.
+ *      Implements ns_openssl_socklisten, which listens on the given interface
+ *      and port for incoming connections..
  *
  * Results:
  *      Tcl result.
@@ -702,7 +732,8 @@ NsTclSSLSockListenCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLSockAcceptCmd --
  *
- *      Accept a connection from a listening socket.
+ *      Implements ns_openssl_sockaccept, which accepts a connection from a
+ *      listening socket.
  *
  * Results:
  *      Tcl result.
@@ -769,7 +800,9 @@ NsTclSSLSockAcceptCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLGetUrlCmd --
  *
- *      Implements ns_geturl.
+ *      Implements ns_openssl_geturl, which opens an SSL connection to a URL,
+ *      retrieves the page and returns it as a Tcl string. Uses
+ *      Ns_OpenSSLFetchPage to do the work.
  *
  * Results:
  *      Tcl result.
@@ -836,8 +869,8 @@ done:
  *
  * NsTclSSLSockNReadCmd --
  *
- *      Gets the number of bytes that a socket has waiting to be
- *      read.
+ *      Implements ns_openssl_socknread command, which lets the number of bytes
+ *      that a socket has waiting to be read.
  *
  * Results:
  *      Tcl result.
@@ -882,7 +915,8 @@ NsTclSSLSockNReadCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLSockCheckCmd --
  *
- *      Check if a socket is still connected, useful for nonblocking.
+ *      Implements ns_openssl_sockcheck, which checks to see if a socket is
+ *      still connected (useful for non-blocking connections)..
  *
  * Results:
  *      Tcl result.
@@ -922,8 +956,7 @@ NsTclSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLSelectCmd --
  *
- *      Imlements ns_sockselect: basically a tcl version of
- *      select(2).
+ *      Imlements ns_openssl_sockselect, basically a Tcl version of select(2).
  *
  * Results:
  *      Tcl result.
@@ -1075,8 +1108,8 @@ done:
  *
  * NsTclSSLSockCallbackCmd --
  *
- *      Register a Tcl callback to be run when a certain state exists
- *      on a socket.
+ *      Implements ns_openssl_sockcallback, which registers a Tcl callback to
+ *      be run when a certain state exists on the socket.
  *
  * Results:
  *      Tcl result.
@@ -1163,7 +1196,8 @@ NsTclSSLSockCallbackCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLSockListenCallbackCmd --
  *
- *      Listen on a socket and register a callback to run when
+ *      Implements ns_openssl_socklistencallback command, which listens on a
+ *      socket and registers a callback to run when
  *      connections arrive.
  *
  * Results:
@@ -1210,7 +1244,7 @@ NsTclSSLSockListenCallbackCmd(ClientData arg, Tcl_Interp *interp,
  *
  * NsTclSSLSockSetBlockingCmd --
  *
- *      Sets a socket blocking.
+ *      Implements ns_openssl_sockblocking, which Sets a socket blocking.
  *
  * Results:
  *      Tcl result.
@@ -1234,7 +1268,8 @@ NsTclSSLSockSetBlockingCmd(ClientData arg, Tcl_Interp *interp, int argc,
  *
  * NsTclSSLSockSetNonBlockingCmd --
  *
- *      Sets a socket nonblocking.
+ *      Implements ns_openssl_socknonblocking command which sets a socket
+ *      nonblocking.
  *
  * Results:
  *      Tcl result.
@@ -1312,51 +1347,6 @@ NsTclSSLSockProc(SOCKET sock, void *arg, int why)
         return NS_FALSE;
     }
     return NS_TRUE;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * NsOpenSSLGetConn --
- *
- *      Return the SSL connection struct for the current connection.
- *
- * Results:
- *      Ns_OpenSSLConn* or NULL.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-static Ns_OpenSSLConn *
-NsOpenSSLGetConn(Tcl_Interp *interp)
-{
-    Ns_Conn *conn;
-    char *name;
-
-    /*
-     * AOLserver stashes a pointer to the conn in the interp. We then 
-     * use that to get a pointer to our SSL conn through the core driver's
-     * context.
-     */
-
-    conn = Ns_TclGetConn(interp);
-    if (conn != NULL) {
-        name = Ns_ConnDriverName(conn);
-        if (name != NULL && STREQ(name, MODULE)) {
-            return (Ns_OpenSSLConn *) Ns_ConnDriverContext(conn);
-        }
-    }
-
-    /*
-     * ...but, that only works if the connection is driven by the core server.
-     * If it isn't...hmm, I need to figure this one out...
-     */
-
-    return NULL;
 }
 
 

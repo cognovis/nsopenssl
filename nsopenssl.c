@@ -129,10 +129,13 @@ Ns_ModuleInit(char *server, char *module)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout)
+Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout,
+                      Ns_OpenSSLContext *sslcontext)
 {
     Ns_OpenSSLConn *sslconn;
+#if 0
     Ns_OpenSSLContext *sslcontext;
+#endif
     SOCKET sock;
 
     if (timeout < 0) {
@@ -144,8 +147,18 @@ Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout)
     if (sock == INVALID_SOCKET)
         return NULL;
 
-    /* XXX add code to use default SSL context if it exists */
-   
+    /*
+     * If we didn't specify an SSL context, return an error.
+     */
+  
+    if (sslcontext == NULL) {
+        /* XXX add code to use default SSL context if it exists */
+        /* XXX need to put server name in log output */
+        Ns_Log(Error, "%s: cannot create SSL connection: no SSL context was specified",
+            MODULE);
+        return NULL;
+    }
+
     if ((sslconn = NsOpenSSLConnCreate(sock, NULL, sslcontext)) == NULL) {
         return NULL;
     }
@@ -1719,7 +1732,7 @@ Ns_OpenSSLFetchURL(Ns_DString *page, char *url, Ns_Set *headers)
     if (request->port == 0) {
 	request->port = 443;
     }
-    sslconn = Ns_OpenSSLSockConnect(request->host, request->port, 0, 300);
+    sslconn = Ns_OpenSSLSockConnect(request->host, request->port, 0, 300, NULL);
             /* XXX try to get the server name into the log message */
     if (sslconn == NULL) {
 	Ns_Log(Error, "%s: Ns_OpenSSLFetchURL failed to connect to '%s'", MODULE, url);

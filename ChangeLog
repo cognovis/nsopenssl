@@ -1,3 +1,8 @@
+2003-09-29  Scott Goodwin  <scott@scottg.net>
+
+        * init.c, nsopenssl.h: added default SSL contexts section and
+        modified to read from config file..
+
 2003-08-21  Scott Goodwin  <scott@scottg.net>
 
         * all: Added Ns_OpenSSLContextInit, Ns_OpenSSLContextRelease and other

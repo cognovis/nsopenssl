@@ -34,6 +34,9 @@
 
 #include "nsopenssl.h"
 
+/*
+ * Local functions defined in this file.
+ */
 
 static int InitOpenSSL(void);
 static int SeedPRNG(void);
@@ -63,10 +66,17 @@ static int ServerStateSSLDriverAdd(char *server, char *module, NsOpenSSLDriver *
 static Ns_OpenSSLContext *ServerStateSSLContextGet(char *server, char *module, char *name);
 
 
-/* Callback used by core NSD */
-static Ns_DriverProc OpenSSLProc;
+/*
+ * Static variables defined in this file.
+ */
 
-/* XXX These are global definitions */
+static Ns_Tls tls_sslconn;
+static Ns_DriverProc OpenSSLProc; /* Callback used by core NSD */
+
+/*
+ * Global variables defined for entire module.
+ */
+
 Tcl_HashTable NsOpenSSLServers;
 NsOpenSSLSessionCacheId *nextSessionCacheId;
 
@@ -167,6 +177,8 @@ ServerStateInit(char *server, char *module)
     Tcl_SetHashValue(hPtr, thisServer);
     Tcl_InitHashTable(&thisServer->sslcontexts, TCL_STRING_KEYS);
     Tcl_InitHashTable(&thisServer->ssldrivers, TCL_STRING_KEYS);
+    thisServer->defaultservercontext = NULL;
+    thisServer->defaultclientcontext = NULL;
     return;
 }
 
@@ -331,9 +343,10 @@ static void
 LoadSSLContexts(char *server, char *module)
 {
     Ns_OpenSSLContext *sslcontext;
-    Ns_Set *sslcontexts;
-    char *path, *name;
+    Ns_Set *sslcontexts, *defaults;
+    char *path, *name, *value;
     int i;
+    Server *thisServer = ServerStateGet(server, module);
 
     path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
     sslcontexts = Ns_ConfigGetSection(path);
@@ -360,6 +373,39 @@ LoadSSLContexts(char *server, char *module)
             }
         }
     }
+
+    /*
+     * Get defaults server and client contexts
+     */
+
+    path = Ns_ConfigGetPath(server, module, "defaults", NULL);
+    defaults = Ns_ConfigGetSection(path);
+
+    if (defaults == NULL) {
+        Ns_Log(Notice, "%s: %s: no default SSL contexts defined for this server", 
+                server, MODULE);
+        return;
+    } else {
+        for (i = 0; i < Ns_SetSize(defaults); ++i) {
+            name = Ns_SetKey(defaults, i);
+            value = Ns_ConfigGetValue(path, name);
+            Ns_Log(Notice, "%s: %s: default SSL context for %s is %s", 
+                MODULE, server, name, value);
+            if (STREQ(name, "server")) {
+                thisServer->defaultservercontext = strdup(value);
+            } else if (STREQ(name, "client")) {
+                thisServer->defaultclientcontext = strdup(value);
+            } else {
+                Ns_Log(Error, "%s: %s: bad parameter '%s' for default contexts",
+                    MODULE, server, name);
+            }
+        }
+    }
+    /* XXX remove these debug statements */
+    Ns_Log(Debug, "***  default SSL context for server is %s", 
+                thisServer->defaultservercontext);
+    Ns_Log(Debug, "***  default SSL context for client is %s", 
+                thisServer->defaultclientcontext);
 }
 
 
