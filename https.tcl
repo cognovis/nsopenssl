@@ -221,15 +221,21 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     # shouldn't.
     #
 
+    ns_log warning "TYPE=$type"
+    set boundary "----------------------------173856392039582"
+
     if {[string match "" $rqset]} { 
 	set rqset [ns_set new rqset]
 	ns_set put $rqset "Accept" "*/*\r"
 	ns_set put $rqset "User-Agent" "[ns_info name]-Tcl/[ns_info version]\r"
     }
+
     if {$type == ""} {
-	ns_set put $rqset "Content-type" "application/x-www-form-urlencoded"
+	ns_set put $rqset "Content-type" "application/x-www-form-urlencoded\r"
+    } elseif {$type == "multipart/form-data"} {
+	ns_set put $rqset "Content-type" "multipart/form-data, boundary=$boundary\r"
     } else {
-	ns_set put $rqset "Content-type" "$type"
+	ns_set put $rqset "Content-type" "$type\r"
     }
 
     #
@@ -237,20 +243,39 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     #
 
     set querystring ""
-    if {![string match "" $qsset]} {
-	for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
-	    set key [ns_set key $qsset $i]
-	    set value [ns_set value $qsset $i]
-	    if { $i > 0 } {
-		append querystring "&"
+
+    if {$type == "multipart/form-data"} {
+	if {![string match "" $qsset]} {
+	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
+		set key [ns_set key $qsset $i]
+		set value [ns_set value $qsset $i]
+		append querystring "--${boundary}\n"
+		append querystring "Content-Disposition: form-data; name=\"$key\"\n\n"
+		append querystring "$value\n"
 	    }
-	    append querystring "$key=[ns_urlencode $value]"
+	    append querystring "${boundary}--"
+	    ns_log notice "QS that will be sent is\n$querystring\n"
+	    ns_set put $rqset "Content-length" [string length $querystring]
+	} else {
+	    ns_log notice "QS string is empty"
+	    ns_set put $rqset "Content-length" "0"
 	}
-	ns_log notice "QS that will be sent is $querystring"
-	ns_set put $rqset "Content-length" [string length $querystring]
     } else {
-	ns_log notice "QS string is empty"
-	ns_set put $rqset "Content-length" "0"
+	if {![string match "" $qsset]} {
+	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
+		set key [ns_set key $qsset $i]
+		set value [ns_set value $qsset $i]
+		if { $i > 0 } {
+		    append querystring "&"
+		}
+		append querystring "$key=[ns_urlencode $value]"
+	    }
+	    ns_log notice "QS that will be sent is\n$querystring\n"
+	    ns_set put $rqset "Content-length" [string length $querystring]
+	} else {
+	    ns_log notice "QS string is empty"
+	    ns_set put $rqset "Content-length" "0"
+	}
     }
 
     #

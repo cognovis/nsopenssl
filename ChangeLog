@@ -1,5 +1,8 @@
 2001-10-13  Scott S. Goodwin  <scott@scottg.net>
 
+	* https.tcl: Added ability for ns_httpspost to do
+	multiport/form-data. (Not Yet Tested!!!).
+
 	* ssl.c: The NsOpenSSLSend function simply did an
 	SSL_write. Robert Spassky Cabacungan found that this wasn't
 	working for long file transfers. Specifically, in his own words:
