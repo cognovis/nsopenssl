@@ -50,12 +50,21 @@ HDRS     =
 #
 # Extra libraries required by your module (-L and -l go here)
 #
-MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto
+ifndef BSAFE
+MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
+else
+MODLIBS  =  -L$(OPENSSL)/lib -L$(BSAFE)/lib -lssl -lcrypto -lBSAFEglue -lcrypto -lbsafe -lBSAFEglue
+endif
 
 #
 # Compiler flags required by your module (-I for external headers goes here)
 #
 CFLAGS   =  -I$(OPENSSL)/include
+
+#
+# If you compiled OpenSSL without rc2, rc4, rc5 and idea, then use this instead
+#
+#CFLAGS   =  -I$(OPENSSL)/include -DNO_RC2 -DNO_RC4 -DNO_RC5 -DNO_IDEA 
 
 
 include  $(NSHOME)/include/Makefile.module
