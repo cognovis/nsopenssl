@@ -692,7 +692,7 @@ static int
 NsSSLInterpInit (Tcl_Interp * interp, void *ignored)
 {
 
-    Tcl_CreateCommand (interp, "ssl", SSLCmd, NULL, NULL);
+    Tcl_CreateCommand (interp, "ns_openssl", SSLCmd, NULL, NULL);
 
     return NS_OK;
 }

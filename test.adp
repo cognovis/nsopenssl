@@ -16,49 +16,49 @@
 
 
 <tr><td><font color=red>SSL INFO</font></td><td>
-<%=[ssl info]%>
+<%=[ns_openssl info]%>
 </td></tr>
 
 <tr><td><font color=red>CLIENT CERT VERSION</font></td><td>
-<%=[ssl clientcert version]%>
+<%=[ns_openssl clientcert version]%>
 </td></tr>
 
 <tr><td><font color=red>SERIAL NUMBER</font></td><td>
-<%=[ssl clientcert serial]%>
+<%=[ns_openssl clientcert serial]%>
 </td></tr>
 
 <tr><td><font color=red>SUBJECT</font></td><td>
 <%
-  set var [ssl clientcert subject]
+  set var [ns_openssl clientcert subject]
   ns_puts "$var"
 %>
 </td></tr>
 
 <tr><td><font color=red>ISSUER</font></td><td>
 <%
-  set var [ssl clientcert issuer]
+  set var [ns_openssl clientcert issuer]
   ns_puts "$var"
 %>
 </td></tr>
 
 <tr><td><font color=red>NOT BEFORE</font></td><td>
-<%=[ssl clientcert notbefore]%>
+<%=[ns_openssl clientcert notbefore]%>
 </td></tr>
 
 <tr><td><font color=red>NOT AFTER</font></td><td>
-<%=[ssl clientcert notafter]%>
+<%=[ns_openssl clientcert notafter]%>
 </td></tr>
 
 <tr><td><font color=red>SIGNATURE ALGORITHM</font></td><td>
-<%=[ssl clientcert signature_algorithm]%>
+<%=[ns_openssl clientcert signature_algorithm]%>
 </td></tr>
 
 <tr><td><font color=red>KEY ALGORITHM</font></td><td>
-<%=[ssl clientcert key_algorithm]%>
+<%=[ns_openssl clientcert key_algorithm]%>
 </td></tr>
 
 <tr><td><font color=red>PEM Certificate</font></td><td>
-<%=[ssl clientcert pem]%>
+<%=[ns_openssl clientcert pem]%>
 </td></tr>
 
 </table>
