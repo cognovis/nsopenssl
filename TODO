@@ -22,8 +22,10 @@ nsopenssl 4.0 release:
     only do this with core driver conns.
   - Change version number scheme to match AOLserver
   - Review PRNG code
-  - Ignore any ciphers or protocols listed in config that weren't compiled into OpenSSL library
+  - Ignore any ciphers or protocols listed in config that weren't compiled into
+    OpenSSL library
   - Add benchmarking/performance testing
+  - Figure out how to work with keepalive
 
 
 General Wish List:

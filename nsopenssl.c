@@ -178,6 +178,34 @@ Ns_ModuleInit(char *server, char *module)
     return NS_OK;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsOpenSSLDebug --
+ *
+ *    Write message to log file. When not in debug mode, no logging is done,
+ *    function just returns.
+ *
+ *----------------------------------------------------------------------
+ */
+
+#if 0
+extern void
+NsOpenSSLDebug(char *fmt, ...)
+{
+    va_list ap;
+    Ns_LogSeverity severity = "Debug";
+    char buf[1000];
+
+    //va_start(ap, fmt);
+    sprintf(&buf, fmt, ap);
+    Ns_Log(severity, &buf);
+    //va_end(ap);
+
+}
+#endif
+
+
 
 /*
  *----------------------------------------------------------------------

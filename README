@@ -120,11 +120,11 @@ For nsopenssl 3.x, AOLserver 4.x:
 ns_section "ns/server/${vs1_servername}/module/nsopenssl/sslcontexts"
 ns_param vs1_users_ctx        "SSL context used for regular user access"
 ns_param vs1_admins_ctx       "SSL context used for administrator access"
-#ns_param vs1_client_ctx       "SSL context used for outgoing script socket connections"
+ns_param vs1_client_ctx       "SSL context used for outgoing script socket connections"
 
 ns_section "ns/server/${vs1_servername}/module/nsopenssl/defaults"
 ns_param server               vs1_users_ctx
-#ns_param client               vs1_client_ctx
+ns_param client               vs1_client_ctx
 
 ns_section "ns/server/${vs1_servername}/module/nsopenssl/sslcontext/vs1_users_ctx"
 ns_param Role                  server
@@ -203,7 +203,7 @@ ns_param SeedBytes                1024
 
 
 For nsopenssl 2.x, AOLserver 3.x:
-
+----------------------------------------------------------------
 ns_section "ns/server/${servername}/module/nsopenssl"
 
 # NSD-driven connections:

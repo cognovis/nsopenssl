@@ -368,3 +368,10 @@ NsOpenSSLContextTraceGet(char *server, NsOpenSSLContext *sslcontext);
 extern int 
 NsOpenSSLModuleInit(char *server);
 
+
+#if 0
+/* XXX debug log */
+extern void
+NsOpenSSLDebug(char *fmt, ...);
+#endif
+
