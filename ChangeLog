@@ -1,6 +1,6 @@
 2001-06-12  Scott S. Goodwin  <scott@scottg.net>
 
-	* all: prefixed functions that are server-specific with "Server"
+	* init.c: prefixed functions that are server-specific with "Server"
 	to make room for the upcoming client functions.
 
 	* nsopenssl-client-test.htm: added this file to test connectivity
