@@ -320,7 +320,7 @@ Ns_ModuleInit (char *server, char *module)
 	config->cachetimeout = cachetimeout;
 
 	Ns_Log (Debug,
-		"\nSessionCacheSize = '%d'; SessionCacheTimout = '%d'",
+		"SessionCacheSize = '%d'; SessionCacheTimout = '%d'",
 		config->cachesize, config->cachetimeout);
     }
 

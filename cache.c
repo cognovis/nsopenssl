@@ -223,7 +223,7 @@ NsSSLDelSessionCacheEntry (SSL_CTX * ctx, SSL_SESSION * session)
      */
 
     Ns_HtuuEncode (session->session_id, session->session_id_length, key);
-    Ns_Log (Debug, "Session ID: '%s'", key);
+    Ns_Log (Debug, "Deleting Session ID: '%s'", key);
 
     Ns_CacheLock (server->cachehash);
     {

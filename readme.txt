@@ -12,13 +12,13 @@ be used in a production environment. Feedback would be appreciated.
 Feature Highlights
 ------------------
 
- * Open Source software (AOLserver Public License)
+ * Open Source software (AOLserver Public License or GPL)
  * Useable for both commercial and non-commercial use
  * 128-bit strong cryptography world-wide
  * Support for SSLv2, SSLv3 and TLSv1 protocols
  * Support for both RSA and Diffie-Hellman ciphers
- * Clean reviewable ANSI C source code
- * Support for the OpenSSL+RSAref US-situation
+ * Support for client certificate verification
+ * Clean, reviewable ANSI C source code
 
 
 Compiling the code
@@ -34,13 +34,16 @@ export OPENSSL=/usr/local/ssl
 gmake
 gmake install INST=/usr/local/aolserver
 
-To compile with BSAFE make sure your OpenSSL library has been compiled
-with BSAFE, and type:
+To compile with RSA's BSAFE Crypto-C libarary, simply make sure your
+OpenSSL library has been compiled with BSAFE, and add another make
+option:
 
 gmake OPENSSL=/usr/local/openssl-bsafe BSAFE=/path/to/bsafe
 
 (for more information on how to compile with BSAFE, see
 http://scottg.net/aolserver).
+
+See nsd.tcl for a sample configuration that uses SSL on port 8443.
 
 To test the server, put the sample configuration from nsd.tcl into
 your server's nsd.tcl, copy the sample *.pem files to
@@ -56,8 +59,10 @@ Development Environment
 -----------------------
 
 The code was developed under RedHat 6.2 with OpenSSL 0.9.5a. It will
-probably run without too many problems on different flavours of a UNIX
-like operating system.
+probably run without too many problems on different flavors of UNIX.
+
+You can see debug output by putting the server itself in debug
+mode. There isn't a separate debug option for nsopenssl.
 
 OpenSSL must be compiled as position-independent, but it does not
 build that way in the configuration that comes from the OpenSSL
@@ -74,55 +79,86 @@ configuration that seems to work on these platforms is:
 Then, followed by the same gmake step as before:
 gmake CC="gcc -fPIC"
 
-See nsd.tcl for a sample configuration that uses SSL on port 8443.
-
 
 Configuration Options
 ---------------------
 
 ns_section "ns/server/${servername}/module/nsopenssl"
-ns_param port                $httpsport
-ns_param hostname            $hostname
-ns_param certfile            $sslcertfile
-ns_param keyfile             $sslkeyfile
-ns_param debug               off
-ns_param sessioncachesize    512
-ns_param sessioncachetimeout 300
-ns_param protocol            "ALL, SSLv2, SSLv3, TLSv1"
-#ns_param ciphersuite         "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
-ns_param ClientVerify              true
-ns_param ClientVerifyDepth         3
-ns_param ClientVerifyOnce          true
-ns_param ClientVerifyDefault       true
-ns_param ClientCACertPath          /p/d/asssg/ssl.ca
-ns_param ClientCACertFile          /p/d/asssg/ssl.ca/ca-bundle.crt
+ns_param Port                     $httpsport
+ns_param Hostname                 $hostname
+ns_param CertFile                 certfile.pem
+ns_param KeyFile                  keyfile.pem
+ns_param SessionCacheSize         512
+ns_param SessionCacheTimeout      300
+ns_param Protocol                 "ALL, SSLv2, SSLv3, TLSv1"
+ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param ClientVerify             true
+ns_param ClientVerifyDepth        3
+ns_param ClientVerifyOnce         true
+ns_param ClientVerifyDefault      true
+ns_param ClientCACertPath         ssl.ca
+ns_param ClientCACertFile         ssl.ca/ca-bundle.crt
 
 ns_section "ns/server/${servername}/modules"
-ns_param nsopenssl    ${bindir}/nsopenssl.so
+ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
 
 Note that "ALL" in the protocol parameter obviates the need for listing the other protocols.
+
+
+
+Tcl Interface Commands
+----------------------
+
+ns_openssl info
+  - returns a Tcl list containing the SSL libary name, SSL library version,
+    Crypto library name, Crypto library version.
+
+ns_openssl clientcert version
+  - returns a Tcl string containing the certificate's version number, e.g. "3".
+
+ns_openssl clientcert serial
+  - returns a Tcl string containing the certificate's serial number, e.g. "27C6".
+
+ns_openssl clientcert subject
+  - returns a Tcl string containing the certificate's subject name,
+    e.g. "/C=US/O=U.S. Government/OU=DoD/OU=PKI/OU=USAF/CN=Goodwin.Scott.S.0300074002"
+
+ns_openssl clientcert issuer
+  - returns a Tcl string containing the certificate's issuer name,
+    e.g. "/C=US/O=U.S. Government/OU=DoD/OU=PKI/CN=Med CA-2"
+
+ns_openssl clientcert notbefore
+  - returns a Tcl string containing the certificate's valid start date,
+    e.g. "Aug 28 20:00:38 2000 GMT"
+
+ns_openssl clientcert notafter
+  - returns a Tcl string containing the certificate's valid end date,
+    e.g. "Aug 28 20:00:38 2002 GMT"
+
+ns_openssl clientcert signature_algorithm
+  - returns a Tcl string containing the algorithm used for the signature,
+    e.g. "sha1WithRSAEncryption"
+
+ns_openssl clientcert key_algorithm
+  - returns a Tcl string containing the algorithm used for the key,
+    e.g. "rsaEncryption"
+
+ns_openssl clientcert pem
+  - returns a Tcl string containing the client's PEM-formatted certificate,
+    which should have "--- BEGIN CERTIFICATE ---" and
+    "--- END CERTIFICATE ---" lines in it.
 
 
 Open Issues
 -----------
 
-Here's some things on my list.
-
- - Client certificate support needs to be added
- - Session caching seems to be flakey
- - Enable and test keepalive
- - done: Integrate and test with AOLserver 3.0b4
- - Create a TCL interface to access information about SSL connections
- - Write Good Documentation
- - Create a tool to create a Certificate Signing Request
- - done: Figure out how to distribute this
- ...
+See the TODO file...
 
 
 Copyright Notices
 -----------------
 
-The nsopenssl module is written and Copyrighted by Stefan
+The nsopenssl module was originally written and Copyrighted by Stefan
 Arentz. Parts of it are also copyrighted by Scott S. Goodwin. It is
 distributed under the AOLserver Public License. See the file
 license.txt for more information.
@@ -141,4 +177,4 @@ Related Links
   http://www.openssl.org    OpenSSL toolkit homepage
   http://www.modssl.org     OpenSSL module for Apache
   http://www.thawte.com     For getting test certificates
-  http://scottg.net         Information on AOLserver
+  http://scottg.net         Information on AOLserver and this module

@@ -16,6 +16,8 @@ Scott S. Goodwin - scott@scottg.net
   fine, as does Netscape. All three were using the same client
   certificate.
 
+- Add 'clientcert exists' Tcl command.
+
 - Add more Tcl commands for examining the server's cert, generating
   keypairs and CSRs etc.
 

@@ -134,9 +134,8 @@ SSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
 				  argv[0], argv[1], " subject\"", NULL);
 		status = TCL_ERROR;
 	    } else if (sslconn->clientcert != NULL) {
-		result =
-		    X509_NAME_oneline (X509_get_subject_name
-				       (sslconn->clientcert), NULL, 0);
+		result = X509_NAME_oneline (X509_get_subject_name
+					    (sslconn->clientcert), NULL, 0);
 		Ns_DStringPrintf (&ds, "%s ", result);
 	    } else {
 		Ns_DStringPrintf (&ds, "%s ", "");

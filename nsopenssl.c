@@ -216,18 +216,25 @@ NsSSLCreateServer (SSLConf * config)
 	}
 
 	/*
-	 * The two valid values for session cache mode are
-	 * SSL_SESS_CACHE_SERVER or SSL_SESS_CACHE_OFF.
+	 * Initialize the session cache.  The two valid values for a
+	 * server session cache mode are SSL_SESS_CACHE_SERVER or
+	 * SSL_SESS_CACHE_OFF.
 	 */
 
 	if (srvPtr->cachesize != 0) {
 
-	    /* Initialize the session cache.  */
+            /*
+	     * We must set a session id context. This can be any
+	     * string you want.
+	     */
 
 	    SSL_CTX_set_session_id_context (srvPtr->context, (void *)
 					    &server_session_id_context,
 					    sizeof
 					    (server_session_id_context));
+
+	    SSL_CTX_set_session_cache_mode (srvPtr->context,
+					    SSL_SESS_CACHE_SERVER);
 
 	    srvPtr->cachehash = Ns_CacheCreateSz ("ns_openssl",
 						  TCL_STRING_KEYS,
@@ -241,7 +248,7 @@ NsSSLCreateServer (SSLConf * config)
 				     NsSSLNewSessionCacheEntry);
 	    SSL_CTX_sess_set_get_cb (srvPtr->context,
 				     NsSSLGetSessionCacheEntry);
-#if 0
+#if 1
 	    /* TODO: BUG: This is where the caching "breaks". What
 	     * happens is that when caching is turned on, each
 	     * connections gets a session id and that session is
@@ -256,8 +263,6 @@ NsSSLCreateServer (SSLConf * config)
 	    SSL_CTX_sess_set_remove_cb (srvPtr->context,
 					NsSSLDelSessionCacheEntry);
 #endif
-	    SSL_CTX_set_session_cache_mode (srvPtr->context,
-					    SSL_SESS_CACHE_SERVER);
 	} else {
 	    SSL_CTX_set_session_cache_mode (srvPtr->context,
 					    SSL_SESS_CACHE_OFF);

@@ -1,5 +1,8 @@
 2000-11-05  root  <scott@scottg.net>
 
+	* readme.txt: updated with Tcl interface and with parameters for
+	nsd.tcl.
+
 	* nsopenssl.c: left it in SSL_VERIFY_PEER mode by mistake. It now
 	uses the config file parameter ClientVerify properly. Also did
 	some cleanup.
