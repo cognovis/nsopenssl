@@ -779,8 +779,8 @@ NsTclSSLSockNReadCmd (ClientData dummy, Tcl_Interp * interp, int argc,
 					 (int *) &sock) != TCL_OK) {
 	return TCL_ERROR;
     }
-    if (ns_sockioctl (sock, FIONREAD, &nread) != 0) {
-	Tcl_AppendResult (interp, "ns_sockioctl failed: ",
+    if (ioctl (sock, FIONREAD, &nread) != 0) {
+	Tcl_AppendResult (interp, "ioctl failed: ",
 			  SockError (interp), NULL);
 	return TCL_ERROR;
     }
