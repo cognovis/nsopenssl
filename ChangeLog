@@ -1,3 +1,11 @@
+2004-03-27  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.c, tclcmds.c: Fixed fd leak where I wasn't properly cleaning
+      up after ns_sockopen etc. Changes involved adding readchan and writechan
+      to NsOpenSSLConn struct, unregistering and closing the sockets in
+      ChanCloseProc. Thanks to Noah Robin (sitz@aol.net) for reporting the
+      problem.
+
 2004-03-12  Scott Goodwin  <scott@scottg.net>
 
       * nsopenssl.c: Changed couple of STREQ's for STRIEQ's so sslcontext

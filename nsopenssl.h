@@ -171,6 +171,8 @@ typedef struct NsOpenSSLConn {
     struct timeval            timer;      /* for performance measurement */
     struct Ns_Driver         *driver;    /* the core sock driver this conn belongs to */
     struct NsOpenSSLDriver   *ssldriver; /* the SSL driver this conn belongs to */
+    Tcl_Channel               readchan;
+    Tcl_Channel               writechan;
 } NsOpenSSLConn;
 
 /*

@@ -1627,6 +1627,7 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
         return TCL_ERROR;
     }
 
+    sslconn->readchan = chan;
     Tcl_SetChannelBufferSize(chan, BUFSIZ);
     Tcl_SetChannelOption(interp, chan, "-translation", "binary");
     Tcl_RegisterChannel(interp, chan);
@@ -1660,6 +1661,7 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
 
     sslconn->refcnt++;
 
+    sslconn->writechan = chan;
     Tcl_SetChannelBufferSize(chan, BUFSIZ);
     Tcl_SetChannelOption(interp, chan, "-translation", "binary");
     Tcl_RegisterChannel(interp, chan);
@@ -1764,8 +1766,12 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
-    //Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
+    Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
     //Ns_Log(Debug, "--->>> BEFORE ConnDestroy: ChanCloseProc");
+    Tcl_UnregisterChannel(interp, sslconn->readchan);
+    Tcl_UnregisterChannel(interp, sslconn->writechan);
+    ns_sockclose(sslconn->wsock);
+    ns_sockclose(sslconn->socket);
     NsOpenSSLConnDestroy(sslconn);
 
     return TCL_OK;

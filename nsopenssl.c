@@ -1118,6 +1118,13 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
              */
 
             if (sslconn == NULL) {
+
+#if 0
+                if (setsockopt(sock->sock, IPPROTO_TCP, TCP_NODELAY, (void *) 1, sizeof(int)) == -1) {
+                    Ns_Log(Warning, "%s (%s): unable to turn off Nagle algorithm");
+                }
+#endif
+
 #if 0
                 /* XXX core driver socket handles this, no? */
                 /* XXX look at interaction issues - when driver sock dies, how do I handle it? */
