@@ -118,24 +118,29 @@ install: all
 #
 # Install test code
 #
-TESTMODS = \
+TESTMOD = \
 	ns_openssl_sockcallback.tcl \
 	ns_openssl_socklistencallback.tcl \
 	ns_openssl_socklisten.tcl \
 	ns_openssl_socknread.tcl \
 	ns_openssl_sockopen.tcl
 
-TESTPAGES = \
+TESTPAG = \
 	index.adp
 
 install-tests: install
-	@if [ -n "$(TESTMODS)" ]; then \
-		for i in $(TESTMODS); do \
-			echo "...installing $$i"; \
-			$(INSTALL) $$i $(INST)/servers/test/modules/tcl/nsopenssl; \
+	@if [ ! -d "$(INST)/servers/test" ]; then \
+		echo "** $(CP) -r $(INST)/servers/server1 $(INST)/servers/test;  $(MKDIR)"; \
+		$(CP) -r $(INST)/servers/server1 $(INST)/servers/test; \
+		exit 1;\
+	fi
+	@if [ -n "$(TESTMOD)" ]; then \
+		for i in $(TESTMOD); do \
+			$(MKDIR) $(INST)/servers/test/modules/tcl/nsopenssl; \
 		done \
 	fi
 
+#			$(CP) tests/$$i $(INST)/servers/test/modules/tcl/nsopenssl; \
 
 ## NOTES #################################################################################
 
