@@ -1,3 +1,11 @@
+2004-01-16  Scott Goodwin  <scott@scottg.net>
+
+      * ssl.c, nsopenssl.h: Merged NsOpenSSLConnConnect and
+      NsOpenSSLConnAccept into a single NsOpenSSLConnHandshake function. Also
+      converted the function to use SSL_* calls directly instead of using
+      OpenSSL's BIO abstraction. Subjectively, the handshake does appear to be
+      quicker.
+
 2004-01-08  Scott Goodwin  <scott@scottg.net>
 
       * ssl.c: Fixed bug in Recv and Send procs so that larger files could be

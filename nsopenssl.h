@@ -206,6 +206,11 @@ extern int
 NsOpenSSLConnSend(BIO *bio, void *buffer, int towrite);
 
 extern int
+NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn);
+
+// XXX remove
+#if 0
+extern int
 NsOpenSSLConnAccept(NsOpenSSLConn *sslconn);
 
 /* XXX test */
@@ -214,6 +219,7 @@ NsOpenSSLConnAccept2(NsOpenSSLConn *sslconn);
 
 extern int
 NsOpenSSLConnConnect(NsOpenSSLConn *sslconn);
+#endif
 
 /*
  * ssl.c

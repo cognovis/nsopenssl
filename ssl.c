@@ -114,6 +114,8 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
     sslconn->sslctx     = NULL;
     sslconn->peerport   = -1;
     sslconn->socket     = socket;
+    // XXX set wild timeout for now
+    sslconn->timeout    = 200000;
 
     /*
      * It's the caller's responsibility to increment the reference count; the
@@ -152,12 +154,11 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 
     /* Run the SSL handshake on the connection */
     if (sslcontext->role == SERVER_ROLE) {
-	SSL_set_accept_state(sslconn->ssl);
-	status = NsOpenSSLConnAccept(sslconn);
-    } else if (sslcontext->role == CLIENT_ROLE) {
-	SSL_set_connect_state(sslconn->ssl);
-	status = NsOpenSSLConnConnect(sslconn);
+        SSL_set_accept_state(sslconn->ssl);
+    } else {
+        SSL_set_connect_state(sslconn->ssl);
     }
+    status = NsOpenSSLConnHandshake(sslconn);
 
     if (status != NS_OK) {
 	NsOpenSSLConnDestroy(sslconn);
@@ -639,6 +640,39 @@ NsOpenSSLConnSend(BIO *bio, void *buffer, int towrite)
  *----------------------------------------------------------------------
  */
 
+
+extern int
+NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
+{
+    int rc;
+    // XXX initialize the above int
+
+    rc = SSL_read(conn->ssl, (char *) buffer, toread);
+    switch(SSL_get_error(ssl, rc)) {
+
+    case SSL_ERROR_NONE:
+	break;
+
+    case SSL_ERROR_WANT_WRITE:
+    case SSL_ERROR_WANT_READ:
+    case SSL_ERROR_WANT_X509_LOOKUP:
+	Ns_Log(Debug, "NsOpenSSLRecv: WANT_SOMETHING\n");
+	SSL_renegotiate(ssl);
+	SSL_write(ssl,NULL,0);
+	goto again;
+
+    case SSL_ERROR_SYSCALL:
+    case SSL_ERROR_SSL:
+	Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_SYSCALL\n");
+	break;
+
+    case SSL_ERROR_ZERO_RETURN:
+	Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_ZERO_RETURN\n");
+	break;
+    }
+}
+
+#if 0
 extern int
 NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread)
 {
@@ -657,13 +691,11 @@ NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread)
     BIO_get_fd(bio, &socket);
 
     /* XXX Ensure socket is still alive */
-#if 0
-    if (send(socket, NULL, 0, 0) != 0) {
-        Ns_Log(Notice, "%s (SERVER): connection reset by peer",
-                MODULE);
-        return NS_ERROR;
-    }
-#endif
+    //if (send(socket, NULL, 0, 0) != 0) {
+    //    Ns_Log(Notice, "%s (SERVER): connection reset by peer",
+    //            MODULE);
+    //    return NS_ERROR;
+    //}
 
    // Ns_Log(Debug, "NsOpenSSLConnRecv[%d]: toread = (%d)", socket, toread);
     do {
@@ -685,6 +717,7 @@ NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread)
 
     return rc;
 }
+#endif
 
 
 /*
@@ -734,6 +767,7 @@ NsOpenSSLConnFlush(NsOpenSSLConn *sslconn)
  *----------------------------------------------------------------------
  */
 
+#if 0
 extern int
 NsOpenSSLConnAccept(NsOpenSSLConn *sslconn)
 {
@@ -745,6 +779,89 @@ NsOpenSSLConnAccept(NsOpenSSLConn *sslconn)
 
     if (rc < 0) {
 	return NS_ERROR;
+    }
+
+    return NS_OK;
+}
+#endif
+
+extern int
+NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
+{
+    int             rc;
+    int             error;
+    time_t          endtime;
+    struct timeval  tv;
+    int             n;
+    fd_set         *wfds;
+    fd_set         *rfds;
+    fd_set          fds;
+
+#if 0
+    Ns_SockSetNonBlocking(sslconn->socket);
+    rc = BIO_set_nbio(sslconn->io, flag);
+#endif
+
+    endtime = time(NULL) + sslconn->timeout + 1;
+    FD_ZERO(&fds);
+
+    while (1) {
+
+	if (sslconn->sslcontext->role == SERVER_ROLE) {
+	    rc = SSL_accept(sslconn->ssl);
+	} else {
+	    rc = SSL_connect(sslconn->ssl);
+	}
+
+        if (rc == 1) {
+            break;
+        }
+
+        error = SSL_get_error(sslconn->ssl, rc);
+
+        if (error == SSL_ERROR_SYSCALL) {
+            if (rc == 0) {
+                Ns_Log(Error, "%s (%s): EOF during SSL handshake",
+                    MODULE, sslconn->server);
+            } else {
+                Ns_Log(Error, "%s (%s): error during SSL handshake: %s",
+                    MODULE, sslconn->server, ns_sockstrerror(errno));
+            }
+            return NS_ERROR;
+
+        } else if (error == SSL_ERROR_WANT_READ) {
+            rfds = &fds;
+            wfds = NULL;
+
+        } else if (error == SSL_ERROR_WANT_WRITE) {
+            rfds = NULL;
+            wfds = &fds;
+
+        } else {
+            Ns_Log(Error, "%s (%s): error %d/%d during SSL handshake",
+                MODULE, sslconn->server, rc, error);
+            return NS_ERROR;
+        }
+
+        FD_SET(sslconn->socket, &fds);
+
+        do {
+            tv.tv_sec = endtime - time(NULL);
+            tv.tv_usec = 0;
+            n = select(sslconn->socket + 1, rfds, wfds, NULL, &tv);
+        } while (n < 0 && errno == EINTR);
+
+        if (n < 0) {
+            Ns_Log(Error, "%s (%s): select failed: %s",
+                MODULE, sslconn->server, ns_sockstrerror(errno));
+            return NS_ERROR;
+        }
+
+        if (n == 0) {
+            Ns_Log(Notice, "%s (%s): SSL handshake timeout",
+                MODULE, sslconn->server);
+            return NS_ERROR;
+        }
     }
 
     return NS_OK;
@@ -767,13 +884,14 @@ NsOpenSSLConnAccept(NsOpenSSLConn *sslconn)
  *----------------------------------------------------------------------
  */
 
+#if 0
 int
 NsOpenSSLConnConnect(NsOpenSSLConn *sslconn)
 {
     int rc = -1;
 
     do {
-	rc = BIO_do_handshake (sslconn->bio);
+	rc = BIO_do_handshake(sslconn->bio);
     } while (rc < 0 && BIO_should_retry(sslconn->bio));
 
     if (rc < 0) {
@@ -782,6 +900,87 @@ NsOpenSSLConnConnect(NsOpenSSLConn *sslconn)
 
     return NS_OK;
 }
+#endif
+
+#if 0
+extern int
+NsOpenSSLConnConnect(NsOpenSSLConn *sslconn)
+{
+    int             rc;
+    int             error;
+    time_t          endtime;
+    struct timeval  tv;
+    int             n;
+    fd_set         *wfds;
+    fd_set         *rfds;
+    fd_set          fds;
+
+    //Ns_SockSetNonBlocking(sslconn->socket);
+    //rc = BIO_set_nbio(sslconn->io, flag);
+
+    endtime = time(NULL) + sslconn->timeout + 1;
+    FD_ZERO(&fds);
+
+    Ns_Log(Notice, "*** HEY, I'M HERE !!!");
+
+    while (1) {
+
+        rc = SSL_connect(sslconn->ssl);
+
+        if (rc == 1) {
+            break;
+        }
+
+        error = SSL_get_error(sslconn->ssl, rc);
+
+        if (error == SSL_ERROR_SYSCALL) {
+            if (rc == 0) {
+                Ns_Log(Error, "%s (%s): EOF during SSL handshake",
+                    MODULE, sslconn->server);
+            } else {
+                Ns_Log(Error, "%s (%s): error during SSL handshake: %s",
+                    MODULE, sslconn->server, ns_sockstrerror(errno));
+            }
+            return NS_ERROR;
+
+        } else if (error == SSL_ERROR_WANT_READ) {
+            rfds = &fds;
+            wfds = NULL;
+
+        } else if (error == SSL_ERROR_WANT_WRITE) {
+            rfds = NULL;
+            wfds = &fds;
+
+        } else {
+            Ns_Log(Error, "%s (%s): error %d/%d during SSL handshake",
+                MODULE, sslconn->server, rc, error);
+            return NS_ERROR;
+        }
+
+        FD_SET(sslconn->socket, &fds);
+
+        do {
+            tv.tv_sec = endtime - time(NULL);
+            tv.tv_usec = 0;
+            n = select(sslconn->socket + 1, rfds, wfds, NULL, &tv);
+        } while (n < 0 && errno == EINTR);
+
+        if (n < 0) {
+            Ns_Log(Error, "%s (%s): select failed: %s",
+                MODULE, sslconn->server, ns_sockstrerror(errno));
+            return NS_ERROR;
+        }
+
+        if (n == 0) {
+            Ns_Log(Notice, "%s (%s): SSL handshake timeout",
+                MODULE, sslconn->server);
+            return NS_ERROR;
+        }
+    }
+
+    return NS_OK;
+}
+#endif
 
 
 /*
