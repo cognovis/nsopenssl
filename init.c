@@ -121,6 +121,9 @@ NsOpenSSLCreateDriver(char *server, char *module)
 	return NULL;
     }
 
+    sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
+                            CONFIG_RANDOMFILE, sdPtr->dir, NULL);
+
     /*
      * If the OpenSSL's PRNG is not seeded,
      * do so now.
@@ -147,9 +150,6 @@ NsOpenSSLCreateDriver(char *server, char *module)
     if (sdPtr->bufsize < 1) {
 	sdPtr->bufsize = DEFAULT_SERVER_BUFFERSIZE;
     }
-
-    sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-                                          CONFIG_RANDOMFILE, sdPtr->dir, NULL);
 
 #ifndef NS_MAJOR_VERSION
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
@@ -199,6 +199,7 @@ NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr)
 	if (sdPtr->dir      != NULL)           ns_free(sdPtr->dir);
 	if (sdPtr->address  != NULL)           ns_free(sdPtr->address);
 	if (sdPtr->location != NULL)           ns_free(sdPtr->location);
+	if (sdPtr->randomFile != NULL)         ns_free(sdPtr->randomFile);
 	ns_free(sdPtr);
     }
 }
@@ -331,8 +332,7 @@ MakeDriverSSLContext(NsOpenSSLDriver *sdPtr)
     /*
      * Set peer verify and verify depth
      */
-	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_NONE, NULL);
-#if 0
+
     peerVerify = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_SERVER_PEERVERIFY, DEFAULT_SERVER_PEERVERIFY);
 
@@ -347,7 +347,6 @@ MakeDriverSSLContext(NsOpenSSLDriver *sdPtr)
     } else {
 	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_NONE, NULL);
     }
-#endif
 
     /*
      * Set SSL handshake and connection tracing
@@ -507,7 +506,7 @@ MakeSockServerSSLContext(NsOpenSSLDriver *sdPtr)
     /*
      * Set peer verify and verify depth
      */
-#if 0
+
     peerVerify = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_SOCKSERVER_PEERVERIFY, DEFAULT_SOCKSERVER_PEERVERIFY);
 
@@ -521,7 +520,6 @@ MakeSockServerSSLContext(NsOpenSSLDriver *sdPtr)
 	SSL_CTX_set_verify(sdPtr->sockServerContext, SSL_VERIFY_NONE,
 	    PeerVerifyCallback);
     }
-#endif
 
     /*
      * Set SSL handshake and connection tracing
@@ -682,7 +680,7 @@ MakeSockClientSSLContext(NsOpenSSLDriver *sdPtr)
     /*
      * Set peer verify and verify depth
      */
-#if 0
+
     peerVerify = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_SOCKCLIENT_PEERVERIFY, DEFAULT_SOCKCLIENT_PEERVERIFY);
 
@@ -696,7 +694,7 @@ MakeSockClientSSLContext(NsOpenSSLDriver *sdPtr)
 	SSL_CTX_set_verify(sdPtr->sockClientContext, SSL_VERIFY_NONE,
 	    PeerVerifyCallback);
     }
-#endif
+
 
     /*
      * Set SSL handshake and connection tracing
@@ -1228,7 +1226,7 @@ InitLocation(NsOpenSSLDriver *sdPtr)
 static int
 PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 {
-    return NS_TRUE;
+    return 1;
 }
 
 

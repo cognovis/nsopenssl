@@ -1,3 +1,19 @@
+2001-08-16  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: turned on the peerVerify code for SSL sock server and
+	sock clients (as opposed to NSD-driven conns). Need to test.
+
+	* tclcmds.c: was using an interp before it was allocated. Pretty
+	amazing. Adam Zell pointed this out.
+
+	* init.c: boneheadedly #if 0'd out the client cert verification
+	code for NSD-driven conns. Works now. Sean Yamamoto noticed the
+	problem.
+
+	* init.c: should have been initializin sdPtr->randomFile *before*
+	calling SeedPRNG. Also should have been freeing randomFile when
+	freein the driver. Thanks to Adam Zell for pointing these out.
+
 2001-08-15  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: add the rqset parameter to ns_httpsget so that

@@ -1856,13 +1856,13 @@ SSLSockListenCallback(SOCKET sock, void *arg, int why)
     char         **sockv;
     int            sockc, result;
 
+    interp = Ns_TclAllocateInterp(NULL);
+
     ccPtr = Ns_OpenSSLSockAccept(sock);
     if (ccPtr == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
         return TCL_ERROR;
     }
-
-    interp = Ns_TclAllocateInterp(NULL);
 
     result = CreateTclChannel(ccPtr, interp);
 
