@@ -47,15 +47,15 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 static int InitializeSSL(void);
 static int MakeModuleDir(char *server, char *module, char **dirp);
-static int MakeSSLContext(NsOpenSSLDriver *sdPtr);
-static int SetCipherSuite(NsOpenSSLDriver *sdPtr);
-static int SetProtocols(NsOpenSSLDriver *sdPtr);
-static int LoadCertificate(NsOpenSSLDriver *sdPtr);
-static int LoadKey(NsOpenSSLDriver *sdPtr);
-static int CheckKey(NsOpenSSLDriver *sdPtr);
-static int LoadCACerts(NsOpenSSLDriver *sdPtr);
+static int ServerMakeSSLContext(NsOpenSSLDriver *sdPtr);
+static int ServerSetCipherSuite(NsOpenSSLDriver *sdPtr);
+static int ServerSetProtocols(NsOpenSSLDriver *sdPtr);
+static int ServerLoadCertificate(NsOpenSSLDriver *sdPtr);
+static int ServerLoadKey(NsOpenSSLDriver *sdPtr);
+static int ServerCheckKey(NsOpenSSLDriver *sdPtr);
+static int ServerLoadCACerts(NsOpenSSLDriver *sdPtr);
 static int InitLocation(NsOpenSSLDriver *sdPtr);
-static int ClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static int ServerClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr);
 
 /* What happens if we run multiple copies of nsopenssl in the same server? */
@@ -106,14 +106,14 @@ NsOpenSSLCreateDriver(char *server, char *module)
     if (
 	   NsOpenSSLInitThreads()                      == NS_ERROR
 	|| InitializeSSL()                             == NS_ERROR
-	|| MakeSSLContext(sdPtr)                       == NS_ERROR
+	|| ServerMakeSSLContext(sdPtr)                 == NS_ERROR
 	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
-	|| SetProtocols(sdPtr)                         == NS_ERROR
-	|| SetCipherSuite(sdPtr)                       == NS_ERROR
-	|| LoadCertificate(sdPtr)                      == NS_ERROR
-	|| LoadKey(sdPtr)                              == NS_ERROR
-	|| CheckKey(sdPtr)                             == NS_ERROR
-	|| LoadCACerts(sdPtr)                          == NS_ERROR
+	|| ServerSetProtocols(sdPtr)                   == NS_ERROR
+	|| ServerSetCipherSuite(sdPtr)                 == NS_ERROR
+	|| ServerLoadCertificate(sdPtr)                == NS_ERROR
+	|| ServerLoadKey(sdPtr)                        == NS_ERROR
+	|| ServerCheckKey(sdPtr)                       == NS_ERROR
+	|| ServerLoadCACerts(sdPtr)                    == NS_ERROR
 	|| NsOpenSSLInitSessionCache(sdPtr)            == NS_ERROR
 	|| InitLocation(sdPtr)                         == NS_ERROR
     ) {
@@ -253,7 +253,7 @@ MakeModuleDir(char *server, char *module, char **dirp)
 /*
  *----------------------------------------------------------------------
  *
- * MakeSSLContext --
+ * ServerMakeSSLContext --
  *
  *       Create a new SSL context for the specified SSLDriver.
  *
@@ -267,7 +267,7 @@ MakeModuleDir(char *server, char *module, char **dirp)
  */
 
 static int
-MakeSSLContext(NsOpenSSLDriver *sdPtr)
+ServerMakeSSLContext(NsOpenSSLDriver *sdPtr)
 {
     sdPtr->context = SSL_CTX_new(SSLv23_server_method());
     if (sdPtr->context == NULL) {
@@ -289,7 +289,7 @@ MakeSSLContext(NsOpenSSLDriver *sdPtr)
     if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
 	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_PEER,
-	    ClientVerifyCallback);
+	    ServerClientVerifyCallback);
     }
 
     if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
@@ -303,7 +303,7 @@ MakeSSLContext(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * SetCipherSuite --
+ * ServerSetCipherSuite --
  *
  *       Set the cipher suite to be used by the SSL server according
  *       to the config file.
@@ -318,7 +318,7 @@ MakeSSLContext(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-SetCipherSuite(NsOpenSSLDriver *sdPtr)
+ServerSetCipherSuite(NsOpenSSLDriver *sdPtr)
 {
     int rc;
     char *value = ConfigStringDefault(sdPtr->module, sdPtr->configPath,
@@ -338,7 +338,7 @@ SetCipherSuite(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * SetProtocols --
+ * ServerSetProtocols --
  *
  *       Set the list of protocols that the driver will allow.
  *
@@ -364,7 +364,7 @@ static struct {
 };
 
 static int
-SetProtocols(NsOpenSSLDriver *sdPtr)
+ServerSetProtocols(NsOpenSSLDriver *sdPtr)
 {
     Ns_Set *config;
     int     i, j, l;
@@ -461,7 +461,7 @@ NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * LoadCertificate --
+ * ServerLoadCertificate --
  *
  *       Load the certificate for the SSL server from the file
  *       specified in the server config.
@@ -476,7 +476,7 @@ NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-LoadCertificate(NsOpenSSLDriver *sdPtr)
+ServerLoadCertificate(NsOpenSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
@@ -496,7 +496,7 @@ LoadCertificate(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * LoadKey --
+ * ServerLoadKey --
  *
  *       Load the private key for the SSL server from the file
  *       specified in the server config.
@@ -511,7 +511,7 @@ LoadCertificate(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-LoadKey(NsOpenSSLDriver *sdPtr)
+ServerLoadKey(NsOpenSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
@@ -531,7 +531,7 @@ LoadKey(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * CheckKey --
+ * ServerCheckKey --
  *
  *       Make sure that the private key for the SSL server matches the
  *       certificate.
@@ -546,7 +546,7 @@ LoadKey(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-CheckKey(NsOpenSSLDriver *sdPtr)
+ServerCheckKey(NsOpenSSLDriver *sdPtr)
 {
     if (SSL_CTX_check_private_key(sdPtr->context) == 0) {
 	Ns_Log(Error, "%s: private key does not match certificate",
@@ -559,7 +559,7 @@ CheckKey(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * LoadCACerts --
+ * ServerLoadCACerts --
  *
  *       Load the CA certificates for the SSL server from the file
  *       specified in the server config.  Not an error if there
@@ -575,7 +575,7 @@ CheckKey(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-LoadCACerts(NsOpenSSLDriver *sdPtr)
+ServerLoadCACerts(NsOpenSSLDriver *sdPtr)
 {
     int status;
     int rc;
@@ -721,7 +721,7 @@ InitLocation(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * ClienVerifyCallback --
+ * ServerClienVerifyCallback --
  *
  *	Called by the SSL library at each stage of client certificate
  *	verification.
@@ -739,7 +739,7 @@ InitLocation(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
+ServerClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 {
     return 1;
 }
