@@ -155,6 +155,7 @@ typedef struct Ns_OpenSSLContext {
 typedef struct NsOpenSSLDriver {
     char                     *server;      
     char                     *module;      
+    char                     *name;      
     struct Ns_Driver         *driver;        /* the aolserver conn driver */
     struct NsOpenSSLDriver   *next;          /* pointer to next driver */
     struct Ns_OpenSSLContext *context;       /* SSL context assoc with this driver */ 
@@ -162,10 +163,10 @@ typedef struct NsOpenSSLDriver {
     char                     *configPath;
     char                     *dir;
     char                     *location;
+    char                     *hostname;
     char                     *address;	
-    char                     *bindaddr;
     SOCKET                    lsock;
-    int                       port;
+    int                       port;          /* The port this driver listens on */
     int                       refcnt;        /* Don't ns_free() unless this is 0 */
     Ns_Mutex                  lock;
     int                       bufsize;

@@ -130,9 +130,6 @@ NsOpenSSLModuleInit (char *server, char *module)
         Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
     }
 
-    /* XXX TEMPORARY */
-    return NS_OK;
-
     /*
      * Start up the driver(s) for this virtual server.  Each driver is tied to
      * a specific, named SSL context.  A driver manages one SSL port; to get
@@ -348,17 +345,14 @@ static NsOpenSSLDriver *
 ConfigSSLDriverLoad (char *server, char *module, char *name)
 {
     NsOpenSSLDriver *driver = NULL;
-    char *path         = NULL;
-    char *role         = NULL;
 
-    path = Ns_ConfigGetPath(server, module, name, NULL);
-    role = Ns_ConfigGetValue(path, "role");
+    Ns_Log(Debug, "%s: %s: *** ConfigSSLDriverLoad", MODULE, server);
 
     driver = NsOpenSSLDriverCreate(server, module, name);
     if (driver == NULL) {
         Ns_Log(Error, "%s: %s: SSL driver came back NULL in ConfigSSLDriverLoad",
-                MODULE, server);
-	    return NULL;
+             MODULE, server);
+        return NULL;
     }
 
     return driver;

@@ -45,15 +45,9 @@ static const char *RCSID =
 
 #include "nsopenssl.h"
 
-/* XXX merge these into the Ns_OpenSSLContext* equivalents ... */
-static int InitLocation (NsOpenSSLDriver *driver);
-#if 0
-static char *GetModuleDir (char *server, char *module);
-#endif
 static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int SessionCacheIdGetNext (void);
 static SessionCacheId *nextSessionCacheId;
-
 
 /*
  * Driver initialization/destruction
@@ -180,38 +174,97 @@ NsOpenSSLDriver *
 NsOpenSSLDriverCreate (char *server, char *module, char *name)
 {
     NsOpenSSLDriver *driver = NULL;
+    Ns_DString ds;
+    char *lookupHostname;
+    char *path;
 
-    driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(*driver));
-
-    if (driver == NULL) {
-	    Ns_Log(Error, "%s: %s: Failed to create driver structure", 
-                    MODULE, server);
-	    return NULL;
+    Ns_Log(Debug, "%s: %s: In NsOpenSSLDriverCreate", MODULE, server);
+   
+    path = Ns_ConfigGetPath(server, module, "driver", name, NULL);
+    if (path == NULL) {
+        Ns_Log(Error, "%s: %s: Failed to find SSL driver '%s' in nsd.tcl",
+                MODULE, server, name);
+        return NULL;
     }
-
-    /* XXX check what else I need to initialize here */
+ 
+    driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(*driver));
+    if (driver == NULL) {
+	Ns_Log(Error, "%s: %s: Failed to create driver '%s'", 
+                MODULE, server, name);
+	return NULL;
+    }
 
     driver->server     = server;
     driver->module     = module;
-    driver->configPath = Ns_ConfigGetPath(server, module, NULL);
+    driver->name       = name;
+    driver->configPath = path;
 
+    /*
+     * The port number is mandatory
+     */
+
+    if (Ns_ConfigGetInt(path, "port", &driver->port) != NS_TRUE) {
+        Ns_Log(Error, "%s: %s: Port not set for driver %s", MODULE, server, name);
+        Ns_Free(driver);
+        return NULL;
+    }
+    Ns_Log(Notice, "%s: %s: port = %d", MODULE, server, driver->port);
+
+#if 0
     /* XXX mutex names can't be name of module anymore */
     Ns_MutexSetName(&driver->lock, module);
-
-    if (InitLocation(driver) == NS_ERROR) {
-        Ns_Log(Error, "%s: %s: InitLocation failed", MODULE, server);
-	    NsOpenSSLDriverDestroy(driver);
-	    return NULL;
-    }
-
-    /* XXX tmp shutoff */
-#if 0
-    /* XXX this belongs in another function */
-    if (SetModuleDir (driver) == NS_ERROR || InitLocation (driver) == NS_ERROR) {
-	NsOpenSSLDriverFree (driver);
-	    return NULL;
-    }
 #endif
+
+    driver->address  = Ns_ConfigGetValue (path, "address");
+    driver->hostname = Ns_ConfigGetValue (path, "hostname");
+    driver->location = Ns_ConfigGetValue (path, "location");
+
+    /*
+     * Set driver's address
+     */
+
+    if (driver->address == NULL) {
+        Ns_DStringInit (&ds);
+        lookupHostname = (driver->hostname != NULL) ? driver->hostname : Ns_InfoHostname ();
+        if (Ns_GetAddrByHost (&ds, lookupHostname) == NS_ERROR) {
+            Ns_Log (Error, "%s: %s: failed to resolve '%s': %s",
+                    MODULE, server, lookupHostname, strerror (errno));
+            /* XXX failure mode here ??? */
+            return NULL;
+        }
+        driver->address = Ns_DStringExport (&ds);
+    }
+    Ns_Log(Notice, "%s: %s: address = %s", MODULE, server, driver->address);
+
+    /*
+     * Set driver's hostname
+     */
+
+    if (driver->hostname == NULL) {
+        Ns_DStringInit (&ds);
+        if (Ns_GetHostByAddr (&ds, driver->address) == NS_ERROR) {
+            Ns_Log (Warning, "%s: %s: failed to reverse resolve address '%s': %s",
+                    MODULE, driver->server, driver->address, strerror (errno));
+            driver->hostname = (Ns_InfoHostname() != NULL) ? Ns_InfoHostname() : driver->address;
+        } else {
+            driver->hostname = Ns_DStringExport (&ds);
+        }
+    }
+    Ns_Log(Notice, "%s: %s: hostname = %s", MODULE, server, driver->hostname);
+
+    /*
+     * Set driver's location string
+     */
+
+    if (driver->location == NULL) {
+        Ns_DStringInit (&ds);
+        Ns_DStringVarAppend (&ds, DEFAULT_PROTOCOL "://", driver->hostname, NULL);
+        if (driver->port != DEFAULT_PORT) {
+            Ns_DStringPrintf (&ds, ":%d", driver->port);
+        }
+        driver->location = Ns_DStringExport (&ds);
+    }
+    Ns_Log (Notice, "%s: %s: location %s", MODULE, server, driver->location);
 
     return driver;
 }
@@ -272,7 +325,6 @@ NsOpenSSLDriverDestroy (NsOpenSSLDriver *driver)
     driver->dir               = NULL;
     driver->location          = NULL;
     driver->address           = NULL;
-    driver->bindaddr          = NULL;
     driver->lsock             = INVALID_SOCKET;
     driver->port              = -1;
     driver->refcnt            = 1;
@@ -1634,81 +1686,6 @@ Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *context)
     return NS_OK;
 }
 
-
-/*
- *----------------------------------------------------------------------
- *
- * InitLocation --
- *
- *       Set the location, hostname, advertised address, bind address,
- *       and port of the driver as specified in the server config.
- *
- * Results:
- *       NS_ERROR or NS_OK
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-InitLocation (NsOpenSSLDriver *driver)
-{
-    char *hostname;
-    char *lookupHostname;
-    Ns_DString ds;
-
-    driver->bindaddr = Ns_ConfigGetValue (driver->configPath,
-					   "address");
-
-    hostname = Ns_ConfigGetValue (driver->configPath,
-				    "hostname");
-
-    if (driver->bindaddr == NULL) {
-	    lookupHostname = (hostname != NULL) ? hostname : Ns_InfoHostname ();
-	    Ns_DStringInit (&ds);
-	    if (Ns_GetAddrByHost (&ds, lookupHostname) == NS_ERROR) {
-	        Ns_Log (Error, "%s: %s: failed to resolve '%s': %s",
-		        MODULE, driver->server, lookupHostname, strerror (errno));
-	        return NS_ERROR;
-	    }
-	    driver->address = Ns_DStringExport (&ds);
-    } else {
-	    driver->address = ns_strdup (driver->bindaddr);
-    }
-
-    if (hostname == NULL) {
-	    Ns_DStringInit (&ds);
-	    if (Ns_GetHostByAddr (&ds, driver->address) == NS_ERROR) {
-	        Ns_Log (Warning, MODULE, "%s: %s: failed to reverse resolve '%s': %s",
-		        MODULE, driver->server, driver->address, strerror (errno));
-	        hostname = ns_strdup (driver->address);
-	    } else {
-	        hostname = Ns_DStringExport (&ds);
-	    }
-    }
-
-    if (Ns_ConfigGetInt(driver->configPath, "port", &driver->port) == NS_FALSE) {
-        Ns_Log(Warning, "%s: %s: No port set for driver", MODULE, driver->server);
-        /* XXX this should be a mandatory setting */
-        driver->port = DEFAULT_PORT;
-    }
-    if (driver->location != NULL) {
-	    driver->location = ns_strdup (driver->location);
-    } else {
-        Ns_Log(Notice, "%s: %s: location not set; defaulting", MODULE, driver->server);
-	    Ns_DStringInit (&ds);
-	    Ns_DStringVarAppend (&ds, DEFAULT_PROTOCOL "://", hostname, NULL);
-	    if (driver->port != DEFAULT_PORT) {
-	        Ns_DStringPrintf (&ds, ":%d", driver->port);
-	    }
-	    driver->location = Ns_DStringExport (&ds);
-    }
-    Ns_Log (Notice, "%s: %s: location %s", MODULE, driver->server, driver->location);
-
-    return NS_OK;
-}
 
 /*
  *----------------------------------------------------------------------
