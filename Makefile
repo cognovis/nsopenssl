@@ -13,8 +13,8 @@
 #  directory, you can tell make where to find aolserver.
 #
 #NSHOME   =  /home/user/cvs/aolserver
-#NSHOME   =  ../aolserver
-NSHOME   = /src/aolserver/aolserver3_1
+NSHOME   =  ../aolserver
+#NSHOME   = /src/aolserver/aolserver3_1
 
 #
 # Override default rules if library not available
