@@ -672,14 +672,13 @@ retry:
 
         case SSL_ERROR_ZERO_RETURN:
             /* Transport close alert received. */
-            Ns_Log(Warning, "%s (%s): SSL %s: socket gone; disconnected by client?",
-                    MODULE, sslconn->server, dir);
-            n = -1;
             break;
 
         case SSL_ERROR_WANT_WRITE:
             if (Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait)
                     != NS_OK) {
+                Ns_Log(Error, "%s (%s): SSL %s error: timed out in SSL_ERROR_WANT_WRITE",
+                        MODULE, sslconn->server, dir);
                 n = -1;
                 break;
             }
@@ -688,6 +687,8 @@ retry:
         case SSL_ERROR_WANT_READ:
             if (Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait)
                     != NS_OK) {
+                Ns_Log(Error, "%s (%s): SSL %s error: timed out in SSL_ERROR_WANT_READ",
+                        MODULE, sslconn->server, dir);
                 n = -1;
                 break;
             }
