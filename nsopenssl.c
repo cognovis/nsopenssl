@@ -37,29 +37,23 @@
  *
  * This module implements an SSL socket driver using the OpenSSL library.
  *
- * Currently maintained by Scott S. Goodwin <scott@scottg.net>
+ * Originally by Stefan Arentz <stefan.arentz@soze.com>.
  *
- * Code to make nsopenssl work with AOLserver 4.x's new comm API hacked
- * and generously contributed by Jim Davidson and Kris Rehberg.
- *
- * Some serious code refactoring and cleanup by Rob Mayoff
- * <mayoff@arsdigita.com>.
+ * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
  *
  * Client certificate support, Tcl interface, bug fixes 
  * by Scott Goodwin <scott@scottg.net>
  *
- * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
- *
- * Originally by Stefan Arentz <stefan.arentz@soze.com>.
+ * Some serious code refactoring and cleanup by Rob Mayoff
+ * <mayoff@arsdigita.com>.
  *
  * References:
  *
- *  nsopenssl home        - http://scottg.net
- *  OpenNSD Home          - http://www.opennsd.org
- *  AOLServer Home        - http://www.aolserver.com
- *  OpenSSL               - http://www.openssl.org
- *  SSL for Apache        - http://www.modssl.org
- *  Original Distribution - http://stefan.arentz.nl/software/
+ *  Distribution - http://stefan.arentz.nl/software/
+ *  OpenSSL - http://www.openssl.org
+ *  AOLServer Home - http://www.aolserver.com
+ *  SSL for Apache - http://www.modssl.org
+ *  nsopenssl home - http://scottg.net
  *
  */
 
@@ -85,10 +79,8 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
  * Local functions defined in this file
  */
 
-#ifndef NS_MAJOR_VERSION
-
 static Ns_ThreadProc SockThread;
-static void SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr);
+static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr);
 static Ns_Thread sockThread;
 static SOCKET trigPipe[2];
 
@@ -108,7 +100,7 @@ static Ns_ConnDriverNameProc   SockName;
 static Ns_ConnInitProc         SockInit;
 
 /* Linked list of all configured nsopenssl instances */
-static NsServerSSLDriver *firstSSLDriverPtr;
+static NsOpenSSLDriver *firstSSLDriverPtr;
 
 static Ns_DrvProc sockProcs[] = {
     {Ns_DrvIdStart,        (void *) SockStart},
@@ -127,12 +119,6 @@ static Ns_DrvProc sockProcs[] = {
     {Ns_DrvIdInit,         (void *) SockInit},
     {0,                    NULL}
 };
-
-#else
-
-static Ns_DriverProc OpenSSLProc;
-
-#endif
 
 
 /*
@@ -155,50 +141,24 @@ static Ns_DriverProc OpenSSLProc;
 NS_EXPORT int
 Ns_ModuleInit(char *server, char *module)
 {
-    NsServerSSLDriver *sdPtr;
-    NsClientSSLDriver *cdPtr;
-    NsOpenSSLModuleData *mPtr = NULL;
+    NsOpenSSLDriver *sdPtr;
 
-    if (Ns_TclInitInterps(server, NsOpenSSLCreateCmds, NULL)
+    if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
 	    != NS_OK) {
 	return NS_ERROR;
     }
 
-    mPtr = NsOpenSSLModuleDataInit(server, module);
-    if (mPtr == NULL) {
-	return NS_ERROR;
-    }
-
-    if (NsInitOpenSSL() == NS_ERROR) {
-        return NS_ERROR;
-    }
-
-#ifndef NS_MAJOR_VERSION
-    sdPtr = NsServerSSLCreateDriver(server, module, mPtr, sockProcs);
-#else
-    sdPtr = NsServerSSLCreateDriver(server, module, mPtr);
-#endif
+    sdPtr = NsOpenSSLCreateDriver(server, module, sockProcs);
     if (sdPtr == NULL) {
 	return NS_ERROR;
     }
 
-    cdPtr = NsClientSSLCreateDriver(server, module, mPtr);
-    if (cdPtr == NULL) {
-	return NS_ERROR;
-    }
-
-#ifndef NS_MAJOR_VERSION
     sdPtr->nextPtr = firstSSLDriverPtr;
     firstSSLDriverPtr = sdPtr;
 
     return NS_OK;
-#else
-    return Ns_DriverInit(server, module, "nsopenssl", OpenSSLProc, sdPtr, NS_DRIVER_SSL);
-#endif
-
 }
 
-#ifndef NS_MAJOR_VERSION
 
 /*
  *----------------------------------------------------------------------
@@ -221,12 +181,12 @@ Ns_ModuleInit(char *server, char *module)
 static int
 SockStart(char *server, char *label, void **drvDataPtr)
 {
-    NsServerSSLDriver *sdPtr = *((NsServerSSLDriver **) drvDataPtr);
+    NsOpenSSLDriver *sdPtr = *((NsOpenSSLDriver **) drvDataPtr);
 
     sdPtr->lsock = Ns_SockListen(sdPtr->bindaddr, sdPtr->port);
     if (sdPtr->lsock == INVALID_SOCKET) {
 	Ns_Fatal("%s: could not listen on %s:%d: %s",
-	    sdPtr->module->name, sdPtr->address ? sdPtr->address : "*",
+	    sdPtr->module, sdPtr->address ? sdPtr->address : "*",
 	    sdPtr->port, ns_sockstrerror(ns_sockerrno));
 	return NS_ERROR;
     }
@@ -259,7 +219,7 @@ SockStart(char *server, char *label, void **drvDataPtr)
  */
 
 static void
-SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
+SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr)
 {
     int refcnt;
 
@@ -272,7 +232,7 @@ SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
     Ns_MutexUnlock(&sdPtr->lock);
 
     if (refcnt == 0) {
-	NsServerSSLFreeDriver(sdPtr);
+	NsOpenSSLFreeDriver(sdPtr);
     }
 }
 
@@ -300,8 +260,8 @@ SockThread(void *ignored)
     fd_set set, watch;
     char c;
     int slen, n, stop;
-    NsServerSSLDriver *sdPtr, *nextPtr;
-    NsServerSSLConnection *scPtr;
+    NsOpenSSLDriver *sdPtr, *nextPtr;
+    NsOpenSSLConnection *scPtr;
     struct sockaddr_in sa;
     SOCKET max, sock;
 
@@ -321,7 +281,7 @@ SockThread(void *ignored)
 	nextPtr = sdPtr->nextPtr;
 	if (sdPtr->lsock != INVALID_SOCKET) {
 	    Ns_Log(Notice, "%s: listening on %s (%s:%d)",
-		sdPtr->module->name, sdPtr->location,
+		sdPtr->module, sdPtr->location,
 		sdPtr->address ? sdPtr->address : "*", sdPtr->port);
 	    if (max < sdPtr->lsock) {
 		max = sdPtr->lsock;
@@ -371,7 +331,7 @@ SockThread(void *ignored)
 		    }
 		    Ns_MutexUnlock(&sdPtr->lock);
 		    if (scPtr == NULL) {
-			scPtr = (NsServerSSLConnection *)
+			scPtr = (NsOpenSSLConnection *)
 			    ns_malloc(sizeof *scPtr);
 		    }
 
@@ -383,7 +343,7 @@ SockThread(void *ignored)
 
 		    if (Ns_QueueConn(sdPtr->driver, scPtr) != NS_OK) {
 			Ns_Log(Warning, "%s: connection dropped",
-			    sdPtr->module->name);
+			    sdPtr->module);
 			(void) SockClose(scPtr);
 		    }
 		}
@@ -394,7 +354,7 @@ SockThread(void *ignored)
 
     while ((sdPtr = firstSSLDriverPtr) != NULL) {
 	firstSSLDriverPtr = sdPtr->nextPtr;
-	Ns_Log(Notice, "%s: closing %s", sdPtr->module->name, sdPtr->location);
+	Ns_Log(Notice, "%s: closing %s", sdPtr->module, sdPtr->location);
 	ns_sockclose(sdPtr->lsock);
 	SockFreeConn(sdPtr, NULL);
     }
@@ -423,7 +383,7 @@ SockThread(void *ignored)
 static void
 SockStop(void *arg)
 {
-    NsServerSSLDriver *sdPtr = (NsServerSSLDriver *) arg;
+    NsOpenSSLDriver *sdPtr = (NsOpenSSLDriver *) arg;
 
     if (sockThread != NULL) {
         Ns_Log(Notice, DEFAULT_NAME ":  exiting: triggering shutdown");
@@ -457,15 +417,15 @@ SockStop(void *arg)
 static int
 SockClose(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
-    NsServerSSLDriver *sdPtr = scPtr->sdPtr;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsOpenSSLDriver *sdPtr = scPtr->sdPtr;
 
-    Ns_Log(Debug, "%s: SockClose", sdPtr->module->name);
+    Ns_Log(Debug, "%s: SockClose", sdPtr->module);
     if (scPtr->sock != INVALID_SOCKET) {
 	if (scPtr->ssl != NULL) {
-	    NsServerSSLFlushConn(scPtr);
+	    NsOpenSSLFlush(scPtr);
 	}
-	NsServerSSLDestroyConn(scPtr);
+	NsOpenSSLDestroyConn(scPtr);
     }
     SockFreeConn(sdPtr, scPtr);
     return NS_OK;
@@ -492,9 +452,9 @@ SockClose(void *arg)
 static int
 SockRead(void *arg, void *vbuf, int toread)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    return NsServerSSLRecv(scPtr, vbuf, toread);
+    return NsOpenSSLRecv(scPtr, vbuf, toread);
 }
 
 
@@ -518,9 +478,9 @@ SockRead(void *arg, void *vbuf, int toread)
 static int
 SockWrite(void *arg, void *buf, int towrite)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    return NsServerSSLSend(scPtr, buf, towrite);
+    return NsOpenSSLSend(scPtr, buf, towrite);
 }
 
 
@@ -543,7 +503,7 @@ SockWrite(void *arg, void *buf, int towrite)
 static char *
 SockHost(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return scPtr->sdPtr->address;
 }
@@ -568,7 +528,7 @@ SockHost(void *arg)
 static int
 SockPort(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return scPtr->sdPtr->port;
 }
@@ -593,7 +553,7 @@ SockPort(void *arg)
 static char *
 SockName(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return DRIVER_NAME;
 }
@@ -618,7 +578,7 @@ SockName(void *arg)
 static char *
 SockPeer(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return scPtr->peer;
 }
@@ -643,9 +603,9 @@ SockPeer(void *arg)
 static int
 SockConnectionFd(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    if (NsServerSSLFlushConn(scPtr) == NS_ERROR) {
+    if (NsOpenSSLFlush(scPtr) == NS_ERROR) {
 	return -1;
     }
 
@@ -695,7 +655,7 @@ SockDetach(void *arg)
 static int
 SockPeerPort(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return scPtr->port;
 }
@@ -720,7 +680,7 @@ SockPeerPort(void *arg)
 static char *
 SockLocation(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     return scPtr->sdPtr->location;
 }
@@ -745,107 +705,12 @@ SockLocation(void *arg)
 static int
 SockInit(void *arg)
 {
-    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     if (scPtr->ssl == NULL) {
-	return NsServerSSLCreateConn(scPtr);
+	return NsOpenSSLCreateConn(scPtr);
     } else {
 	return NS_OK;
     }
 }
 
-#else /* default to the new comm model in AS4 */
-
-
-/*            
- *----------------------------------------------------------------------
- *
- * OpenSSLProc --
- *
- *      SSL driver callback proc.  This driver performs the necessary
- *      handshake and encryption of SSL.
- *
- * Results:   
- *      For close, always 0.  For keep, 0 if connection could be
- *      properly flushed, -1 otherwise.  For send and recv, # of bytes
- *      processed or -1 on error.
- *
- * Side effects:
- *      None. 
- *            
- *----------------------------------------------------------------------
- */
-
-static int
-OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
-{
-    NsServerSSLConnection *scPtr;
-    Ns_Driver *driver = sock->driver;
-    int n, total;                    
-
-    switch (cmd) {
-    case DriverRecv:
-    case DriverSend:
-        /*          
-         * On first I/O, initialize the connection context.
-         */
-           
-        scPtr = sock->arg;
-        if (scPtr == NULL) {
-            scPtr = ns_calloc(1, sizeof(*scPtr));
-            scPtr->sdPtr = driver->arg;
-            scPtr->sock = sock->sock;
-            sock->arg = scPtr;
-            if (NsServerSSLCreateConn(scPtr) != NS_OK) {
-                return -1;
-            }
-        }    
-
-        /*
-         * Process each buffer one at a time.
-         */
-
-        total = 0;
-        do {      
-            if (cmd == DriverSend) {
-                n = NsServerSSLSend(sock->arg, bufs->ns_buf, bufs->ns_len);
-            } else {
-                n = NsServerSSLRecv(sock->arg, bufs->ns_buf, bufs->ns_len);
-            }
-            if (n < 0 && total > 0) {
-                /* NB: Mask error if some bytes were read. */
-                n = 0;
-            }
-            ++bufs;
-            total += n;
-        } while (n > 0 && --nbufs > 0);
-        n = total;
-        break;
-              
-    case DriverKeep:
-        if (sock->arg != NULL && NsServerSSLFlushConn(sock->arg) == NS_OK) {
-            n = 0;
-        } else {
-            n = -1;
-        }
-        break;
-              
-    case DriverClose:
-        if (sock->arg != NULL) {
-            (void) NsServerSSLFlushConn(sock->arg);
-            NsServerSSLDestroyConn(sock->arg);
-            ns_free(sock->arg);
-            sock->arg = NULL;
-        }
-        n = 0;
-        break;
-              
-    default:  
-        /* Unsupported command. */
-        n = -1;
-        break;
-    }         
-    return n;
-}
-
-#endif

@@ -1,19 +1,20 @@
-Assistance:
-
-  The nsopenssl module is being maintained by me, Scott
-  Goodwin. Suggestions, improvements, patches should be sent to
-  nsopenssl@scottg.net. Go to http://scottg.net for more information.
-
-
 Release Plan:
 
-  Numbering scheme: each upgrade iteration increments the number by
-  one-tenth (1.5, 1.6, 1.7 etc.). If a letter like 'a' or 'b' appears
-  after the number (e.g. 1.5b), then it's not an official release, but
-  may be a bugfix or beta test copy.
+  Numbering scheme? Keep it simple: each upgrade iteration increments
+  the number by one-tenth (1.5, 1.6, 1.7 etc.). If a 'b' appears after
+  the number (e.g. 1.5b), then it's the beta test copy, not the
+  released copy.
+
+
+Assistance:
+
+  If you want assistance or let me know that some of these features
+  are more imporant to you than others, send a note to
+  nsopenssl@scottg.net.
 
 
 Versions:
+
 
 nsopenssl 1.1:
 
@@ -21,31 +22,7 @@ nsopenssl 1.1:
  point, look in the ChangeLog.
 
 
-nsopenssl 1.1a:
-
- Bugfix release to allow client verify and session caching to be used
- at the same time. This is not an official release and you should
- upgrade when the next release is available.
-
-
-nsopenssl 1.1b:
-
- Added ability to have the server pass the server certificate's
- CA cert chain.
-
-
-nsopenssl 1.2 is currently in DEVELOPMENT:
-
- * - adding outgoing HTTPS support so you can connect to SSL sites
-     from your server.
-
-
-future releases:
-
- * - integrate Windows patches from (forgot their full names -- get
-     this from my inbox later).
-
- * - add an NSOPENSSL_VERSION define, with MAJOR and MINOR release.
+next:
 
  * - investigate the keep-alive problem with MSIE; investigate how
      Apache uses ssl-unclean-shutdown, downgrade-1.0,
@@ -57,6 +34,8 @@ future releases:
      feature in mod_ssl where you can allow connections at less than
      128-bit but force the browser to bump up to 128-bit for the actual
      communication.
+
+ * - set 'info version' string dynamically from the OpenSSL library
 
  * - revisit Tcl command naming; commands may need to be
      renamed/pushed down an 'arg' level to support upcoming features;

@@ -32,11 +32,6 @@
 
 /* @(#) $Header$ */
 
-extern Ns_TclInterpInitProc NsOpenSSLCreateCmds;
+extern Ns_TclInterpInitProc NsOpenSSLInterpInit;
 
-typedef struct SSLTclCmd {
-    char           *name;
-    Tcl_CmdProc    *proc;
-    ClientData      clientData;
-} SSLTclCmd;
 

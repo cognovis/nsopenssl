@@ -16,9 +16,9 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000-2001 Scott S. Goodwin
- * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 1999 Stefan Arentz
+ * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -45,181 +45,52 @@
 
 #include <ns.h>
 
-#define DRIVER_NAME      "nsopenssl"
-
-#if 0
-/* XXX set this to have nsopenssl compile with aolserver 4.x */
-#define NS_MAJOR_VERSION 4
-#endif
+#define DRIVER_NAME                   "nsopenssl"
 
 /*
  * The encryption library may be different. For example, you may have
  * OpenSSL as the LIBRARY but BSAFE 4.3 as the CRYPTO_LIBRARY. There
- * should be ifdef's here that'll handle this later. But I haven't set
- * it up to autodetect BSAFE cryptolib yet.
+ * should be ifdef's here that'll handle this later.
  */
 
-#define SSL_LIBRARY_NAME  "OpenSSL"
-#if OPENSSL_VERSION_NUMBER == 0x0090601fL
-#  define SSL_LIBRARY_VERSION  "0.9.6a"
-#elif OPENSSL_VERSION_NUMBER == 0x0090600fL
-#  define SSL_LIBRARY_VERSION  "0.9.6"
-#elif OPENSSL_VERSION_NUMBER == 0x0090581fL
-#  define SSL_LIBRARY_VERSION  "0.9.5a"
-#elif OPENSSL_VERSION_NUMBER == 0x00905100L
-#  define SSL_LIBRARY_VERSION  "0.9.5"
-#else
-#  define SSL_LIBRARY_VERSION  "Unknown"
-#endif
+#define SSL_LIBRARY_NAME               "OpenSSL"
+#define SSL_LIBRARY_VERSION            "0.9.6"
+#define SSL_CRYPTO_LIBRARY_NAME        "OpenSSL"
+#define SSL_CRYPTO_LIBRARY_VERSION     "0.9.6"
 
-#define SSL_CRYPTO_LIBRARY_NAME   SSL_LIBRARY_NAME
-#define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
+struct NsOpenSSLConnection;
 
-typedef struct NsOpenSSLModuleData {
-    Ns_Mutex        lock;
-    int             refcnt;
-    char            *name;         /* Module name */
-    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
-    char            *dir;          /* Module directory (on disk) */
-    int             *serveron;     /* Set to 1 if server is on, 0 if off */
-    int             *clienton;     /* Set to 1 if client is on, 0 if off */
-} NsOpenSSLModuleData;
-
-/* Forward reference */
-struct NsServerSSLConnection;
-
-/*
- * NsServerSSLDriver works with the core server to maintain connection states.
- */
-
-typedef struct NsServerSSLDriver {
-
-    /*
-     * Visible in NsOpenSSLContext
-     */
-
-    char                         *type;   /* client or server */
-    struct NsOpenSSLModuleData   *module;
-    SSL_CTX                      *context;
-    char                         *certfile;
-    char                         *keyfile;
-    char                         *protocols;
-    char                         *cipherSuite;
-    char                         *cafile;
-    char                         *cadir;
-    int                          cacheEnabled;
-    int                          cacheSize;
-    long                         cacheTimeout;
-    char                         *randomFile;   /* Used to seed PRNG */
-
-    /*
-     * Private to NsServerSSLDriver
-     */
-
-    struct NsServerSSLDriver     *nextPtr;
-    struct NsServerSSLConnection *firstFreePtr;
-
-    Ns_Mutex                     lock;
-    int                          refcnt;
-    Ns_Driver                    driver;
-
-    char                         *location;     /* E.g. https://example.com:8443 */
-    char                         *address;      /* Advertised address */
-    char                         *bindaddr;     /* Bind address - might be 0.0.0.0 */
-    int                          port;         /* Bind port */
-
-    int                          bufsize;
-    int                          timeout;
-    SOCKET                       lsock;
-
-} NsServerSSLDriver;
-
-/* Forward reference */
-struct NsClientSSLConnection;
-
-typedef struct NsClientSSLDriver {
-
-    /*
-     * Visible in NsOpenSSLContext
-     */
-
-    char                         *type;   /* client or server */
-    struct NsOpenSSLModuleData   *module;
-    SSL_CTX                      *context;
-    char                         *certfile;
-    char                         *keyfile;
-    char                         *protocols;
-    char                         *cipherSuite;
-    char                         *cafile;
-    char                         *cadir;
-    int                          cacheEnabled;
-    int                          cacheSize;
-    long                         cacheTimeout;
-    char                         *randomFile;   /* Used to seed PRNG */
-
-    /*
-     * Private to NsClientSSLDriver
-     */
-
-    struct NsClientSSLDriver   *nextPtr;
-    struct NsClientSSLConnection *firstFreePtr;
+typedef struct NsOpenSSLDriver {
+    struct NsOpenSSLDriver   *nextPtr;
+    struct NsOpenSSLConnection *firstFreePtr;
 
     Ns_Mutex         lock;
     int              refcnt;
     Ns_Driver        driver;
 
+    char            *module;       /* Module name */
+    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
+    char            *dir;          /* Module directory (on disk) */
+
     char            *location;     /* E.g. https://example.com:8443 */
     char            *address;      /* Advertised address */
+    char            *bindaddr;     /* Bind address - might be 0.0.0.0 */
+    int              port;         /* Bind port */
+
     int              bufsize;
     int              timeout;
     SOCKET           lsock;
 
-} NsClientSSLDriver;
+    SSL_CTX         *context;
 
+    char            *randomFile;   /* Used to seed PRNG */
+} NsOpenSSLDriver;
 
-/*
- * Used to access the common fields in NsServerSSLDriver and NsClientSSLDriver
- */
-
-typedef struct NsOpenSSLContext {
-    char                         *type;   /* client or server */
-    struct NsOpenSSLModuleData   *module;
-    SSL_CTX                      *context;
-    char                         *certfile;
-    char                         *keyfile;
-    char                         *protocols;
-    char                         *cipherSuite;
-    char                         *cafile;
-    char                         *cadir;
-    int                          cacheEnabled;
-    int                          cacheSize;
-    long                         cacheTimeout;
-    char                         *randomFile;   /* Used to seed PRNG */
-} NsOpenSSLContext;
-
-
-typedef struct NsServerSSLConnection {
-    struct NsServerSSLConnection *nextPtr;
-    struct NsServerSSLDriver   *sdPtr;
+typedef struct NsOpenSSLConnection {
+    struct NsOpenSSLConnection *nextPtr;
+    struct NsOpenSSLDriver   *sdPtr;
 
     SOCKET  sock;
-#ifndef NS_MAJOR_VERSION
-    char    peer[16];
-    int     port;
-#endif
-
-    SSL    *ssl;
-    BIO    *io;
-
-    X509   *clientcert;
-} NsServerSSLConnection;
-
-typedef struct NsClientSSLConnection {
-    struct NsClientSSLConnection *nextPtr;
-    struct NsClientSSLDriver   *cdPtr;
-
-    SOCKET  sock;
-
     char    peer[16];
     int     port;
 
@@ -227,51 +98,28 @@ typedef struct NsClientSSLConnection {
     BIO    *io;
 
     X509   *clientcert;
-} NsClientSSLConnection;
+} NsOpenSSLConnection;
 
 /*
  * init.c
  */
 
-/* common functions */
-extern int NsInitOpenSSL();
-extern NsOpenSSLModuleData *NsOpenSSLModuleDataInit(char *server, char *module);
-extern void NsOpenSSLModuleDataFree(NsOpenSSLModuleData *mPtr);
-
-/* server functions */
-#ifndef NS_MAJOR_VERSION
-extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module,
-    NsOpenSSLModuleData *mPtr, Ns_DrvProc *procs);
-#else
-extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module,
-    NsOpenSSLModuleData *mPtr);
-#endif
-extern void NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr);
-
-/* client functions */
-extern NsClientSSLDriver *NsClientSSLCreateDriver(char *server, char *module,
-    NsOpenSSLModuleData *mPtr);
-extern void NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr);
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
+    Ns_DrvProc *procs);
+extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
 
 /*
  * ssl.c
  */
 
-extern int NsServerSSLCreateConn(NsServerSSLConnection *scPtr);
-extern void NsServerSSLDestroyConn(NsServerSSLConnection *scPtr);
-extern void NsServerSSLTrace(SSL *ssl, int where, int rc);
-extern int NsServerSSLShutdownConn(SSL *ssl);
-
-extern void NsClientSSLTrace(SSL *ssl, int where, int rc);
-
-/*
- * nsopenssl.c
- */
-
-extern int NsServerSSLFlushConn(NsServerSSLConnection *scPtr);
-extern void NsServerSSLDestroyConn(NsServerSSLConnection *scPtr);
-extern int NsServerSSLRecv(NsServerSSLConnection *scPtr, void *buffer,
+extern int NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr);
+extern void NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr);
+extern void NsOpenSSLTrace(SSL *ssl, int where, int rc);
+extern int NsOpenSSLShutdown(SSL *ssl);
+extern int NsOpenSSLFlush(NsOpenSSLConnection *scPtr);
+extern void NsDestroyOpenSSLConn(NsOpenSSLConnection *scPtr);
+extern int NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
     int toread);
-extern int NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer,
+extern int NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
     int towrite);
 

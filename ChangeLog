@@ -1,127 +1,31 @@
-2001-06-23  Scott S. Goodwin  <scott@scottg.net>
+2001-08-08  Scott S. Goodwin  <scott@scottg.net>
 
-	* tclcmds.h, tclcmds.c: added struct to hold list of Tcl commands
-	to create and made the creation process loop over all the commands
-	and create them.
+	* nsopenssl 1.1c released.
 
-	* init.c: rewrote SetProtocols to allow the protocols to be set on
-	one line in nsd.tcl. Added protocols and cipherSuite to structs.
-
-2001-06-16  Scott S. Goodwin  <scott@scottg.net>
-
-	* init.c, nsopenssl.h: cleaned up InitSessionCache.
-
-	* init.c, nsopenssl.h: enormous changes to support client
-	connections. Started moving a lot of the config options into the
-	Driver structures so they are passed to things like LoadKey
-	etc. Both client and server use most of the same functions such as
-	LoadKey, LoadCertificate, etc. Created NsOpenSSLContext as a
-	"view" into the public parts of NsServerSSLDriver and
-	NsClientSSLDriver.
+	* all: Bug fix. If a file upload is interrupted, the connection
+	doesn't go away, and the thread continues consuming CPU and
+	memory. This fix checks to see if the client has gone away and
+	forces an error, at which point the connection is cleaned up
+	properly.
 
 2001-06-15  Scott S. Goodwin  <scott@scottg.net>
 
-	* all: changed define names for server
-	(i.e. CONFIG_CIPHERSUITE became CONFIG_SERVER_CIPHERSUITE). Added
-	defines for the upcoming client code. Got the SSL_CTX for the
-	client working via ClientMakeContext. Added
-	ClientVerifyServerCallback routine, NsClientSSLTrace routine.
+	* nsopenssl 1.1b released.
 
-	* readme.txt: updated.
-
-	* init.c, nsopenssl.c, nsopenssl.h, ssl.c: created
-	NsOpenSSLModuleData structure to hold the data about the module
-	that is common between client and server functions. Pulled this
-	data out of the NsServerSSLDriver and NsClientSSLDriver
-	struct. Changed all references like sdPtr->module to be
-	sdPtr->module->name.
-
-	* init.c: changed ServerLoadCertificate to look for a certificate
-	chain after the server's certificate. Simply append all of the
-	certs in the chain to the end of the server cert file. Having a
-	chain is optional.
-
-2001-06-13  Scott S. Goodwin  <scott@scottg.net>
-
-	* init.c: added NsClientSSLCreateDriver and NsClientSSLFreeDriver.
-
-	* init.c, nsopenssl.h: moved OpenSSL initialization out of
-	NsServerCreateDriver to the new NsInitOpenSSL function.
-
-	* init.c, nsopenssl.c, nsopenssl.h: changed NsOpenSSLCreateDriver
-	to NsServerSSLCreateDriver and NsOpenSSLFreeDriver to
-	NsServerSSLFreeDriver.
-
-	* nsopenssl.c: added NsClientSSLConnection and NsClientSSLDriver
-	structs (I know, the client stuff doesn't need a driver; I'll work
-	that issue later.)
-
-	* all: changed NsOpenSSLConnection struct name to
-	NsServerSSLConnection and NsOpenSSLDriver to NsServerSSLDriver in
-	preparation for adding client structures.
-
-2001-06-12  Scott S. Goodwin  <scott@scottg.net>
-
-	* init.c, nsopenssl.c, nsopenssl.h: prefixed static functions that
-	are server-specific with "Server", and replaced "NsOpenSSL" with
-	"NsServerSSL" to make room for the upcoming client functions,
-	which will be called "NsClientSSL".
-
-	* nsopenssl-client-test.htm: added this file to test connectivity
-	for the nsopenssl client code.
-
-	* Makefile: removed old CLIENTVERIFY test preprocessor stuff.
-
-	* all: changed #ifdef AS3 to #ifndef NS_MAJOR_VERSION. This means
-	it now compiles for AOLserver 3.x by default, since
-	NS_MAJOR_VERSION doesn't even exist in 4.x yet.
-
-	* nsopenssl.h: Added code to define the OpenSSL library in use by
-	pulling the OPENSSL_VERSION_NUMBER from the source.
-
+	* all: Updated to allow the server to pass its certificate chain
+	to the client. To use this feature, simply append your certificate
+	chain to the end of your server certificate PEM file and start
+	your server.
+	
+	
 2001-06-08  Scott S. Goodwin  <scott@scottg.net>
 
-	* init.c: added SSL_CTX_set_session_id_context call and
-	s_server_session_id_context integer. If session caching is on
-	(which it is by default) and clientverify is also on (which it is
-	not by default) all connections after the first for a particular
-	session fail as OpenSSL gets confused. Setting the
-	session_id_context fixes this problem. NOTE: if you run more than
-	one nsopenssl module on the same server, both of those modules
-	will be calling the exact same OpenSSL functions (from the module
-	that was loaded first). In such a case, the session_id_context
-	integer may have to be different for each of the loaded modules.
+	* nsopenssl 1.1a released.
 
-	* init.c: removed unused InitSession prototype.
+	* all: Bug fix to allow session caching and client certificate
+	verification to work at the same time. Session caching is on by
+	default in version 1.1, but client verify is not.
 
-2001-05-22  Scott S. Goodwin  <scott@scottg.net>
-
-	* tclcmds.c: cleaned up NsOpenSSLGetConn (had to change the
-	aolserver 4.x core server to put back Ns_ConnDriverContext, which
-	was always returning NULL);
-
-2001-05-18  Scott S. Goodwin  <scott@scottg.net>
-
-        * init.c, nsopenssl.c, ssl.c, tclcmds.c, Makefile: integrated
-        changes from Jim Davidson and Kris Rehberg to make nsopenssl work
-        with AOLserver 4.x's new communication API. 3.x-specific code is
-        wrapped with '#ifdef AS3' everywhere it needs to be. nsopenssl at
-        this point defaults to compiling for 4.x. To make it compile with
-        AOLserver 3.x, do the following:
-
-        make OPENSSL=/path/to/installed/openssl AS3=1
-
-        I'll try to find an automatic way of determining which version of
-        AOLserver to compile for, probably by having the Makefile look at
-        NSD_VERSION.
-
-2001-05-14  Scott S. Goodwin  <scott@scottg.net>
-
-	* init.c: added more informative error message when the private
-	key fails to be loaded. Essentially tells the user that the
-	private key may be passphrase protected, and outputs on example
-	openssl command that'll take off the passphrase.
- 
 2001-05-05  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsopenssl 1.1 released.

@@ -43,22 +43,13 @@ static void SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name);
 static void SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj);
 static char *ValidTime(ASN1_UTCTIME *tm);
 static char *PEMCertificate(X509 *clientcert);
-static NsServerSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
-
-static SSLTclCmd nsopensslCmds[ ] = {
-    {
-        "ns_openssl", NsOpenSSLCmd, NULL
-    },
-    {
-        NULL, NULL, NULL
-    }                                                   
-};   
+static NsOpenSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
 
 
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLCreateCmds --
+ * NsOpenSSLInterpInit --
  *
  *      Add nsopenssl commands to Tcl interpreter.
  *
@@ -72,25 +63,14 @@ static SSLTclCmd nsopensslCmds[ ] = {
  */
 
 int
-NsOpenSSLCreateCmds(Tcl_Interp *interp, void *arg)
+NsOpenSSLInterpInit(Tcl_Interp *interp, void *arg)
 {
-    SSLTclCmd *cmds = (SSLTclCmd *) &nsopensslCmds;
-
-    while (cmds->name != NULL) {
-
-        if (Tcl_CreateCommand(interp,
-			      cmds->name,
-			      cmds->proc,
-			      cmds->clientData,
-			      NULL)
+    if (Tcl_CreateCommand(interp, "ns_openssl", NsOpenSSLCmd, NULL, NULL)
 	    == NULL) {
-
-	    return NS_ERROR;
-	}
-	++cmds;
-    }         
-
-    return NS_OK;
+	return NS_ERROR;
+    } else {
+	return NS_OK;
+    }
 }
 
 
@@ -111,14 +91,12 @@ NsOpenSSLCreateCmds(Tcl_Interp *interp, void *arg)
  */
 
 static int
-NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,	
+NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,	
     char **argv)
 {
-    NsServerSSLConnection *scPtr;
+    NsOpenSSLConnection *scPtr;
     X509                *clientcert;
     SSL_CIPHER          *cipher;
-    Ns_DString           ds;
-    /* XXX string will be going away in lieu of dstring */
     char                *string;
     int                  integer;
     int                  status;
@@ -142,26 +120,18 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
 
     } else if (STREQ(argv[1], "protocol")) {
 
-        if (scPtr == NULL) {
-            Ns_Log(Debug, "scPtr is NULL");
-        }
-
-        Ns_DStringInit(&ds);
         switch(scPtr->ssl->session->ssl_version) {
             case SSL2_VERSION:
-                Ns_DStringPrintf(&ds, "%s ", "SSLv2");
-                break;
+                string="SSLv2"; break;
             case SSL3_VERSION:
-                Ns_DStringPrintf(&ds, "%s ", "SSLv3");
-                break;
+                string="SSLv3"; break;
             case TLS1_VERSION:
-                Ns_DStringPrintf(&ds, "%s ", "TLSv1");
-                break;
+                string="TLSv1"; break;
             default:
-                Ns_DStringPrintf(&ds, "%s ", "Unknown");
+                string="UNKNOWN";
         }
-        Tcl_SetResult(interp, ds.string, TCL_VOLATILE);
-        Ns_DStringFree(&ds);
+
+        Tcl_SetResult(interp, string, TCL_VOLATILE);
 
     } else if (STREQ(argv[1], "cipher")) {
 
@@ -178,7 +148,6 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
                 string = (scPtr->ssl != NULL ? (char *)SSL_CIPHER_get_name(cipher) : NULL);
                 Tcl_SetResult(interp, string, TCL_VOLATILE);
 	    }
-
         } else if (STREQ(argv[2], "strength")) { 
 
             if (argc != 3) {
@@ -366,7 +335,7 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
  *      Return the SSL connection struct for the current connection.
  *
  * Results:
- *      NsServerSSLConnection* or NULL.
+ *      NsOpenSSLConnection* or NULL.
  *
  * Side effects:
  *      None.
@@ -374,17 +343,19 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-static NsServerSSLConnection *
+static NsOpenSSLConnection *
 NsOpenSSLGetConn(Tcl_Interp *interp)
 {
     Ns_Conn             *conn;
+    NsOpenSSLConnection *cdPtr;
     char                *name;
 
+    /* conn = Ns_GetConn();  ** Ns_GetConn is gone */
     conn = Ns_TclGetConn(interp);
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
 	if (name != NULL && STREQ (name, DRIVER_NAME)) {
-	    return (NsServerSSLConnection *) Ns_ConnDriverContext(conn);
+	    return (NsOpenSSLConnection *) Ns_ConnDriverContext(conn);
 	}
     }
 
