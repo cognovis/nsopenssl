@@ -1,3 +1,25 @@
+2003-05-18  Scott S. Goodwin  <scott@scottg.net>
+
+        * nsopenssl.h, nsopenssl.c, init.c: Added NsOpenSSLServers structure
+          to manage per-virtual server information.
+
+        * nsopenssl.c, init.c: Moved Tcl API initializion from nsopenssl.c to
+          init.c.
+
+2003-05-17  Scott S. Goodwin  <scott@scottg.net>
+
+        * Makefile: cleaned up tagging and file release targets.
+
+        * init.c, nsopenssl.c: Added NsOpenSSLInit; cleaned up InitOpenSSL and
+          SeedPRNG; got rid of PRNGIsSeeded, AddEntropyFromRandomFile. Added a
+          global nsopenssl section to the config file that sets parameters
+          that are non-virtual server specific, and it looks like this:
+
+          ns_section "ns/module/nsopenssl"
+          ns_param RandomFile /tmp/random
+          ns_param SeedBytes  1024
+          ns_param MaxSeedBytes  1024000
+
 2003-05-08  Scott S. Goodwin  <scott@scottg.net>
 
         * Released nsopenssl 2.1a

@@ -1,4 +1,35 @@
 #
+# The contents of this file are subject to the AOLserver Public License
+# Version 1.1 (the "License"); you may not use this file except in
+# compliance with the License. You may obtain a copy of the License at
+# http://aolserver.com.
+#
+# Software distributed under the License is distributed on an "AS IS"
+# basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+# the License for the specific language governing rights and limitations
+# under the License.
+#
+# The Original Code is AOLserver Code and related documentation
+# distributed by AOL.
+#
+# The Initial Developer of the Original Code is America Online,
+# Inc. Portions created by AOL are Copyright (C) 1999 America Online,
+# Inc. All Rights Reserved.
+#
+# Alternatively, the contents of this file may be used under the terms
+# of the GNU General Public License (the "GPL"), in which case the
+# provisions of GPL are applicable instead of those above.  If you wish
+# to allow use of your version of this file only under the terms of the
+# GPL and not to allow others to use your version of this file under the
+# License, indicate your decision by deleting the provisions above and
+# replace them with the notice and other provisions required by the GPL.
+# If you do not delete the provisions above, a recipient may use your
+# version of this file under either the License or the GPL.
+#
+# Copyright (C) 2001-2003 Scott S. Goodwin
+#
+# Derived from http.tcl, originally written by AOL
+#
 # $Header$
 #
 # nsopenssl --
@@ -23,6 +54,11 @@ endif
 VER_ = $(subst .,_,$(VER))
 
 #
+# Module Pretty-name
+#
+MODNAME  = nsopenssl
+
+#
 # Module name
 #
 MOD      =  nsopenssl.so
@@ -30,12 +66,15 @@ MOD      =  nsopenssl.so
 #
 # Objects to build
 #
-OBJS     =  nsopenssl.o config.o init.o ssl.o thread.o tclcmds.o
+OBJS     =  nsopenssl.o init.o ssl.o tclcmds.o config.o thread.o
 
 #
 # Header files in THIS directory (included with your module)
 #
-HDRS     =  nsopenssl.h tclcmds.h config.h thread.h
+HDRS     =  nsopenssl.h
+
+# XXX take out the -g for production
+CFLAGS += -g
 
 #
 # Extra libraries required by your module (-L and -l go here)
@@ -53,7 +92,7 @@ endif
 #
 # Compiler flags required by your module (-I for external headers goes here)
 #
-CFLAGS   +=  -I$(OPENSSL)/include
+CFLAGS   += -I$(OPENSSL)/include
 
 #
 # Tcl modules to install
@@ -66,26 +105,32 @@ TCLMOD   =  https.tcl
 include  $(NSHOME)/include/Makefile.module
 
 #
-# Tag the CVS snapshot with a beta tag
+# Help the poor developer
 #
-tag-beta:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag v$(VER_) nsopenssl
+help:
+	@echo "**" 
+	@echo "** DEVELOPER HELP FOR THIS $(MODNAME)"
+	@echo "**"
+	@echo "** make tag VER=X.Y"
+	@echo "**     Tags the module CVS code with the given tag."
+	@echo "**     You can tag the CVS copy at any time, but follow the rules."
+	@echo "**     VER must be of the form:"
+	@echo "**         X.Y"
+	@echo "**         X.YbetaN"
+	@echo "**     You should browse CVS at SF to find the latest tag."
+	@echo "**"
+	@echo "** make file-release VER=X.Y"
+	@echo "**     Checks out the code for the given tag from CVS."
+	@echo "**     The result will be a releaseable tar.gz file of"
+	@echo "**     the form: module-X.Y.tar.gz."
+	@echo "**"
 
 #
-# Create a tagged release. This moves the 'stable' tag to coincide with the v$(VER_) tag.
-# This way you can checkout the latest stable CVS copy when the head copy is unstable.
+# Tag the code in CVS right now
 #
-tag-stable:
+tag:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag -r stable v$(VER_) nsopenssl
-
-#
-# Create a tagged release (force it)
-#
-tag-stable-force:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag -F -r stable v$(VER_) nsopenssl
+	cvs rtag v$(VER_) $(MODNAME)
 
 #
 # Create a distribution file release
@@ -94,9 +139,9 @@ file-release:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	rm -rf work
 	mkdir work
-	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) nsopenssl
-	mv work/nsopenssl work/nsopenssl-$(VER)
-	( cd work && tar cvf - nsopenssl-$(VER) ) | gzip -9 > nsopenssl-$(VER).tar.gz
+	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) $(MODNAME)
+	mv work/$(MODNAME) work/$(MODNAME)-$(VER)
+	(cd work && tar cvf - $(MODNAME)-$(VER)) | gzip -9 > $(MODNAME)-$(VER).tar.gz
 	rm -rf work
 
 # XXX alter this to work with sed or tcl instead of perl

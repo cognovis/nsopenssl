@@ -47,7 +47,10 @@ static const char *RCSID =
 #include "config.h"
 #include "thread.h"
 
-static int InitializeOpenSSL (void);
+
+//static Tcl_HashTable NsOpenSSLServers;
+
+static int InitOpenSSL (void);
 static int CheckModuleDir (NsOpenSSLDriver * sdPtr);
 static int MakeDriverSSLContext (NsOpenSSLDriver * sdPtr);
 
@@ -73,10 +76,63 @@ static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX * x509_ctx);
  * you want 40-bit encryption to work in old export browsers.
  */
 
-static int AddEntropyFromRandomFile (NsOpenSSLDriver * sdPtr, long maxbytes);
-static int PRNGIsSeeded (NsOpenSSLDriver * sdPtr);
-static int SeedPRNG (NsOpenSSLDriver * sdPtr);
+static int SeedPRNG (void);
 static RSA *IssueTmpRSAKey (SSL * ssl, int export, int keylen);
+
+
+extern int
+NsOpenSSLInitModule (char *server, char *module)
+{
+    static int globalInit = 0;
+    Server *thisServer;
+    Tcl_HashEntry *hPtr;
+    int new;
+
+    /* Initialize one-time global stuff */
+
+    if (!globalInit) {
+        if (InitOpenSSL () == NS_ERROR) {
+            Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
+            return NS_ERROR;
+        }
+        Tcl_InitHashTable(&NsOpenSSLServers, TCL_STRING_KEYS);
+        globalInit = 1;
+    }
+
+    /* Initialize this server's hash table */
+
+    thisServer = ns_malloc(sizeof(Server));
+    thisServer->server = server;
+    Ns_RWLockInit(&thisServer->lock);
+    hPtr = Tcl_CreateHashEntry(&NsOpenSSLServers, server, &new);
+    Tcl_SetHashValue(hPtr, thisServer);
+    Tcl_InitHashTable(&thisServer->sslContexts, TCL_STRING_KEYS);
+    Tcl_InitHashTable(&thisServer->sslDrivers, TCL_STRING_KEYS);
+
+    /* 
+     * Create the Tcl commands for this virtual server's interps. We want the
+     * Tcl API available even if this virtual server doesn't use SSL in case
+     * this server accidentally runs these commands. If the server doesn't
+     * define any SSL contexts and no drivers are started for it (see further
+     * down), the Tcl API commands will issue useful errors in the log file for
+     * you. If we didn't define these commands and you had "command not found"
+     * errors in the logs you'd be scratching your head.
+     */
+    
+    if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL) != NS_OK)
+            return NS_ERROR;
+
+    /* 
+     * Load SSL contexts from the configuration file. If there aren't any, we
+     * don't start any drivers but continue to run normally as some virtual
+     * servers may not use this module.
+     */
+
+    /* XXX Initialize SSL drivers from configuration file */
+
+    return NS_OK;
+}
+
 
 /*
  *----------------------------------------------------------------------
@@ -112,35 +168,13 @@ NsOpenSSLCreateDriver (char *server, char *module)
     sdPtr->lsock = INVALID_SOCKET;
     sdPtr->configPath = Ns_ConfigGetPath (server, module, NULL);
 
-    if (NsOpenSSLInitThreads () == NS_ERROR
-	|| InitializeOpenSSL () == NS_ERROR
-	|| CheckModuleDir (sdPtr) == NS_ERROR
+    if (CheckModuleDir (sdPtr) == NS_ERROR
 	|| MakeDriverSSLContext (sdPtr) == NS_ERROR
 	|| MakeSockServerSSLContext (sdPtr) == NS_ERROR
 	|| MakeSockClientSSLContext (sdPtr) == NS_ERROR
 	|| InitLocation (sdPtr) == NS_ERROR) {
 	NsOpenSSLFreeDriver (sdPtr);
 	return NULL;
-    }
-
-    sdPtr->randomFile = ConfigPathDefault (sdPtr->module, sdPtr->configPath,
-					   CONFIG_RANDOMFILE, sdPtr->dir,
-					   NULL);
-
-    /*
-     * If the OpenSSL's PRNG is not seeded, seed it now.
-     */
-
-    if (PRNGIsSeeded (sdPtr) != NS_TRUE) {
-	Ns_Log (Warning, "%s: PRNG does not have enough entropy",
-		sdPtr->module);
-	SeedPRNG (sdPtr);
-	if (PRNGIsSeeded (sdPtr) == NS_TRUE) {
-	    Ns_Log (Notice, "%s: PRNG now has enough entropy", sdPtr->module);
-	} else {
-	    Ns_Log (Error, "%s: PRNG STILL does not have enough entropy",
-		    sdPtr->module);
-	}
     }
 
     sdPtr->timeout = ConfigIntDefault (module, sdPtr->configPath,
@@ -210,8 +244,6 @@ NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr)
 	    ns_free (sdPtr->address);
 	if (sdPtr->location != NULL)
 	    ns_free (sdPtr->location);
-	if (sdPtr->randomFile != NULL)
-	    ns_free (sdPtr->randomFile);
 	ns_free (sdPtr);
     }
 }
@@ -219,9 +251,9 @@ NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * InitializeOpenSSL --
+ * InitOpenSSL --
  *
- *       Initialize the SSL library.
+ *       Initializes the OpenSSL library prior to first use.
  *
  * Results:
  *       NS_OK
@@ -233,12 +265,36 @@ NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr)
  */
 
 static int
-InitializeOpenSSL (void)
+InitOpenSSL (void)
 {
+    int count = 0;
+
+    /* Initialize OpenSSL library */
+
     SSL_load_error_strings ();
     OpenSSL_add_ssl_algorithms ();
     SSL_library_init ();
     X509V3_add_standard_extensions ();
+
+    /* Initialize OpenSSL threading */
+
+    if (NsOpenSSLInitThreads () == NS_ERROR) {
+        Ns_Log(Error, "%s: OpenSSL threads failed to initialize", MODULE);
+        return NS_ERROR;
+    }
+
+    /* Initialize OpenSSL's Pseudo-Random Number Generator */
+
+        SeedPRNG ();
+    while (! RAND_status () && count < 3) {
+        count++;
+        Ns_Log (Notice, "%s: Seeding OpenSSL's PRNG", MODULE);
+        SeedPRNG ();
+    }
+    if (! RAND_status ()) {
+        Ns_Log (Warning, "%s: PRNG fails to have enough entropy after %d tries",
+                MODULE, count);
+    }
 
     return NS_OK;
 }
@@ -337,44 +393,32 @@ MakeDriverSSLContext (NsOpenSSLDriver * sdPtr)
 
     SSL_CTX_set_app_data (sdPtr->context, sdPtr);
 
-    /*
-     * Enable SSL bug compatibility.
-     */
-
+    /* Enable SSL bug compatibility.  */
     SSL_CTX_set_options (sdPtr->context, SSL_OP_ALL);
 
-    /*
-     * This apparently prevents some sort of DH attack.
-     */
-
+    /* This apparently prevents some sort of DH attack.  */
     SSL_CTX_set_options (sdPtr->context, SSL_OP_SINGLE_DH_USE);
 
-    /*
-     * Temporary key callback required for 40-bit export browsers
-     */
-
+    /* Temporary key callback required for 40-bit export browsers */
     SSL_CTX_set_tmp_rsa_callback (sdPtr->context, IssueTmpRSAKey);
 
-    /*
-     * Set peer verify and verify depth
-     */
+    /* Set peer verify and verify depth */
 
     peerVerify = ConfigBoolDefault (sdPtr->module, sdPtr->configPath,
-				    CONFIG_SERVER_PEERVERIFY,
-				    DEFAULT_SERVER_PEERVERIFY);
+  				    CONFIG_SERVER_PEERVERIFY,
+  				    DEFAULT_SERVER_PEERVERIFY);
 
     if (peerVerify) {
+        Ns_Log(Notice, "*** !!! ServerPeerVerify set to true");
 	SSL_CTX_set_verify (sdPtr->context,
 			    (SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE),
 			    PeerVerifyCallback);
-
-	verifyDepth =
-	    (int) ConfigIntDefault (sdPtr->module, sdPtr->configPath,
+	verifyDepth = (int) ConfigIntDefault (sdPtr->module, sdPtr->configPath,
 				    CONFIG_SERVER_VERIFYDEPTH,
 				    DEFAULT_SERVER_VERIFYDEPTH);
 	SSL_CTX_set_verify_depth (sdPtr->context, verifyDepth);
-
     } else {
+        Ns_Log(Notice, "*** !!! ServerPeerVerify set to false");
 	SSL_CTX_set_verify (sdPtr->context, SSL_VERIFY_NONE, NULL);
     }
 
@@ -1339,90 +1383,83 @@ PeerVerifyCallback (int preverify_ok, X509_STORE_CTX * x509_ctx)
  */
 
 static int
-SeedPRNG (NsOpenSSLDriver * sdPtr)
+SeedPRNG (void)
 {
-    int i;
+    int i, seedBytes, readBytes, maxSeedBytes;
     double *buf_ptr = NULL;
     double *bufoffset_ptr = NULL;
+    char *path, *randomFile;
     size_t size;
-    int seedbytes;
 
-    if (PRNGIsSeeded (sdPtr)) {
-	Ns_Log (Debug, "%s: PRNG already has enough entropy", sdPtr->module);
-	return NS_TRUE;
+    if (RAND_status ()) 
+          return NS_TRUE;
+
+    Ns_Log (Notice, "%s: Seeding OpenSSL's PRNG", MODULE);
+
+    path = Ns_ConfigGetPath (NULL, MODULE, NULL);
+
+    if (Ns_ConfigGetInt(path, "seedbytes", &seedBytes) == NS_FALSE) {
+        seedBytes = DEFAULT_SEED_BYTES;
     }
 
-    Ns_Log (Notice, "%s: Seeding the PRNG", sdPtr->module);
-
-    seedbytes = ConfigIntDefault (sdPtr->module, sdPtr->configPath,
-				  CONFIG_SEEDBYTES, DEFAULT_SEEDBYTES);
-
-    /*
-     * Try to use the file specified by the user.
-     */
-
-    AddEntropyFromRandomFile (sdPtr, seedbytes);
-
-    if (PRNGIsSeeded (sdPtr)) {
-	return NS_TRUE;
+    if (Ns_ConfigGetInt(path, "maxseedbytes", &maxSeedBytes) == NS_FALSE) {
+        maxSeedBytes = DEFAULT_MAX_SEED_BYTES;
     }
 
+    randomFile = Ns_ConfigGetValue(path, "randomfile");
+
     /*
-     * Use Ns API; I have no idea how to measure the amount of
-     * entropy, so for now I just pass the same number as the 2nd arg
-     * to RAND_add Also know that not all of the buffer is used
+     * Try to use the file specified by the user. If PRNG fails to seed here,
+     * you might try increasing the seedBytes parameter in nsd.tcl.
      */
 
-    size = sizeof (double) * seedbytes;
-    buf_ptr = Ns_Malloc (size);
+    if (randomFile != NULL && access (randomFile, F_OK) == 0) {
+    	if ((readBytes = RAND_load_file (randomFile, maxSeedBytes))) {
+	        Ns_Log (Notice, "%s: Obtained %d random bytes from %s",
+		        MODULE, readBytes, randomFile);
+	    } else {
+	        Ns_Log (Warning, "%s: Unable to retrieve any random data from %s",
+		        MODULE, randomFile);
+	    }
+    } else {
+        Ns_Log(Warning, "%s: No randomFile set and/or found", MODULE);
+    }
+
+    if (RAND_status ()) 
+	    return NS_TRUE;
+
+    Ns_Log (Notice, "%s: PRNG seeding from file failed; let's try Ns_DRand()",
+            MODULE);
+
+    /*
+     * Use Ns_DRand(); I have no idea how to measure the amount of entropy, so for
+     * now I just pass seedBytes as the 2nd arg to RAND_add. Not all of the
+     * buffer is used. It's on my list of research topics.
+     */
+
+    size          = sizeof(double) * seedBytes;
+    buf_ptr       = Ns_Malloc (size);
     bufoffset_ptr = buf_ptr;
-    for (i = 0; i < seedbytes; i++) {
-	*bufoffset_ptr = Ns_DRand ();
+
+    for (i = 0; i < seedBytes; i++) {
+       *bufoffset_ptr = Ns_DRand ();
 	bufoffset_ptr++;
     }
-    RAND_add (buf_ptr, seedbytes, (long) seedbytes);
+
+    RAND_add (buf_ptr, seedBytes, (double) seedBytes);
     Ns_Free (buf_ptr);
-    Ns_Log (Notice, "%s: Seeded PRNG with %d bytes from Ns_DRand",
-	    sdPtr->module, seedbytes);
 
-    if (PRNGIsSeeded (sdPtr)) {
-	return NS_TRUE;
-    }
-
-    Ns_Log (Warning, "%s: Failed to seed PRNG with enough entropy",
-	    sdPtr->module);
-    return NS_FALSE;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * PRNGIsSeeded --
- *
- *       See if the PRNG contains enough entropy.
- *
- * Results:
- *       NS_TRUE or NS_FALSE
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-PRNGIsSeeded (NsOpenSSLDriver * sdPtr)
-{
     if (RAND_status ()) {
-	Ns_Log (Debug,
-		"%s: RAND_status reports sufficient entropy for the PRNG",
-		sdPtr->module);
-	return NS_TRUE;
+        Ns_Log (Notice, "%s: PRNG successfully seeded with %d bytes from Ns_DRand",
+	    MODULE, seedBytes);
+    } else {
+        Ns_Log (Warning, "%s: PRNG failed to be seeded with Ns_DRand", MODULE);
+        return NS_FALSE;
     }
 
-    /* Assume we don't have enough */
-    return NS_FALSE;
+    return NS_TRUE;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1453,55 +1490,15 @@ IssueTmpRSAKey (SSL * ssl, int export, int keylen)
     scPtr = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
     sdPtr = scPtr->sdPtr;
 
-    if (SeedPRNG (sdPtr)) {
-	rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
-	Ns_Log (Notice, "%s: Generated %d-bit temporary RSA key",
+    rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
+    if (rsa_tmp != NULL) {
+        Ns_Log (Notice, "%s: Generated %d-bit temporary RSA key",
 		sdPtr->module, keylen);
-	return rsa_tmp;
     } else {
 	Ns_Log (Warning,
 		"%s: Cannot generate temporary RSA key due to insufficient entropy in PRNG",
 		sdPtr->module);
-	return NULL;
-    }
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * AddEntropyFromRandomFile --
- *
- *       Grabs a number of bytes from a file to seed the OpenSSL
- *       PRNG.
- *
- * Results:
- *       None.
- *
- * Side effects:
- *       Directly seeds OpenSSL's PRNG by calling RAND_load_file.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-AddEntropyFromRandomFile (NsOpenSSLDriver * sdPtr, long maxbytes)
-{
-    int readbytes;
-
-    if (sdPtr->randomFile == NULL) {
-	return NS_FALSE;
     }
 
-    if (access (sdPtr->randomFile, F_OK) == 0) {
-	if ((readbytes = RAND_load_file (sdPtr->randomFile, maxbytes))) {
-	    Ns_Log (Debug, "%s: Obtained %d random bytes from %s",
-		    sdPtr->module, readbytes, sdPtr->randomFile);
-	    return NS_TRUE;
-	} else {
-	    Ns_Log (Warning, "%s: Unable to retrieve any random data from %s",
-		    sdPtr->module, sdPtr->randomFile);
-	    return NS_FALSE;
-	}
-    }
-    return NS_FALSE;
+    return rsa_tmp;
 }

@@ -50,7 +50,8 @@
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
-#define DRIVER_NAME                   "nsopenssl"
+#define MODULE "nsopenssl"
+#define DRIVER_NAME MODULE
 
 /*
  * It is possible to have the encryption library be different
@@ -106,7 +107,6 @@ typedef struct NsOpenSSLDriver {
     SSL_CTX *sockServerContext;
     
     SOCKET   lsock;
-    char    *randomFile;	/* Used to seed PRNG */
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
@@ -141,16 +141,28 @@ typedef struct Ns_OpenSSLConn {
        need to reevaluate. */
     struct Ns_OpenSSLConn *nextPtr;
     struct NsOpenSSLDriver *sdPtr;
-
 } Ns_OpenSSLConn;
+
+/*
+ * Store per-virtual server information
+ */
+
+typedef struct Server {
+    char            *server;
+    Ns_Mutex         lock;
+    Tcl_HashTable    sslContexts;
+    Tcl_HashTable    sslDrivers;
+    Ns_OpenSSLConn  *firstSSLConnPtr;
+} Server;
+
+extern Tcl_HashTable NsOpenSSLServers;
+
 
 
 typedef struct SSLTclCmd {
-
     char *name;
     Tcl_CmdProc *proc;
     ClientData clientData;
-
 } SSLTclCmd;
 
 /*
@@ -175,6 +187,7 @@ extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module,
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module);
 #endif
 extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
+extern int NsOpenSSLInitModule (char *server, char *module);
 
 /*
  * ssl.c

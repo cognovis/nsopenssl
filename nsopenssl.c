@@ -58,9 +58,7 @@ NS_EXPORT int Ns_ModuleVersion = 1;
 
 NS_EXPORT int Ns_ModuleInit (char *server, char *module);
 
-/*
- * Private symbols
- */
+Tcl_HashTable NsOpenSSLServers;
 
 /*
  * Common between AOLserver 3.x and 4.x
@@ -146,10 +144,11 @@ Ns_ModuleInit (char *server, char *module)
 {
     NsOpenSSLDriver *sdPtr;
 
-    if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL)
-	!= NS_OK) {
-	return NS_ERROR;
+    if (NsOpenSSLInitModule (server, module) != NS_OK) {
+        Ns_Log(Error, "%s: %s: initialization failed", MODULE, server);
+        return NS_ERROR;
     }
+
 #ifndef NS_MAJOR_VERSION
     sdPtr = NsOpenSSLCreateDriver (server, module, sockProcs);
 #else

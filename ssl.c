@@ -892,12 +892,6 @@ CreateSSLSockConn (int role, int conntype)
     Ns_OpenSSLConn *ccPtr = NULL;
 
     ccPtr = (Ns_OpenSSLConn *) ns_calloc (1, sizeof (Ns_OpenSSLConn));
-    if (ccPtr == NULL) {
-	Ns_Log (Error, "%s: no memory for SSL socket connection structure",
-		DRIVER_NAME);
-	return NULL;
-    }
-
     ccPtr->module = NsOpenSSLGetModuleName ();
     ccPtr->role = role;
     ccPtr->conntype = conntype;

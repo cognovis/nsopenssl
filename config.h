@@ -202,4 +202,5 @@
  */
 
 #define CONFIG_SEEDBYTES            "SeedBytes"
-#define DEFAULT_SEEDBYTES           1024
+#define DEFAULT_SEED_BYTES           1024
+#define DEFAULT_MAX_SEED_BYTES       1024000
