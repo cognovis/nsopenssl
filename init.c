@@ -260,11 +260,8 @@ CheckModuleDir(NsOpenSSLDriver *sdPtr)
     if (value == NULL) {
 	Ns_DStringInit(&ds);
 	Ns_ModulePath(&ds, sdPtr->server, sdPtr->module, NULL);
-
 	sdPtr->dir = Ns_DStringExport(&ds);
-	
 	Ns_Log(Notice, "Module directory defaults to %s", sdPtr->dir);
-
 	if (mkdir(sdPtr->dir, 0755) != 0 && errno != EEXIST) {
 	    Ns_Log(Error, "mkdir(%s) failed: %s", sdPtr->dir, strerror(errno));
 	    ns_free(sdPtr->dir);
@@ -273,18 +270,13 @@ CheckModuleDir(NsOpenSSLDriver *sdPtr)
 	}
     } else {
 	if (Ns_PathIsAbsolute(value)) {
-
 	    sdPtr->dir = ns_strdup(value);  
-
 	} else {
 	    Ns_DStringInit(&ds);
 	    Ns_DStringVarAppend(&ds, sdPtr->dir, value, NULL);
-
 	    sdPtr->dir = Ns_DStringExport(&ds);             
-
 	    Ns_DStringFree(&ds);          
 	}
-
 	Ns_Log(Notice, "Module directory set by ModuleDir to %s", sdPtr->dir);
     }
 
