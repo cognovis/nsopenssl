@@ -125,7 +125,14 @@ ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
 Configuration Notes
 -------------------
 
-Session caching enabled by default.
+Session caching enabled by default (make sure you have nsopenssl 1.1a
+or later so you can use client verification and session caching at the
+same time).
+
+You can have the web server's certificate chain passed to clients by
+simply appending the CA chain certificate files to the end of your
+server's .pem file. Certificate chaining is not a feature of SSLv2,
+only SSLv3 and TLSv1.
 
 RandomFile isn't necessary, but if you want to use your own random
 bits, you can set this. On Linux, it won't matter: OpenSSL will use
@@ -230,8 +237,8 @@ This product includes cryptographic software written by Eric Young
 Related Links
 -------------
 
+  http://scottg.net         Information on AOLserver and this module
   http://www.aolserver.com  AOLserver homepage
   http://www.openssl.org    OpenSSL toolkit homepage
   http://www.modssl.org     OpenSSL module for Apache
   http://www.thawte.com     For getting test certificates
-  http://scottg.net         Information on AOLserver and this module

@@ -1,5 +1,7 @@
 2001-06-15  Scott S. Goodwin  <scott@scottg.net>
 
+	* readme.txt: updated.
+
 	* init.c, nsopenssl.c, nsopenssl.h, ssl.c: created
 	NsOpenSSLModuleData structure to hold the data about the module
 	that is common between client and server functions. Pulled this
