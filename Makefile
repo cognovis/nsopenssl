@@ -142,7 +142,7 @@ TESTTCLMOD = \
 TESTPAG = \
 	index.adp
 
-install-tests: install
+install-tests: install ca
 	@if [ ! -d "$(INST)/servers/test" ]; then \
 		echo "** $(CP) -r $(INST)/servers/server1 $(INST)/servers/test;  $(MKDIR)"; \
 		$(CP) -r $(INST)/servers/server1 $(INST)/servers/test; \
@@ -176,6 +176,10 @@ install-tests: install
 		done \
 	fi
 
+	@if [ ! -d "ca/ca1" ]; then \
+		cd ca; \
+		$(MAKE) ca1; \
+	fi
 
 ## NOTES #################################################################################
 
