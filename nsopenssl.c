@@ -59,7 +59,7 @@ static int ConfigLoadSSLContexts (char *server, char *module);
 
 static Ns_OpenSSLContext *ConfigLoadSSLContext (char *server, char *module, 
 		char *name, char *desc, char *type);
-static int InitSSLContexts (Ns_OpenSSLContext *context);
+static int InitSSLContexts ();
 
 static int SetProtocols (Ns_OpenSSLContext *context);
 static int SetCipherSuite (Ns_OpenSSLContext *context);
@@ -144,6 +144,7 @@ NS_EXPORT int
 Ns_ModuleInit (char *server, char *module)
 {
     NsOpenSSLDriver *driver;
+    static int globalInit = 0;
     static int loaded = 0;
     int seedcount = 0;
 
@@ -161,65 +162,83 @@ Ns_ModuleInit (char *server, char *module)
      */
 
     if (loaded) {
-	    Ns_Log(Error, "%s: Loading this module multiple times is not supported",
-			    MODULE);
+	    Ns_Log(Error, MODULE, ": Loading multiple times not allowed");
 	    return NS_ERROR;
     }
     loaded = 1;
 
     /*
-     * Initialize the OpenSSL library
+     * Some things are initialized once and affect all virtual servers, so we
+     * initialize these global things once the first time the module
+     * initialization routine is run.
      */
 
-    if (InitOpenSSL () == NS_ERROR) {
-	    Ns_Log(Error, "%s: Failed to initialize OpenSSL", MODULE);
-	    return NS_ERROR;
-    }
+    if (!globalInit) {
+
+        /*
+         * Initialize the OpenSSL library
+         */
+
+        if (InitOpenSSL () == NS_ERROR) {
+	        Ns_Log(Error, MODULE, ": Failed to initialize OpenSSL");
+	        return NS_ERROR;
+        }
+
+        /*
+         * Create the nsopenssl Tcl API
+         */
     
+        if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL) != NS_OK) {
+	        return NS_ERROR;
+        }
+    }
+    globalInit = 1;
+   
     /*
-     * Load and initialize the SSL context structures defined in the config
-     * file
+     * Load and initialize this virtual server's pre-defined SSL context
+     * structures as defined in nsd.tcl
      */
-
-    if (LoadSSLContexts() == NS_ERROR) {
-	    Ns_Log(Error, "%s: Failed to load the SSL Contexts", MODULE);
+     
+    if (ConfigLoadSSLContexts(server, module) == NS_ERROR) {
+	    Ns_Log(Error, MODULE, ": Failed to load the SSL Contexts");
 	    return NS_ERROR;
     }
 
-    if (InitSSLContexts() == NS_ERROR) {
-	    Ns_Log(Error, "%s: Failed to initialize the SSL Contexts", MODULE);
+    if (InitSSLContexts(server, module) == NS_ERROR) {
+	    Ns_Log(Error, MODULE, ": Failed to initialize the SSL Contexts");
 	    return NS_ERROR;
     }
 
     /*
-     * Create the nsopenssl Tcl API
+     * Create the actual driver
      */
 
-    if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL) != NS_OK) {
-	return NS_ERROR;
-    }
-
-    /* XXX need a for loop to init each of multiple drivers, or none if nsd
-     * XXX server is not to manage core nsd server conns */
+    /* XXX how do we set up to listen on multiple ports within the same virtual server? */
 
     if ((driver = NsOpenSSLCreateDriver (server, module)) == NULL) {
-	return NS_ERROR;
+	    return NS_ERROR;
     }
 
-    /* XXX TEMP FIX for AOLserver 4.x -- in order to use the SockClient
-     * XXX and SockServer capabilities, we need to know the SSL_CTX for each
-     * XXX which is currently stored in the driver ptr. This will go away in
-     * XXX the next release and be replaced by another mechanism to keep track
-     * XXX of which certs go with which conns. Yes, it's all clear to me now.
+    /*
+     * Maintain the drivers in a single linked-list. You can find out what
+     * server a particular driver serves by looking at driver->server.
      */
-
+    
     driver->nextPtr = firstSSLDriverPtr;
     firstSSLDriverPtr = driver;
 
-    /* XXX will need to create a new driver for each virtual server */
+    /*
+     * Register the driver with AOLserver.
+     */
 
-    return Ns_DriverInit (server, module, MODULE, OpenSSLProc, driver,
-			  NS_DRIVER_SSL);
+    if (Ns_DriverInit (server, module, MODULE, OpenSSLProc, driver, NS_DRIVER_SSL)
+		    != NS_OK) {
+	    Ns_Log(Error, MODULE, ": driver for server %s failed to initialize",
+		    server);
+            return NS_ERROR;
+    }
+
+    return NS_OK;
 }
 
 
