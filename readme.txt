@@ -113,6 +113,10 @@ ns_openssl info
   - returns a Tcl list containing the SSL libary name, SSL library version,
     Crypto library name, Crypto library version.
 
+ns_openssl clientcert exists
+  - returns 0 if no client certificate exists, or a 1 if a client
+    certificate does exist.
+
 ns_openssl clientcert version
   - returns a Tcl string containing the certificate's version number, e.g. "3".
 

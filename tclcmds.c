@@ -97,14 +97,24 @@ SSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
     status = TCL_OK;
 
     if (STREQ (argv[1], "info")) {
-	Ns_DStringPrintf (&ds, "{%s} ", SSL_LIBRARY_NAME);
+        Ns_DStringPrintf (&ds, "{%s} ", SSL_LIBRARY_NAME);
 	Ns_DStringPrintf (&ds, "{%s} ", SSL_LIBRARY_VERSION);
 	Ns_DStringPrintf (&ds, "{%s} ", SSL_CRYPTO_LIBRARY_NAME);
 	Ns_DStringPrintf (&ds, "{%s} ", SSL_CRYPTO_LIBRARY_VERSION);
 
     } else if (STREQ (argv[1], "clientcert")) {
 
-	if (STREQ (argv[2], "version")) {
+	if (STREQ (argv[2], "exists")) {
+	    if (argc != 3) {
+		Tcl_AppendResult (interp, "wrong # args:  should be \"",
+				  argv[0], argv[1], " exists\"", NULL);
+		status = TCL_ERROR;
+	    } else if (sslconn->clientcert != NULL) {
+	      Ns_DStringPrintf (&ds, "%d", 1);
+	    } else {
+	      Ns_DStringPrintf (&ds, "%d", 0);
+	    }
+	} else if (STREQ (argv[2], "version")) {
 	    if (argc != 3) {
 		Tcl_AppendResult (interp, "wrong # args:  should be \"",
 				  argv[0], argv[1], " version\"", NULL);

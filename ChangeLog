@@ -1,5 +1,7 @@
 2000-11-05  root  <scott@scottg.net>
 
+	* tclcmds.c: added 'ns_openssl clientcert exists' command.
+
 	* readme.txt: updated with Tcl interface and with parameters for
 	nsd.tcl.
 
