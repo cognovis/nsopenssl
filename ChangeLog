@@ -1,5 +1,8 @@
 2001-09-28  Scott S. Goodwin  <scott@scottg.net>
 
+	* Makefile: Added better make instructions when OPENSSL var isn't
+	set.
+
 	* Makefile: Cleaned up the Makefile considerably so it's easier to
 	read and understand.
 

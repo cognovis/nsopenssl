@@ -35,6 +35,8 @@ check-env:
 	    echo "** "; \
 	    echo "** OPENSSL variable not set."; \
 	    echo "** nsopenssl.so will not be built."; \
+	    echo "** Usage: make OPENSSL=/path/to/openssl"; \
+	    echo "** Usage: make install OPENSSL=/path/to/openssl INST=/path/to/aolserver"; \
 	    echo "** "; \
 	    exit 1; \
 	fi
