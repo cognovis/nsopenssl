@@ -1,3 +1,8 @@
+2001-09-28  Scott S. Goodwin  <scott@scottg.net>
+
+	* Makefile: Cleaned up the Makefile considerably so it's easier to
+	read and understand.
+
 2001-09-27  Scott S. Goodwin  <scott@scottg.net>
 
 	* tclcmds.c: Bug fixes contributed by Rich Fredericks, AOL Local
