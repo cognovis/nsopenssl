@@ -233,7 +233,7 @@ NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
 
 	} else if (STREQ (argv[2], "port")) {
 
-	    sprintf (interp->result, "%d", scPtr->bindport);
+	    sprintf (interp->result, "%d", scPtr->port);
 
 	}
 
@@ -255,9 +255,9 @@ NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
 
 	Tcl_SetResult (interp, string, TCL_VOLATILE);
 
-    } else if (STREQ (argv[1], "port")) {
+    } else if ((STREQ (argv[1], "port")) || (STREQ (argv[1], "peerport"))) {
 
-	sprintf (interp->result, "%d", scPtr->port);
+	sprintf (interp->result, "%d", scPtr->peerport);
 
     } else if (STREQ (argv[1], "cipher")) {
 

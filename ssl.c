@@ -130,7 +130,7 @@ void
 NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr)
 {
     if (ccPtr->refcnt > 0)
-	return;
+		return;
 
 #if 0
     Ns_Log (Debug, "%s: destroying conn (%p)",

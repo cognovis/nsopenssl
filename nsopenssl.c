@@ -445,8 +445,8 @@ SockThread (void *ignored)
 		    scPtr->sock = sock;
 		    scPtr->address = sdPtr->address;	/* Do not free - driver frees it */
 		    scPtr->bindaddr = sdPtr->bindaddr;	/* Do not free - driver frees it */
-		    scPtr->bindport = sdPtr->port;
-		    scPtr->port = ntohs (sa.sin_port);
+		    scPtr->port = sdPtr->port;
+		    scPtr->peerport = ntohs (sa.sin_port);
 		    strcpy (scPtr->peer, ns_inet_ntoa (sa.sin_addr));
 
 		    if (Ns_QueueConn (sdPtr->driver, scPtr) != NS_OK) {
@@ -752,7 +752,7 @@ SockPeerPort (void *arg)
 {
     Ns_OpenSSLConn *scPtr = (Ns_OpenSSLConn *) arg;
 
-    return scPtr->port;
+    return scPtr->peerport;
 }
 
 /*

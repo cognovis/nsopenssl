@@ -1,5 +1,11 @@
 2002-03-05  Scott S. Goodwin  <scott@scottg.net>
 
+	* nsopenssl.c, nsopenssl.h, tclcmds.c: rearranged the
+	NsOpenSSLDriver and Ns_OpenSSLConn structures to make it clearer
+	what items needed to be freed by what routines. Also changed port
+	to peerport in Ns_OpenSSLConn, and added the 'ns_openssl peerport'
+	command, which is the same as the 'ns_openssl port' command.
+
 	* all: ran *.c and *.h through indent: indent -i2 -br -brs -ce
 	-hnl -psl -sob <filename.c>.
 
