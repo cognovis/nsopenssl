@@ -1,5 +1,10 @@
 2002-02-15  Scott S. Goodwin  <scott@scottg.net>
 
+	* ssl.c: I was decrementing towrite by rc bytes. Problem is that
+	if rc < 0 which it will be on SSL_write error, towrite will get
+	bigger. This was a late night error. The #if'd out debug portion
+	worked properly. Adam Zell pointed this out.
+
 	* dumb: The previous two changes were made once before. The
 	tclcmd.c fix reverted when I received a fix for some other problem
 	in tclcmd.c; I neglected to do a diff between my copy and the

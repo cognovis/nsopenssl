@@ -262,7 +262,8 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 
     do {
 	rc = SSL_write(ccPtr->ssl, buffer, towrite);
-	towrite -= rc;
+        if (rc > 0)
+	    towrite -= rc;
 
 
 #if 0
