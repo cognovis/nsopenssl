@@ -1194,17 +1194,17 @@ Ns_OpenSSLContextTraceGet(server, module, context)
  */
 
 Ns_OpenSSLContext *
-Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, char *role)
+Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
 {
     Ns_OpenSSLContext *context = NULL;
     Ns_DString ds;
 
+#if 0
+    /* XXX turn this on */
     /*
      * The name of an SSL context must be unique within a virtual server.
      */
 
-#if 0
-    /* XXX turn this on */
     if (SSLContextNameCheck (server, module, name)) {
 	    Ns_Log(Error, "%s: SSL context with name %s already defined",
 			    MODULE, name);
@@ -1212,81 +1212,89 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
     }
 #endif
 
-    /*
-     * Set the connection type: "server" is driven by the core nsd HTTP
-     * process; sockservers and sockclients are driven by the nsopenssl C and
-     * Tcl APIs.
-     */
+    Ns_Log(Debug, MODULE, ": Ns_OpenSSLCreateContext: %s, %s, %s", server, name, role);
+
+    context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof *context);
+    if (context == NULL) {
+        Ns_Log(Error, MODULE, ": Failed to create SSL context: %s, %s, %s", 
+                server, name, role);
+        return NULL;
+    }
+
+    Ns_MutexLock(&context->lock);
+
+    Ns_MutexSetName2(&context->lock, MODULE, name);
 
     if (STREQ(role, "server")) {
         context->role = SERVER_ROLE;
     } else if (STREQ(role, "client")) {
         context->role = CLIENT_ROLE;
     } else {
-        Ns_Log(Error, MODULE, ": SSL context %s has an invalid role", name);
-	/* XXX need to ditch here: use goto? */
-    }
-
-    Ns_Log(Debug, MODULE, ": %s: %s: %s: %s", type, name, desc, role);
-
-    /*
-     * Allocate memory to hold the context.
-     */
-
-    context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof *context);
-
-    if (context == NULL) {
-        Ns_Log(Error, MODULE, ": Failed to create SSL context named %s", name);
+        Ns_Log(Error, MODULE, ": SSL context has an invalid role: %s, %s, %s",
+                server, name, role);
+        Ns_MutexUnlock(&context->lock);
+        Ns_Free(context);
         return NULL;
     }
 
     /*
-     * Lock around the structure while changing it
+     * Set defaults that cannot be overridden by the user (i.e. variables for
+     * which no Ns_OpenSSL*Set/Get functions exist.)
      */
 
-    Ns_MutexLock(&context->lock);
-
-    /* XXX make mutex name unique to this struct instance */
-    Ns_MutexSetName2(&context->lock, MODULE, "context");
-
-    context->server = server;
-    context->module = module;
-    context->name   = strdup(key);
-    context->desc   = strdup(desc);
+    context->server         = server;
+    context->module         = module;
+    context->name           = name;
+    context->sessionCacheId = NsSessionIdGenerate();
 
     /*
-     * Set sane default for module directory
+     * Create a sane default path for the module directory
      */
 
     Ns_DStringInit (&ds);
-    Ns_HomePath (&ds, "servers", server, "modules", module, NULL);
-    context->moduleDir = Ns_DStringExport (&ds);
-    Ns_DStringFree (&ds);
    
-    /* XXX set default cert file and key file paths */
-    /* XXX should validate here -- set to null if non-existent? */
-    /* XXX should do a check in InitSSLContext to ensure a key/cert is available */
+    /*
+     * Set initial default values that can be overridden in nsd.tcl, C API and
+     * Tcl API.
+     */
 
-    context->certFile            = NULL; /* XXX DEFAULT_CERTFILE??? */
-    context->keyFile             = NULL; /* XXX DEFAULT_KEYFILE??? */
-    context->CAFile              = NULL; /* XXX DEFAULT_CAFILE??? */
-    context->CADir               = NULL; /* XXX DEFAULT_CADIR??? */
+    Ns_HomePath (&ds, "servers", server, "modules", module, NULL);
+    context->moduleDir = Ns_DStringExport(&ds);
+    Ns_DStringTrunc(&ds, 0);
+
+    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CERT_FILE, NULL);
+    context->certFile = Ns_DStringExport(&ds);
+    Ns_DStringTrunc(&ds, 0);
+
+    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_KEY_FILE, NULL);
+    context->keyFile = Ns_DStringExport(&ds);
+    Ns_DStringTrunc(&ds, 0);
+
+    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CA_FILE, NULL);
+    context->caFile = Ns_DStringExport(&ds);
+    Ns_DStringTrunc(&ds, 0);
+
+    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CA_DIR, NULL);
+    context->caDir = Ns_DStringExport(&ds);
+    Ns_DStringTrunc(&ds, 0);
+
     context->peerVerify          = DEFAULT_PEER_VERIFY;
     context->peerVerifyDepth     = DEFAULT_PEER_VERIFY_DEPTH;
     context->protocols           = DEFAULT_PROTOCOLS;
-    context->cipherSuite         = SSL_DEFAULT_CIPHER_LIST;
+    context->cipherSuite         = DEFAULT_CIPHER_LIST;
     context->sessionCache        = DEFAULT_SESSION_CACHE;
     context->sessionCacheSize    = DEFAULT_SESSION_CACHE_SIZE;
     context->sessionCacheTimeout = DEFAULT_SESSION_CACHE_TIMEOUT;
-    context->sessionCacheId      = NsSessionIdGenerate(); /* Always gets an id */
     context->trace               = DEFAULT_TRACE;
+
+    Ns_DStringFree (&ds);
 
     /*
      * Insert the context into the linked list. Instead of wasting time looking
      * for the end of the list, we'll insert it at the front.
      */
 
-    /* XXX lock firstSSLContext before modifying. SSL Contexts can be created at any time */
+    /* XXX lock firstSSLContext before modifying */
     if (firstSSLContext != NULL) {
 	    /* There are already other contexts */
 	    context->next = firstSSLContext;

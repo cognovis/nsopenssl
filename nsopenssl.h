@@ -209,22 +209,23 @@ typedef struct SSLTclCmd {
 #define CONNTYPE_SOCKCLIENT            2
 
 #define DEFAULT_PROTOCOLS              "All"
-#define DEFAULT_CERTFILE               "certificate.pem"
-#define DEFAULT_KEYFILE                "key.pem"
-#define DEFAULT_CAFILE                 "ca.pem"
-#define DEFAULT_CADIR                  "ca"
-#define DEFAULT_PEERVERIFYON           NS_FALSE
-#define DEFAULT_PEERVERIFYDEPTH        6
-#define DEFAULT_SESSIONCACHEON         NS_TRUE
-#define DEFAULT_SESSIONCACHESIZE       128
-#define DEFAULT_SESSIONTIMEOUT         300
+#define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
+#define DEFAULT_CERT_FILE              "certificate.pem"
+#define DEFAULT_KEY_FILE               "key.pem"
+#define DEFAULT_CA_FILE                "ca.pem"
+#define DEFAULT_CA_DIR                 "ca"
+#define DEFAULT_PEER_VERIFY            NS_FALSE
+#define DEFAULT_PEER_VERIFY_DEPTH      3
+#define DEFAULT_SESSION_CACHE          NS_TRUE
+#define DEFAULT_SESSION_CACHE_SIZE     128
+#define DEFAULT_SESSION_TIMEOUT        300
 #define DEFAULT_TRACE                  NS_FALSE
 
 #define DEFAULT_SOCKTIMEOUT            30
 #define DEFAULT_BUFFERSIZE             16384
 
 #define CONFIG_MODULE_DIR              "ModuleDir"
-#define CONFIG_RANDOMFILE              "RandomFile"
+#define CONFIG_RANDOM_FILE             "RandomFile"
 
 /*
  * If PRNG fails to seed, increase value of SeedBytes in the

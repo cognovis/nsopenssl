@@ -34,6 +34,10 @@ ns_param SeedBytes  1024
 # of an SSL instance. An SSL context may be used by multiple drivers,
 # sockservers and sockclients.
 
+ns_section "ns/server/${servername}/module/nsopenssl/contexts"
+ns_param user                  "SSL context used for regular user access"
+ns_param admin                 "SSL context used for administrator access"
+
 ns_section "ns/server/${servername}/module/nsopenssl/context/user"
 ns_param Role                  server                                             # mandatory
 ns_param ModuleDir             /path/to/dir                                       # default
@@ -47,7 +51,7 @@ ns_param PeerVerify            false                                            
 ns_param PeerVerifyDepth       3                                                  # default
 ns_param Trace                 false                                              # default
 ns_param SessionCache          true                                               # default
-ns_param SessionCacheSize      512                                                # default
+ns_param SessionCacheSize      128                                                # default
 ns_param SessionCacheTimeout   300                                                # default
 
 ns_section "ns/server/${servername}/module/nsopenssl/context/admin"
@@ -63,7 +67,7 @@ ns_param PeerVerify            false
 ns_param PeerVerifyDepth       3
 ns_param Trace                 false
 ns_param SessionCache          true
-ns_param SessionCacheSize      512
+ns_param SessionCacheSize      128
 ns_param SessionCacheTimeout   300
 
 ns_section "ns/server/${servername}/module/nsopenssl/context/sockclient"
@@ -79,22 +83,24 @@ ns_param PeerVerify            true
 ns_param PeerVerifyDepth       3
 ns_param Trace                 false
 ns_param SessionCache          true
-ns_param SessionCacheSize      512
+ns_param SessionCacheSize      128
 ns_param SessionCacheTimeout   300
 
 # SSL drivers. Each driver defines a port and a named SSL context to associate
 # with it.
 
+ns_section "ns/server/${servername}/module/nsopenssl/contexts"
+ns_param users                 "Driver for regular user access"
+ns_param admins                "Driver for administrator access"
+
 ns_section "ns/server/${servername}/module/nsopenssl/driver/users"
 ns_param context               user
-ns_param description           "General users come in here"
 ns_param port                  443
 ns_param hostname              127.0.0.1
 ns_param address               127.0.0.1
 
 ns_section "ns/server/${servername}/module/nsopenssl/driver/admins"
 ns_param context               admin
-ns_param description           "Administrators must come through this driver"
 ns_param port                  8443
 ns_param hostname              127.0.0.1
 ns_param address               127.0.0.1
@@ -118,7 +124,7 @@ ns_param ServerProtocols                 "SSLv2, SSLv3, TLSv1"
 ns_param ServerCipherSuite               "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
 ns_param ServerSessionCache              false
 ns_param ServerSessionCacheID            1
-ns_param ServerSessionCacheSize          512
+ns_param ServerSessionCacheSize          128
 ns_param ServerSessionCacheTimeout       300
 ns_param ServerPeerVerify                true
 ns_param ServerPeerVerifyDepth           3
@@ -133,7 +139,7 @@ ns_param SockServerProtocols             "SSLv2, SSLv3, TLSv1"
 ns_param SockServerCipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
 ns_param SockServerSessionCache          false
 ns_param SockServerSessionCacheID        2
-ns_param SockServerSessionCacheSize      512
+ns_param SockServerSessionCacheSize      128
 ns_param SockServerSessionCacheTimeout   300
 ns_param SockServerPeerVerify            true
 ns_param SockServerPeerVerifyDepth       3
@@ -148,7 +154,7 @@ ns_param SockClientProtocols             "SSLv2, SSLv3, TLSv1"
 ns_param SockClientCipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
 ns_param SockClientSessionCache          false
 ns_param SockClientSessionCacheID        3
-ns_param SockClientSessionCacheSize      512
+ns_param SockClientSessionCacheSize      128
 ns_param SockClientSessionCacheTimeout   300
 ns_param SockClientPeerVerify            true
 ns_param SockServerPeerVerifyDepth       3
@@ -182,7 +188,7 @@ ns_param Protocol                 All
 #ns_param Protocol                 TLSv1
 ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
 ns_param SessionCache             true
-ns_param SessionCacheSize         512
+ns_param SessionCacheSize         128
 ns_param SessionCacheTimeout      300
 ns_param ClientVerify             true
 ns_param CADir                    ca

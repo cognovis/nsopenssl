@@ -58,7 +58,7 @@ static Ns_Mutex *locks;
  */
 
 static void ThreadLockCallback (int mode, int n, const char *file, int line);
-static unsigned long ThreadIdCallback (Ns_OpenSSLContext *contextid);
+static unsigned long ThreadIdCallback (void);
 static struct CRYPTO_dynlock_value *ThreadDynlockCreateCallback (char *file,
 		int line);
 static void ThreadDynlockLockCallback (int mode,
@@ -161,22 +161,19 @@ static int
 SSLContextsInit(char *server, char *module)
 {
 	Ns_Set *contexts;
-	Ns_Set *sockclients;
-	char *key = NULL;
 	int i = 0;
 
 	/*
-	 * Each virtual server can have multiple named SSL contexts. Each
-	 * context defines the characteristics for SSL connections that use the
-	 * context.
+     * Each virtual server can define multiple, named SSL contexts. Each
+     * context defines the characteristics for connections that use the
+     * context.
 	 */
 
 	contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
 
 	if (contexts != NULL) {
 	    for (i = 0; i < Ns_SetSize(contexts); ++i) {
-		    key = Ns_SetKey(contexts, i);
-		    ConfigSSLContextLoad(server, module, key, Ns_SetGet(contexts, key), "server");
+		    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
 	    }
 	} else {
 	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
@@ -206,6 +203,26 @@ SSLContextsInit(char *server, char *module)
 static int
 SSLDriversInit(char *server, char *module)
 {
+	Ns_Set *drivers;
+	char *key = NULL;
+	int i = 0;
+
+	/*
+	 * Each driver is tied to a specific, named SSL context.
+	 */
+
+	drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
+
+	if (drivers != NULL) {
+	    for (i = 0; i < Ns_SetSize(drivers); ++i) {
+		    key = Ns_SetKey(drivers, i);
+            NsOpenSSLDriverCreate(server, module, key, Ns_SetGet(drivers, key), "server");
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	}
+
+	return NS_OK;
 
     /*
      * A driver manages one SSL port; to get multiple SSL ports in one virtual
@@ -248,7 +265,7 @@ SSLDriversInit(char *server, char *module)
  */
 
 static Ns_OpenSSLContext *
-ConfigSSLContextLoad (char *server, char *module, char *name, char *desc)
+ConfigSSLContextLoad (char *server, char *module, char *name)
 {
     Ns_OpenSSLContext *context = NULL;
     char *path         = NULL;
@@ -271,7 +288,7 @@ ConfigSSLContextLoad (char *server, char *module, char *name, char *desc)
     path = Ns_ConfigGetPath(server, module, name, NULL);
     role = Ns_ConfigGetValue(path, "role");
 
-    context = Ns_OpenSSLContextCreate(server, module, name, desc, role);
+    context = Ns_OpenSSLContextCreate(server, module, name, role);
     if (context == NULL) {
         Ns_Log(Error, MODULE, ": SSL context came back NULL in ConfigSSLContextLoad");
 	    return NULL;
