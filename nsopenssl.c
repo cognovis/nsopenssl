@@ -2,7 +2,7 @@
  * The contents of this file are subject to the AOLserver Public License
  * Version 1.1 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
- * http://aolserver.lcs.mit.edu/.
+ * http://aolserver.com.
  *
  * Software distributed under the License is distributed on an "AS IS"
  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
@@ -16,11 +16,6 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000-2002 Scott S. Goodwin
- * Copyright (C) 2000 Rob Mayoff
- * Copyright (C) 2000 Freddie Mendoza
- * Copyright (C) 1999 Stefan Arentz
- *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
  * provisions of GPL are applicable instead of those above.  If you wish
@@ -30,6 +25,11 @@
  * replace them with the notice and other provisions required by the GPL.
  * If you do not delete the provisions above, a recipient may use your
  * version of this file under either the License or the GPL.
+ *
+ * Copyright (C) 2000-2002 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 2000 Freddie Mendoza
+ * Copyright (C) 1999 Stefan Arentz
  */
 
 /*
@@ -47,8 +47,6 @@ static const char *RCSID =
 #include <limits.h>
 
 #include "nsopenssl.h"
-#include "config.h"
-#include "tclcmds.h"
 
 /*
  * Global symbols
@@ -165,9 +163,7 @@ Ns_ModuleInit (char *server, char *module)
 
     return NS_OK;
 #else
-    /* XXX - see what effect changing the "nsopenssl" arg has here. It may be the key
-     * XXX - to asking the core server to return info on that particular driver. */
-    return Ns_DriverInit (server, module, "nsopenssl", OpenSSLProc, sdPtr,
+    return Ns_DriverInit (server, module, DEFAULT_NAME, OpenSSLProc, sdPtr,
 			  NS_DRIVER_SSL);
 #endif
 }
@@ -855,20 +851,15 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, struct iovec * bufs, int nbufs)
 	scPtr = sock->arg;
 	if (scPtr == NULL) {
 	    scPtr = ns_calloc (1, sizeof (*scPtr));
-	    scPtr->role = ROLE_SSL_SERVER;
-	    scPtr->conntype = CONNTYPE_SSL_NSD;
-	    scPtr->type = STR_NSD_SERVER;
-#if 0
-	    scPtr->sdPtr = driver->arg;
-#endif
-	    scPtr->module = driver->module;
-	    scPtr->bufsize = driver->bufsize;
 
-	    scPtr->timeout = driver->recvwait;
-	    scPtr->context = driver->context;
-	    scPtr->refcnt = 0;	/* always 0 for nsdserver conns */
-	    scPtr->sock = sock->sock;
-	    sock->arg = scPtr;
+	    scPtr->sdPtr = driver->arg;
+
+	    scPtr->role     = ROLE_SSL_SERVER;
+	    scPtr->conntype = CONNTYPE_SSL_NSD;
+	    scPtr->type     = STR_NSD_SERVER;
+	    scPtr->refcnt   = 0;	/* always 0 for nsdserver conns */
+	    scPtr->sock     = sock->sock;
+	    sock->arg       = scPtr;
 
 	    if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) scPtr) != NS_OK) {
 		return NS_ERROR;

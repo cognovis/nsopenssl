@@ -2,7 +2,7 @@
  * The contents of this file are subject to the AOLserver Public License
  * Version 1.1 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
- * http://aolserver.lcs.mit.edu/.
+ * http://aolserver.com.
  *
  * Software distributed under the License is distributed on an "AS IS"
  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
@@ -16,9 +16,6 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000-2002 Scott S. Goodwin
- * Copyright (C) 2000 Rob Mayoff
- *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
  * provisions of GPL are applicable instead of those above.  If you wish
@@ -28,10 +25,22 @@
  * replace them with the notice and other provisions required by the GPL.
  * If you do not delete the provisions above, a recipient may use your
  * version of this file under either the License or the GPL.
+ *
+ * Copyright (C) 2000-2002 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
  */
 
+/*
+ * tclcmds.c --
+ *
+ *   Tcl interface to nsopenssl
+ */
+
+static const char *RCSID =
+    "@(#) $Header$, compiled: "
+    __DATE__ " " __TIME__;
+
 #include "nsopenssl.h"
-#include "tclcmds.h"
 
 #ifdef WIN32
 #define SockError(i)    NsWin32ErrMsg(GetLastError())

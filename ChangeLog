@@ -1,3 +1,12 @@
+2002-11-23  Scott Goodwin  <scott@scottg.net>
+
+	* all: Cleaned up the directory; moved some files to the test
+	directory.
+	
+	* config.h, tclcmds.h, thread.h: Merged into nsopenssl.h
+
+	* config.c, nsopenssl.h: Merged config.c into init.c
+
 2002-11-21  Scott Goodwin  <scott@scottg.net>
 
 	* tclcmds.c: ns_sockdup, ns_sockioctl have gone away in AOLserver
