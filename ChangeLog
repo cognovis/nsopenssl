@@ -1,5 +1,14 @@
 2001-06-13  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
 
+	* init.c: added NsClientSSLCreateDriver and NsClientSSLFreeDriver.
+
+	* init.c, nsopenssl.h: moved OpenSSL initialization out of
+	NsServerCreateDriver to the new NsInitOpenSSL function.
+
+	* init.c, nsopenssl.c, nsopenssl.h: changed NsOpenSSLCreateDriver
+	to NsServerSSLCreateDriver and NsOpenSSLFreeDriver to
+	NsServerSSLFreeDriver.
+
 	* nsopenssl.c: added NsClientSSLConnection and NsClientSSLDriver
 	structs (I know, the client stuff doesn't need a driver; I'll work
 	that issue later.)

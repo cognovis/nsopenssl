@@ -62,15 +62,28 @@ static int ServerLoadCACerts(NsServerSSLDriver *sdPtr);
 static int ServerInitLocation(NsServerSSLDriver *sdPtr);
 static int ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int ServerInitSessionCache(NsServerSSLDriver *sdPtr);
+/* What happens if we run multiple copies of nsopenssl in the same server? */
+static int s_server_session_id_context = 1;
 
 /*
  * SSL Client Functions
  */
 
-static int ClientMakeContext(NsServerSSLDriver *sdPtr);
-
+static int ClientMakeContext(NsClientSSLDriver *cdPtr);
+#if 0
+static int ClientSetCipherSuite(NsClientSSLDriver *cdPtr);
+static int ClientSetProtocols(NsClientSSLDriver *cdPtr);
+static int ClientLoadCertificate(NsClientSSLDriver *cdPtr);
+static int ClientLoadKey(NsClientSSLDriver *cdPtr);
+static int ClientCheckKey(NsClientSSLDriver *cdPtr);
+static int ClientLoadCACerts(NsClientSSLDriver *cdPtr);
+static int ClientInitLocation(NsClientSSLDriver *cdPtr);
+static int ClientVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static int ClientInitSessionCache(NsClientSSLDriver *cdPtr);
+#endif
 /* What happens if we run multiple copies of nsopenssl in the same server? */
-static int s_server_session_id_context = 1;
+static int s_client_session_id_context = 2;
+
 
 /*
  * For generating temporary RSA keys. Temp RSA keys are REQUIRED if
@@ -85,7 +98,41 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLCreateDriver --
+ * NsInitOpenSSL --
+ *
+ *       Initialize the OpenSSL library.
+ *
+ * Results:
+ *       None.
+ *
+ * Side effects:
+ *       None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+NsInitOpenSSL()
+{
+    if (
+	   NsOpenSSLInitThreads()                      == NS_ERROR
+	|| InitializeSSL()                             == NS_ERROR
+#if 0
+	/* Haven't moved this here yet... */
+	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
+#endif
+    ) {
+	return NS_ERROR;
+    }
+
+
+    return NS_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsServerSSLCreateDriver --
  *
  *       Create the SSL driver.
  *
@@ -100,9 +147,9 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
 
 NsServerSSLDriver *
 #ifndef NS_MAJOR_VERSION
-NsOpenSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
+NsServerSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
 #else
-NsOpenSSLCreateDriver(char *server, char *module)
+NsServerSSLCreateDriver(char *server, char *module)
 #endif
 {
     NsServerSSLDriver *sdPtr = NULL;
@@ -116,9 +163,9 @@ NsOpenSSLCreateDriver(char *server, char *module)
     sdPtr->configPath = Ns_ConfigGetPath(server, module, NULL);
 
     if (
-	   NsOpenSSLInitThreads()                      == NS_ERROR
-	|| InitializeSSL()                             == NS_ERROR
-	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
+	/* XXX MakeModuleDir needs to be moved to NsOpenSSLInit, but resides in both
+           XXX client and server structs...so we'll leave it here for now */
+	   MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
 	|| ServerMakeContext(sdPtr)                    == NS_ERROR
 	|| ServerSetProtocols(sdPtr)                   == NS_ERROR
 	|| ServerSetCipherSuite(sdPtr)                 == NS_ERROR
@@ -129,7 +176,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
 	|| ServerInitSessionCache(sdPtr)               == NS_ERROR
 	|| ServerInitLocation(sdPtr)                   == NS_ERROR
     ) {
-	NsOpenSSLFreeDriver(sdPtr);
+	NsServerSSLFreeDriver(sdPtr);
 	return NULL;
     }
 
@@ -151,7 +198,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
 #ifndef NS_MAJOR_VERSION
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
     if (sdPtr->driver == NULL) {
-	NsOpenSSLFreeDriver(sdPtr);
+	NsServerSSLFreeDriver(sdPtr);
 	return NULL;
     }
 #endif
@@ -162,7 +209,72 @@ NsOpenSSLCreateDriver(char *server, char *module)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLFreeDriver --
+ * NsClientSSLCreateDriver --
+ *
+ *       Create the Client SSL "driver".
+ *
+ * Results:
+ *       An NsClientSSLDriver* or NULL.
+ *
+ * Side effects:
+ *       None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+NsClientSSLDriver *
+NsClientSSLCreateDriver(char *server, char *module)
+{
+    NsClientSSLDriver *cdPtr = NULL;
+
+    cdPtr = (NsClientSSLDriver *) ns_calloc(1, sizeof *cdPtr);
+
+    Ns_MutexSetName(&cdPtr->lock, module);
+    cdPtr->module = module;
+    cdPtr->refcnt = 1;
+    cdPtr->lsock = INVALID_SOCKET;
+    cdPtr->configPath = Ns_ConfigGetPath(server, module, NULL);
+
+    if (
+	   ClientMakeContext(cdPtr)                    == NS_ERROR
+#if 0
+	|| ClientSetProtocols(cdPtr)                   == NS_ERROR
+	|| ClientSetCipherSuite(cdPtr)                 == NS_ERROR
+	|| ClientLoadCertificate(cdPtr)                == NS_ERROR
+	|| ClientLoadKey(cdPtr)                        == NS_ERROR
+	|| ClientCheckKey(cdPtr)                       == NS_ERROR
+	|| ClientLoadCACerts(cdPtr)                    == NS_ERROR
+	|| ClientInitSessionCache(cdPtr)               == NS_ERROR
+	|| ClientInitLocation(cdPtr)                   == NS_ERROR
+#endif
+    ) {
+	NsClientSSLFreeDriver(cdPtr);
+	return NULL;
+    }
+
+    cdPtr->timeout = ConfigIntDefault(module, cdPtr->configPath,
+	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
+    if (cdPtr->timeout < 1) {
+	cdPtr->timeout = DEFAULT_SOCKTIMEOUT;
+    }
+
+    cdPtr->bufsize = ConfigIntDefault(module, cdPtr->configPath,
+	CONFIG_BUFFERSIZE, DEFAULT_BUFFERSIZE);
+    if (cdPtr->bufsize < 1) {
+	cdPtr->bufsize = DEFAULT_BUFFERSIZE;
+    }
+
+    /* XXX this should probably be moved to a common init function */
+    cdPtr->randomFile = ConfigPathDefault(cdPtr->module, cdPtr->configPath,
+                                          CONFIG_RANDOMFILE, cdPtr->dir, NULL);
+
+    return cdPtr;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsServerSSLFreeDriver --
  *
  *      Destroy an NsServerSSLDriver.
  *
@@ -176,7 +288,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
  */
 
 void
-NsOpenSSLFreeDriver(NsServerSSLDriver *sdPtr)
+NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr)
 {
     NsServerSSLConnection *scPtr;
 
@@ -194,6 +306,44 @@ NsOpenSSLFreeDriver(NsServerSSLDriver *sdPtr)
 	if (sdPtr->address  != NULL)      ns_free(sdPtr->address);
 	if (sdPtr->location != NULL)      ns_free(sdPtr->location);
 	ns_free(sdPtr);
+    }
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsClientSSLFreeDriver --
+ *
+ *      Destroy an NsClientSSLDriver.
+ *
+ * Results:
+ *      None.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr)
+{
+    NsClientSSLConnection *ccPtr;
+
+    Ns_Log(Debug, "%s: freeing(%p)",
+	cdPtr == NULL ? DRIVER_NAME : cdPtr->module, cdPtr);
+
+    if (cdPtr != NULL) {
+	while ((ccPtr = cdPtr->firstFreePtr) != NULL) {
+	    cdPtr->firstFreePtr = ccPtr->nextPtr;
+	    ns_free(ccPtr);
+	}
+	Ns_MutexDestroy(&cdPtr->lock);
+	if (cdPtr->context  != NULL) SSL_CTX_free(cdPtr->context);
+	if (cdPtr->dir      != NULL)      ns_free(cdPtr->dir);
+	if (cdPtr->address  != NULL)      ns_free(cdPtr->address);
+	if (cdPtr->location != NULL)      ns_free(cdPtr->location);
+	ns_free(cdPtr);
     }
 }
 
@@ -308,6 +458,57 @@ ServerMakeContext(NsServerSSLDriver *sdPtr)
 	SSL_CTX_set_info_callback(sdPtr->context, NsServerSSLTrace);
     }
 
+    return NS_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ClientMakeContext --
+ *
+ *       Create a new Client SSL context for the specified SSLDriver.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       Sets cdPtr->context.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+ClientMakeContext(NsClientSSLDriver *cdPtr)
+{
+#if 0
+    cdPtr->context = SSL_CTX_new(SSLv23_server_method());
+    if (cdPtr->context == NULL) {
+	Ns_Log(Error, "%s: error creating client SSL context", cdPtr->module);
+	return NS_ERROR;
+    }
+
+    /* Enable SSL bug compatibility. */
+    SSL_CTX_set_options(cdPtr->context, SSL_OP_ALL);
+
+    /* This apparently prevents some sort of DH attack. */
+    SSL_CTX_set_options(cdPtr->context, SSL_OP_SINGLE_DH_USE);
+
+    SSL_CTX_set_app_data(cdPtr->context, cdPtr);
+
+    /* Temporary key callback required for 40-bit export browsers */
+    SSL_CTX_set_tmp_rsa_callback(cdPtr->context, IssueTmpRSAKey);
+
+    if (ConfigBoolDefault(cdPtr->module, cdPtr->configPath,
+	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
+	SSL_CTX_set_verify(cdPtr->context, SSL_VERIFY_PEER,
+	    ServerVerifyClientCallback);
+    }
+
+    if (ConfigBoolDefault(cdPtr->module, cdPtr->configPath,
+	    CONFIG_TRACE, DEFAULT_TRACE)) {
+	SSL_CTX_set_info_callback(cdPtr->context, NsClientSSLTrace);
+    }
+#endif
     return NS_OK;
 }
 

@@ -134,6 +134,8 @@ typedef struct NsClientSSLDriver {
     char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
     char            *dir;          /* Module directory (on disk) */
 
+    char            *location;     /* E.g. https://example.com:8443 */
+    char            *address;      /* Advertised address */
     int              bufsize;
     int              timeout;
     SOCKET           lsock;
@@ -161,13 +163,21 @@ typedef struct NsClientSSLConnection {
  * init.c
  */
 
+/* common functions */
+extern int NsInitOpenSSL();
+
+/* server functions */
 #ifndef NS_MAJOR_VERSION
-extern NsServerSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
+extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module,
     Ns_DrvProc *procs);
 #else
-extern NsServerSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
+extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module);
 #endif
-extern void NsOpenSSLFreeDriver(NsServerSSLDriver *sdPtr);
+extern void NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr);
+
+/* client functions */
+extern NsClientSSLDriver *NsClientSSLCreateDriver(char *server, char *module);
+extern void NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr);
 
 /*
  * ssl.c

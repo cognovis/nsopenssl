@@ -156,19 +156,28 @@ NS_EXPORT int
 Ns_ModuleInit(char *server, char *module)
 {
     NsServerSSLDriver *sdPtr;
+    NsClientSSLDriver *cdPtr;
 
     if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
 	    != NS_OK) {
 	return NS_ERROR;
     }
 
-#ifndef NS_MAJOR_VERSION
-    sdPtr = NsOpenSSLCreateDriver(server, module, sockProcs);
-#else
-    sdPtr = NsOpenSSLCreateDriver(server, module);
-#endif
+    if (NsInitOpenSSL() == NS_ERROR) {
+        return NS_ERROR;
+    }
 
+#ifndef NS_MAJOR_VERSION
+    sdPtr = NsServerSSLCreateDriver(server, module, sockProcs);
+#else
+    sdPtr = NsServerSSLCreateDriver(server, module);
+#endif
     if (sdPtr == NULL) {
+	return NS_ERROR;
+    }
+
+    cdPtr = NsClientSSLCreateDriver(server, module);
+    if (cdPtr == NULL) {
 	return NS_ERROR;
     }
 
@@ -257,7 +266,7 @@ SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
     Ns_MutexUnlock(&sdPtr->lock);
 
     if (refcnt == 0) {
-	NsOpenSSLFreeDriver(sdPtr);
+	NsServerSSLFreeDriver(sdPtr);
     }
 }
 

@@ -298,7 +298,7 @@ NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer, int towrite)
  *
  * NsServerSSLTrace --
  *
- *	Log the progress of an SSL connection.
+ *	Log the progress of an Server SSL connection.
  *
  * Results:
  *      None.
