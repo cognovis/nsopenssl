@@ -100,7 +100,7 @@ NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr)
     ) {
 	Ns_Log(Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
 	    ccPtr->type);
-	SSL_set_shutdown(ccPtr->ssl,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+	SSL_set_shutdown(ccPtr->ssl, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
 	NsOpenSSLShutdown(ccPtr->ssl);
 	NsOpenSSLDestroyConn(ccPtr);
 
@@ -152,6 +152,7 @@ NsOpenSSLDestroyConn(Ns_OpenSSLConn *ccPtr)
 	    SSL_free(ccPtr->ssl);
 	    ccPtr->ssl = NULL;
 	}
+
 #ifndef NS_MAJOR_VERSION
 	if (ccPtr->sock != INVALID_SOCKET) {
 	    ns_sockclose(ccPtr->sock);
@@ -161,8 +162,9 @@ NsOpenSSLDestroyConn(Ns_OpenSSLConn *ccPtr)
 
 	/*
 	 * We only free the connection structure if it's an
-         * Ns_OpenSSLConn type; Ns_OpenSSLConn types
-         * are free'd when the comm driver shuts down.
+         * SSL socket type not tied to the comm API. If it is
+         * tied to the comm API, it's freed when the comm driver
+         * shuts down.
 	 */
 
 	if (ccPtr->conntype == CONNTYPE_SSL_SOCK) {
@@ -247,11 +249,16 @@ int
 NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 {
 
-    return SSL_write(ccPtr->ssl, buffer, towrite);
-
-/* XXX this part doesn't seem to work right on Solaris */
 #if 0
+    /* XXX how it was done in nsopenssl 1.1c */
+    return SSL_write(ccPtr->ssl, buffer, towrite);
+#endif
+
+
     int rc;
+    int total;
+
+    total = towrite;
 
     do {
 	rc = SSL_write(ccPtr->ssl, buffer, towrite);
@@ -330,13 +337,20 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 		     */
 		    break;
 		}
+	} else {
+	    Ns_Log(Notice, "NsOpenSSLSend: bytes written to client on this pass: %d of %d", rc, total);
+	    towrite -= rc;
+	    if (towrite == 0) {
+		return rc;
+	    } else if (towrite < 0) {
+		Ns_Log(Error, "NsOpenSSLSend: %d bytes left to write, but rc went negative (%d), meaning an error occurred", towrite, rc);
+		return rc;
+	    }
 	}
-	towrite -= rc;
     } while (BIO_should_retry(ccPtr->ssl->wbio) &&
 	     BIO_should_write(ccPtr->ssl->wbio));
 
     return rc;
-#endif
 }
 
 
@@ -395,6 +409,10 @@ NsOpenSSLShutdown(SSL *ssl)
 {
     int i;
     int rc;
+
+    /*
+     * Call SSL_shutdown repeatedly until we're sure it's done.
+     */
 
     for (i = rc = 0; rc == 0 && i < 4; i++) {
         rc = SSL_shutdown(ssl);
@@ -1017,7 +1035,8 @@ static int
 CreateSSL(Ns_OpenSSLConn *ccPtr)
 {
     /*
-     * If the connection is managed by nsd, then the context is already set.
+     * If the connection is managed by nsd's comm API, then
+     * the context is already set.
      */
 
     if (ccPtr->context == NULL) {
@@ -1035,13 +1054,14 @@ CreateSSL(Ns_OpenSSLConn *ccPtr)
     }
 
     SSL_clear(ccPtr->ssl);
-    SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     if (ccPtr->role == ROLE_SSL_SERVER) {
 	SSL_set_accept_state(ccPtr->ssl);
     } else {
 	SSL_set_connect_state(ccPtr->ssl);
     }
+
+    SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     return NS_OK;
 }
@@ -1117,7 +1137,8 @@ CreateBIOStack(Ns_OpenSSLConn *ccPtr)
  *----------------------------------------------------------------------
  */
 
-#if 0 /* XXX not used right now, but may be shortly */
+/* XXX not used right now, but may be shortly */
+
 static int
 SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag)
 {
@@ -1138,7 +1159,6 @@ SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag)
 #endif
 
 }
-#endif
 
 
 /*
@@ -1223,6 +1243,13 @@ RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
     fd_set         *rfds;
     fd_set          fds;
 
+    if (SetNonBlocking(ccPtr, 1) == NS_ERROR) {
+	Ns_Log(Warning,
+	    "%s: could not put socket in non-blocking mode; "
+	    "timeout may not be enforced: %s",
+	    ccPtr->module, ns_sockstrerror(errno));
+    }
+
     endtime = time(NULL) + ccPtr->timeout + 1;
     FD_ZERO(&fds);
 
@@ -1283,12 +1310,22 @@ RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
 
     ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
+    if (SetNonBlocking(ccPtr, 0) == NS_ERROR) {
+	Ns_Log(Warning,
+	    "%s: could not put socket in blocking mode; "
+	    "results unpredictable: %s",
+	    ccPtr->module, ns_sockstrerror(errno));
+    }
+
+    /* XXX log if the cert is valid as a test */
+#if 0
     /* Test cert validity in log file */
     if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
         Ns_Log(Notice, "%s: %s: CLIENT's CERT is VALID", ccPtr->module, ccPtr->type);
     } else {
         Ns_Log(Notice, "%s: %s: CLIENT's CERT is NOT VALID", ccPtr->module, ccPtr->type);
     }
+#endif
 
     return NS_OK;
 

@@ -1,3 +1,19 @@
+2002-02-12  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: made the socket non-blocking at the beginning of
+	RunServerSSLHandshake, and set it back to blocking before the
+	function returns.
+
+	* ssl.c: took out #if 0 for the SetNonBlocking function. It's
+	not used right now, but it had nested #if 0's, which makes me
+	nervous.
+
+	* ssl.c: moved SSL_set_app_data call from before to after
+	SSL_set_accept_state call, as it was in 1.1c.
+
+	* ssl.c: added some debug code in NsOpenSSLSend to help debug
+	Solaris problem.
+
 2002-02-08  Scott S. Goodwin  <scott@scottg.net>
 
 	* ssl.c: reverted NsOpenSSLSend back to the way nsopenssl 1.1c
