@@ -1,5 +1,8 @@
 2004-02-15  Scott Goodwin  <scott@scottg.net>
 
+      * ssl.c: Restructured SSL read and write loops; both now take into
+      account incomplete reads and track buffer length.
+      
       * nsopenssl.h, ssl.c, sslcontext.c: Added microsecond timers to the
       connection structure for OpenSSLTrace to output. This incurs no overhead
       when SSL handshake tracing is turned off. When handshake tracing is

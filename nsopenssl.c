@@ -1142,10 +1142,10 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             total = 0;
             do {
                 if (cmd == DriverSend) {
-		            Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
+		            //Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 } else {
-		            Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
+		            //Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 }
                 if (n < 0 && total > 0) {

@@ -1986,7 +1986,7 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
     /* Convert the difference in seconds to microseconds and add */
     microseconds = microseconds + (seconds * 1000000);
 
-    Ns_Log(Notice, "%s (%s): trace (%p): %8l usecs: %s%s%s%s%s",
+    Ns_Log(Notice, "%s (%s): trace (%p): %8ld secs: %s%s%s%s%s",
             MODULE, sslconn->server,
             sslconn,
             microseconds,
