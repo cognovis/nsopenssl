@@ -1,11 +1,5 @@
 $Header$
 
-
-Note: this file may or may not be up to date. Please see the nsopenssl
-section of http://scottg.net for the latest.
-
-
-
 SSLv2, SSLv3, TLSv1 Module
 --------------------------
 
@@ -324,3 +318,19 @@ Related Links
   http://www.openssl.org    OpenSSL toolkit homepage
   http://www.modssl.org     OpenSSL module for Apache
   http://www.thawte.com     For getting test certificates
+
+
+Developers
+----------
+
+If you make any mods to nsopenssl and commit them, please be sure to
+tag after your commit. This allows anyone to go and get a named (i.e.
+tagged) snapshot of the code.
+
+You tag by doing:
+
+cvs -q tag nsopenssl-2_2_beta_1
+
+Make sure you know what the latest tag is and increment accordingly.
+
+
