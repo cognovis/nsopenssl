@@ -2,7 +2,7 @@
  * The contents of this file are subject to the AOLserver Public License
  * Version 1.1 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
- * http://aolserver.com/.
+ * http://aolserver.lcs.mit.edu/.
  *
  * Software distributed under the License is distributed on an "AS IS"
  * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
@@ -28,8 +28,6 @@
  * If you do not delete the provisions above, a recipient may use your
  * version of this file under either the License or the GPL.
  */
-
-
 
 /*
  * nsopenssl.c - version 0.2
@@ -58,10 +56,19 @@
  */
 
 
+/*
+ * Modifications to work with AOLserver 3.0 by Freddie Mendoza avm@satori.com
+ * Date: 9/6/2000 
+ *
+ *  Modifications made:
+ *  changed NsSSLRecv and NsSSLCreateConn to use OpenSSL BIO routines
+ *  added more debugging in the SSL negotiations
+ *  changes made to make caching work better
+ *  removed some redundant functions that are now part of the AOLserver core.
+ *  tested to work with OpenSSL 0.9.5a and 0.9.4
+ */
 
 static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
-
-
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -72,7 +79,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include "ns.h"
 
-
+#define SSL_LIBRARY_NAME "OpenSSL"
 
 #define DEFAULT_PORT		     443
 #define DEFAULT_PROTOCOL 	     "https"
@@ -95,14 +102,17 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #define DEFAULT_SESSIONCACHESIZE     128
 #define DEFAULT_SESSIONCACHETIMEOUT  300
 
+#define BUFSIZZ 16*1024
+static int Bufsize=BUFSIZZ;
+
+
 
 typedef struct SSLServer {
     SSL_CTX*      context;
     SSL_METHOD*   method;
     char*         certfile;
     char*         keyfile;
-    Tcl_HashTable cachehash;
-    Ns_Mutex      cachemutex;
+    Ns_Cache*	  cachehash;
     int           cachesize;
     int           cachetimeout;
     char*         ciphersuite;
@@ -111,6 +121,8 @@ typedef struct SSLServer {
 typedef struct SSLConnection {
     SSLServer* server;
     SSL*       ssl;
+	BIO*	   io;
+	BIO*	   ssl_bio;
 } SSLConnection;
 
 typedef struct SSLSessionCacheEntry {
@@ -163,6 +175,8 @@ static SockDrv *firstSockDrvPtr;
 static Ns_Thread sockThread;
 static SOCKET trigPipe[2];
 
+
+
 static Ns_DriverStartProc SockStart;
 static Ns_DriverStopProc SockStop;
 static Ns_ConnReadProc SockRead;
@@ -191,7 +205,8 @@ static int SSL_smart_shutdown(SSL *ssl);
 static int NsSSLNewSessionCacheEntry(SSL *ssl, SSL_SESSION *session);
 static SSL_SESSION* NsSSLGetSessionCacheEntry(SSL *ssl, unsigned char *id, int idlen, int *pCopy);
 static void NsSSLDelSessionCacheEntry(SSL_CTX *ctx, SSL_SESSION *pSession);
-
+static void NsSSLLogTracingState(SSL *ssl, int where, int rc);
+static void NsSSLFreeEntry(SSLSessionCacheEntry *cacheEntry);
 
 
 static Ns_DrvProc sockProcs[] = {
@@ -264,8 +279,8 @@ Ns_ModuleInit(char *server, char *module)
      */
 
     path = Ns_ConfigGetPath(server, module, NULL);    
-    if (Ns_ConfigGetBool(path, "debug", &debug) == NS_FALSE) {
-	debug = 0;
+    if (!Ns_ConfigGetBool(path, "debug", &debug)) {
+	debug = 1;
     }
 
     /*
@@ -745,6 +760,7 @@ SockClose(void *arg)
     ConnData *cdPtr = arg;
     SockDrv *sdPtr = cdPtr->sdPtr;
 
+    Ns_Log(Debug, "Calling SockClose\n");
     if (cdPtr->sock != INVALID_SOCKET) {
 	if (cdPtr->conn != NULL) {
 	    (void) NsSSLFlush(cdPtr->conn);
@@ -1038,6 +1054,7 @@ SockInit(void *arg)
 	cdPtr->conn = NsSSLCreateConn(cdPtr->sock, cdPtr->sdPtr->timeout,
 				      cdPtr->sdPtr->server);
 	if (cdPtr->conn == NULL) {
+	    Ns_Log(Notice, "SockInit: cdPtr->conn was null\n");
 	    return NS_ERROR;
 	}
     }
@@ -1134,7 +1151,7 @@ NsSSLCreateServer(char *certfile, char *keyfile, int cachesize, int cachetimeout
 	 * XXX Get this from the config file in InitModule
 	 */
 	
-	srvPtr->method = SSLv2_server_method();
+	srvPtr->method = SSLv23_server_method();
 	
 	/*
 	 * Create and initialize a new SSL server context.
@@ -1171,12 +1188,19 @@ NsSSLCreateServer(char *certfile, char *keyfile, int cachesize, int cachetimeout
 	 */
 
 	if (srvPtr->cachesize != 0) {
-	    Tcl_InitHashTable(&srvPtr->cachehash, TCL_STRING_KEYS);
-	    Ns_MutexInit(&srvPtr->cachemutex);
-	    
+		srvPtr->cachehash = Ns_CacheCreateSz("ns_openssl", 
+											TCL_STRING_KEYS,
+                    						srvPtr->cachesize, 
+											(Ns_Callback *)NsSSLFreeEntry);
+
 	    SSL_CTX_sess_set_new_cb(srvPtr->context,    NsSSLNewSessionCacheEntry);
 	    SSL_CTX_sess_set_get_cb(srvPtr->context,    NsSSLGetSessionCacheEntry);
 	    SSL_CTX_sess_set_remove_cb(srvPtr->context, NsSSLDelSessionCacheEntry);
+
+		if(debug) 
+		{ 
+	    	SSL_CTX_set_info_callback(srvPtr->context,  NsSSLLogTracingState ); 
+		}
 
 	    SSL_CTX_set_session_cache_mode(srvPtr->context, SSL_SESS_CACHE_SERVER);
 	} else {
@@ -1266,8 +1290,7 @@ NsSSLDestroyServer(SSLServer *server)
     }
 
     if (server->cachesize != 0) {
-	Tcl_DeleteHashTable(&server->cachehash);
-	Ns_MutexDestroy(&server->cachemutex);
+		Ns_CacheDestroy(server->cachehash);
     }
 
     if (server->ciphersuite != NULL) {
@@ -1342,104 +1365,150 @@ NsSSLCreateConn(SOCKET sock, int timeout, SSLServer *server)
     int err;
     X509* xs;
     char* cp;
+	char buf[8194];
+	int rd;
+	BIO *sbio;
+	fd_set readfds;
+	int width;
 
     if (debug) {
 	Ns_Log(Debug, ">>> NsSSLCreateConn()");
     }
 
-    assert(server != NULL);
-
     conPtr = (SSLConnection*) ns_calloc(1, sizeof(SSLConnection));
-    if (conPtr != NULL) {
-	/* Remember the server in the connection */
-	conPtr->server = server;
+    if (conPtr != NULL)
+	{
+		/* Remember the server in the connection */
+		conPtr->server = server;
 	
-	conPtr->ssl = SSL_new(server->context);
-	if (conPtr->ssl == NULL) {
-	    /* XXX Send an error message to the log */
-	    (void) NsSSLDestroyConn(conPtr);
-	    return NULL;
-	}
-	
-	SSL_clear(conPtr->ssl);
-	
-	/*SSL_set_session_id_context(ssl, (unsigned char *)cpVHostID, strlen(cpVHostID));*/
-
-	/* Store our SSLConnection as OpenSSL's app data */
-	SSL_set_app_data(conPtr->ssl, conPtr);
-	
-	/* Connect this connection's descriptor to the SSL connection */
-	SSL_set_fd(conPtr->ssl, sock);
-	
-	SSL_set_verify_result(conPtr->ssl, X509_V_OK);
-	
-	while (SSL_is_init_finished(conPtr->ssl) == 0) {
-	    if ((err = SSL_accept(conPtr->ssl)) <= 0) {
-		Ns_Log(Notice, "Failed to accept SSL connection, err = %d / %d", err, SSL_get_error(conPtr->ssl, err));
-		if (SSL_get_error(conPtr->ssl, err) == SSL_ERROR_ZERO_RETURN) {
-		    Ns_Log(Notice, "Error: SSL_ERROR_ZERO_RETURN");
-		    /*
-		     * The case where the connection was closed before any data
-		     * was transferred. That's not a real error and can occur
-		     * sporadically with some clients.
-		     */
-		    Ns_Log(Notice, "handshake stopped: connection was closed");
-		    SSL_set_shutdown(conPtr->ssl, SSL_RECEIVED_SHUTDOWN);
-		    SSL_smart_shutdown(conPtr->ssl);
-		} else if (ERR_GET_REASON(ERR_peek_error()) == SSL_R_HTTP_REQUEST) {
-		    Ns_Log(Notice, "Error: This is an HTTP request");
-		    /* What to do here? */
-		} else if (SSL_get_error(conPtr->ssl, err) == SSL_ERROR_SYSCALL) {
-		    Ns_Log(Notice, "Error: SSL_ERROR_SYSCALL");
-
-		    /* Let interrupted syscalls continue */
-		    if (errno == EINTR) {
-			continue;
-		    }
-		    
-		    if (errno > 0) {
-			Ns_Log(Notice, "SSL handshake interrupted by system [Hint: Stop button pressed in browser?!]");
-		    } else {
-			Ns_Log(Notice, "Spurious SSL handshake interrupt [Hint: Usually just one of those OpenSSL confusions!?]");
-		    }
-		    
-		    SSL_set_shutdown(conPtr->ssl, SSL_RECEIVED_SHUTDOWN);
-		    SSL_smart_shutdown(conPtr->ssl);
-		} else {
-		    Ns_Log(Notice, "Error: Other");
+		conPtr->ssl = SSL_new(server->context);
+		if (conPtr->ssl == NULL) {
+	    	/* XXX Send an error message to the log */
+	    	(void) NsSSLDestroyConn(conPtr);
+	    	return NULL;
 		}
-		
-		/* For all errors we destroy the connection */
-		(void) NsSSLDestroyConn(conPtr);
-		return NULL;
-		
-	    } else {
-		
+
+		conPtr->io = NULL;
+		conPtr->ssl_bio = NULL;
+
+    	/* Store our SSLConnection as OpenSSL's app data */
+    	SSL_set_app_data(conPtr->ssl, conPtr);
+	
+		SSL_clear(conPtr->ssl);
+
+		/* BIO stuff */
+
+		conPtr->io=BIO_new(BIO_f_buffer());
+		conPtr->ssl_bio=BIO_new(BIO_f_ssl());
+
+		/* set the buffer to a big size */
+		if (!BIO_set_write_buffer_size(conPtr->io,Bufsize)) goto err;
+
+#ifdef FIONBIO
+    if (s_nbio)
+        {
+        unsigned long sl=1;
+ 
+        if (!s_quiet)
+            /* BIO_printf(bio_err,"turning on non blocking io\n");  */
+			;
+        if (BIO_socket_ioctl(sock,FIONBIO,&sl) < 0)
+            /* ERR_print_errors(bio_err);  */
+			;
+        }
+#endif
+
+    	sbio=BIO_new_socket(sock,BIO_NOCLOSE);
+
+    	SSL_set_bio(conPtr->ssl,sbio,sbio);
+    	SSL_set_accept_state(conPtr->ssl);
+
+    	BIO_set_ssl(conPtr->ssl_bio,conPtr->ssl,BIO_CLOSE);
+    	BIO_push(conPtr->io,conPtr->ssl_bio);
+
+    	width=sock+1;
+		for(;;)
+		{
+			int read_from_sslcon = SSL_pending(conPtr->ssl);
+			int i;
+
+			if (!read_from_sslcon)
+			{
+            	FD_ZERO(&readfds);
+            	FD_SET(sock,&readfds);
+
+				i=select(width,(void *)&readfds,NULL,NULL,NULL);
+				if (i <= 0) continue;
+
+				if (FD_ISSET(sock,&readfds))
+				read_from_sslcon = 1;
+			}
+
+        	if (read_from_sslcon)
+			{
+            	if (!SSL_is_init_finished(conPtr->ssl))
+            	{
+                	/* i=init_ssl_connection(conPtr->ssl);  */
+	
+					if ((i=SSL_accept(conPtr->ssl)) <= 0)
+					{
+						if (BIO_sock_should_retry(i))
+						{
+							/* BIO_printf(bio_s_out,"DELAY\n");  */
+							i = 1;
+						}
+
+						if (i < 0)
+                    	{
+                    		/* ret=0;  */
+                    		goto err;
+                    	}
+                		else if (i == 0)
+                    	{
+                    		/* ret=1;  */
+                    		goto err;
+                    	}
+					}
+					else
+					{
+
 		/*
 		 * Successful SSL_accept. This means that the handshake was done
 		 * and that the SSL communication channel has been setup. Before
 		 * we continue, we do some extra checks.
 		 */
 
-		/*Check for failed client authentication */
-		if ((err = SSL_get_verify_result(conPtr->ssl)) != X509_V_OK) {
-		    char* errstr = (char*) X509_verify_cert_error_string(err);
-		    Ns_Log(Notice, "SSL client authentication failed: %s",  errstr != NULL ? errstr : "unknown reason");
-		    SSL_set_shutdown(conPtr->ssl, SSL_RECEIVED_SHUTDOWN);
-		    SSL_smart_shutdown(conPtr->ssl);
-		    (void) NsSSLDestroyConn(conPtr);
-		    return NULL;
-		}
-	    }
-	}
-	
-	/* Print the cipher */
-	if (debug) {
-	    Ns_Log(Debug, "SSL connection using %s", SSL_get_cipher(conPtr->ssl));
-	}
-    }
+						/*Check for failed client authentication */
+						if ((err = SSL_get_verify_result(conPtr->ssl)) != X509_V_OK)
+						{
+			    			char* errstr = (char*) X509_verify_cert_error_string(err);
+			    			Ns_Log(Notice, "SSL client authentication failed: %s",  errstr != NULL ? errstr : "unknown reason");
 
-    return conPtr;
+							goto err;
+						}
+						else
+						{
+							Ns_Log(Debug, "NsSSLCreateConn: returning\n");
+    						return conPtr;
+						}
+					}
+				}
+			}
+		}
+
+
+	}
+err:
+	Ns_Log(Notice, "NsSSLCreateConn: Error shutting down\n");
+	SSL_set_shutdown(conPtr->ssl,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+	SSL_smart_shutdown(conPtr->ssl);
+	if (conPtr->io != NULL)
+	{
+		BIO_free(conPtr->io);
+		conPtr->io = NULL;
+	}
+	(void) NsSSLDestroyConn(conPtr);
+	return NULL;
 }
 
 /*
@@ -1467,9 +1536,16 @@ NsSSLDestroyConn(SSLConnection *conn)
     }
 
     assert(conn != NULL);
+
+
+	if (conn->io != NULL)
+	{
+		BIO_free(conn->io);
+	}
+
     
     if (conn->ssl != NULL) {
-	SSL_free(conn->ssl);
+		SSL_free(conn->ssl);
     }
     
     Ns_Free(conn);
@@ -1497,11 +1573,55 @@ NsSSLDestroyConn(SSLConnection *conn)
 static int
 NsSSLRecv(SSLConnection *conn, void *buffer, int toread)
 {
+  int rd, i=0;
+  char *buf = NULL;
+
+
   assert(conn != NULL);
   assert(conn->ssl != NULL);
   assert(buffer != NULL);
-  
-  return SSL_read(conn->ssl, buffer, toread);
+
+again:
+
+				rd = BIO_read(conn->io, buffer, toread);
+				if (rd < 0)
+				{
+				
+					if(BIO_should_retry(conn->io))
+					{
+						goto again;
+					}
+				} 
+				else if (rd == 0) 
+				{
+					rd = 0;
+				}
+
+
+#if 0
+  				rd = SSL_read(conn->ssl, (char *)buffer, toread);
+                switch (SSL_get_error(conn->ssl,rd))
+                    {
+                case SSL_ERROR_NONE:
+                    break;
+                case SSL_ERROR_WANT_WRITE:
+                case SSL_ERROR_WANT_READ:
+                case SSL_ERROR_WANT_X509_LOOKUP:
+					Ns_Log(Debug, "NsSSLRecv: WANT_SOMETHING\n");
+					SSL_renegotiate(conn->ssl);
+					SSL_write(conn->ssl,NULL,0);
+					goto again;
+                case SSL_ERROR_SYSCALL:
+                case SSL_ERROR_SSL:
+					Ns_Log(Debug, "NsSSLRecv: SSL_ERROR_SYSCALL\n");
+					break;
+                case SSL_ERROR_ZERO_RETURN:
+					Ns_Log(Debug, "NsSSLRecv: SSL_ERROR_ZERO_RETURN\n");
+                    break;
+                    }
+#endif
+
+  return rd;
 }
 
 /*
@@ -1524,9 +1644,12 @@ NsSSLRecv(SSLConnection *conn, void *buffer, int toread)
 static int
 NsSSLSend(SSLConnection *conn, void *buffer, int towrite)
 {
+	int wr;
     assert(conn != NULL);
     assert(conn->ssl != NULL);
     assert(buffer != NULL);
+
+	Ns_Log(Debug, ">>> NsSSLSend()");
 
     return SSL_write(conn->ssl, buffer, towrite);
 }
@@ -1549,16 +1672,17 @@ NsSSLNewSessionCacheEntry(SSL *ssl, SSL_SESSION *session)
     SSLConnection* connection;
     SSLServer* server;
     SSLSessionCacheEntry* cacheEntry;
-    Tcl_HashEntry* hashEntry;
+    Ns_Entry* hashEntry;
     int new;
     char key[1024];
     unsigned char data[16 * 1024]; /* How to calc this? Standard base64 size rule on SSL_SESSION? */
     unsigned char *datap, *value;
     int datalength;
-    int result;
+    int result = TCL_ERROR;
     
-    if (debug) {
-	Ns_Log(Debug, ">>> NsSSLNewSessionCacheEntry()");
+    if (debug) 	
+	{
+		Ns_Log(Debug, ">>> NsSSLNewSessionCacheEntry()");
     }
 
     /*
@@ -1568,14 +1692,6 @@ NsSSLNewSessionCacheEntry(SSL *ssl, SSL_SESSION *session)
     connection = (SSLConnection*) SSL_get_app_data(ssl);
     server = connection->server;
 
-    /*
-     * Check if the hash table has exceeded it's max size.
-     */
-
-    //if (NsSSLGetSessionCacheSize(server) > server->cachesize) {
-    //    NsSSLExpireSessionCache(server);
-    //}
-    
     /*
      * Convert the session id to a base64 encoded string.
      */
@@ -1604,23 +1720,51 @@ NsSSLNewSessionCacheEntry(SSL *ssl, SSL_SESSION *session)
      */
 
     cacheEntry = (SSLSessionCacheEntry*) Ns_Malloc(sizeof(SSLSessionCacheEntry));
-    
     cacheEntry->time = time(NULL);
     cacheEntry->data = value;
     cacheEntry->size = datalength;
     
-    Ns_LockMutex(&server->cachemutex);
+	Ns_CacheLock(server->cachehash);
     {
-	hashEntry = Tcl_CreateHashEntry(&server->cachehash, key, &new);
-	if (hashEntry != NULL && new == 1) { /* XXX What to do if it's not a new entry? */
-	    Tcl_SetHashValue(hashEntry, (ClientData) cacheEntry);
-	} else {
-	    Ns_Free(value);
-	}
+		hashEntry = Ns_CacheCreateEntry(server->cachehash, key, &new);
+		if(!new)
+		{
+			SSLSessionCacheEntry* cacheEntryTmp;
+
+    		Ns_Log(Debug, "Entry exists with Session ID: '%s'", key);
+	    	cacheEntryTmp = Ns_CacheGetValue(hashEntry);
+
+			if((strncmp((char *)cacheEntry->data, (char *)cacheEntryTmp->data,
+						cacheEntry->size)) != 0) 
+			{
+    			Ns_Log(Debug, "Cache Unset of key : '%s'", key);
+				Ns_CacheUnsetValue(cacheEntryTmp);
+				new = 1;
+			}
+			else
+			{
+    			Ns_Log(Debug, "Cache entry is the same: key : '%s'", key);
+				result = TCL_OK;
+			}
+
+		}
+
+		if (new) 
+		{ 
+    		Ns_Log(Debug, "Added New Session ID: '%s'", key);
+	    	Ns_CacheSetValueSz(hashEntry, cacheEntry, cacheEntry->size);
+		} 	
+		else 	
+		{
+    		Ns_Log(Debug, "Was not able to add New Session ID: '%s'", key);
+	    	Ns_Free(value);
+	    	Ns_Free(cacheEntry);
+    		result =  TCL_ERROR;
+		}
     }
-    Ns_UnlockMutex(&server->cachemutex);
+	Ns_CacheUnlock(server->cachehash);
     
-    return 0;
+    return result;
 }
 
 static SSL_SESSION*
@@ -1628,16 +1772,16 @@ NsSSLGetSessionCacheEntry(SSL *ssl, unsigned char *id, int id_length, int *copy)
 {
     SSLConnection* connection;
     SSLServer* server;
-    SSL_SESSION *session;
+    SSL_SESSION *session = NULL;
     SSLSessionCacheEntry* cacheEntry;
-    Tcl_HashEntry* hashEntry;
+    Ns_Entry* hashEntry;
     char key[1024];    
     
-    if (debug) {
-	Ns_Log(Debug, ">>> NsSSLGetSessionCacheEntry()");
+    if (debug) 	
+	{
+		Ns_Log(Debug, ">>> NsSSLGetSessionCacheEntry()");
     }
     
-    session = NULL;
     
     /*
      * Get our server record via the SSL's application data.
@@ -1651,19 +1795,22 @@ NsSSLGetSessionCacheEntry(SSL *ssl, unsigned char *id, int id_length, int *copy)
      */
     
     Ns_HtuuEncode(id, id_length, key);
-    Ns_Log(Debug, "Session ID: '%s'", key);
     
-    Ns_LockMutex(&server->cachemutex);
-    {
-	hashEntry = Tcl_FindHashEntry(&server->cachehash, key);
-	if (hashEntry == NULL) {
-	    Ns_Log(Debug, "SSLCache: Did not find entry for key '%s'", key);	    
-	} else {
-	    cacheEntry = Tcl_GetHashValue(hashEntry);
-	    session = d2i_SSL_SESSION(NULL, (unsigned char**) &cacheEntry->data, cacheEntry->size);
+	Ns_CacheLock(server->cachehash);
+	{
+		hashEntry = Ns_CacheFindEntry(server->cachehash, key);
+		if (hashEntry == NULL) 
+		{
+	    	Ns_Log(Debug, "SSLCache: Did not find entry for key '%s'", key);	    
+		} 
+		else 	
+		{
+	    	Ns_Log(Debug, "SSLCache: Found entry for key '%s'", key);	    
+	    	cacheEntry = Ns_CacheGetValue(hashEntry);
+	    	session = d2i_SSL_SESSION(NULL, (unsigned char**) &cacheEntry->data, cacheEntry->size);
+		}
 	}
-    }
-    Ns_UnlockMutex(&server->cachemutex);
+	Ns_CacheUnlock(server->cachehash);
 
     *copy = 0;
     return session;
@@ -1674,12 +1821,15 @@ NsSSLDelSessionCacheEntry(SSL_CTX *ctx, SSL_SESSION *session)
 {
     SSLConnection* connection;
     SSLServer* server;
-    Tcl_HashEntry* hashEntry;
+    Ns_Entry* hashEntry;
     SSLSessionCacheEntry* cacheEntry;
     char key[1024];
+
+	Ns_Log(Debug, "Session hits: '%d'", SSL_CTX_sess_hits(ctx));
     
-    if (debug) {
-	Ns_Log(Debug, ">>> NsSSLDelSessionCacheEntry()");
+    if (debug) 
+	{
+		Ns_Log(Debug, ">>> NsSSLDelSessionCacheEntry()");
     }
     
     /*
@@ -1695,19 +1845,92 @@ NsSSLDelSessionCacheEntry(SSL_CTX *ctx, SSL_SESSION *session)
     Ns_HtuuEncode(session->session_id, session->session_id_length, key);
     Ns_Log(Debug, "Session ID: '%s'", key);
 
-    Ns_LockMutex(&server->cachemutex);
-    {
-	hashEntry = Tcl_FindHashEntry(&server->cachehash, key);
-	if (hashEntry != NULL) {
-	    cacheEntry = Tcl_GetHashValue(hashEntry);
-	    if (cacheEntry == NULL) {
-		Ns_Log(Debug, "SSLCache: Did not find entry for key '%s'", key);
-	    } else {
-		Ns_Free(cacheEntry->data);
-		Ns_Free(cacheEntry);
-		Tcl_DeleteHashEntry(hashEntry);
-	    }
+	Ns_CacheLock(server->cachehash);
+	{
+		hashEntry = Ns_CacheFindEntry(server->cachehash, key);
+		if (hashEntry != NULL) 
+		{
+	    	cacheEntry = Ns_CacheGetValue(hashEntry);
+	    	if (cacheEntry == NULL) 
+			{
+				Ns_Log(Debug, "SSLCache: Did not find entry for key '%s'", key);
+	    	} 
+			else 
+			{
+				NsSSLFreeEntry(cacheEntry);
+				Ns_CacheDeleteEntry(hashEntry);
+	    	}
+    	}
 	}
-    }
-    Ns_UnlockMutex(&server->cachemutex);
+	Ns_CacheUnlock(server->cachehash);
 }
+
+static void
+NsSSLFreeEntry(SSLSessionCacheEntry* cacheEntry)
+{
+	Ns_Free(cacheEntry->data);
+	Ns_Free(cacheEntry);
+}
+
+static void
+NsSSLLogTracingState(SSL *ssl, int where, int rc)
+{
+    SSLConnection* connection;
+    SSLServer* server;
+	char *str;
+
+    /*
+     * Get our server record via the SSL's application data.
+     */
+
+    connection = (SSLConnection*) SSL_get_app_data(ssl);
+	server = connection->server;
+	
+	if (where & SSL_CB_HANDSHAKE_START)
+	{
+		Ns_Log(Debug, "%s: Handshake : start", SSL_LIBRARY_NAME);
+	} 
+	else if (where & SSL_CB_HANDSHAKE_DONE)
+	{
+		Ns_Log(Debug, "%s: Handshake : done", SSL_LIBRARY_NAME);
+	}
+	else if (where & SSL_CB_LOOP)
+	{
+		Ns_Log(Debug, "%s: Loop : %s", SSL_LIBRARY_NAME,
+							SSL_state_string_long(ssl));
+	}
+	else if (where & SSL_CB_READ)
+	{
+		Ns_Log(Debug, "%s: Read : %s", SSL_LIBRARY_NAME,
+							SSL_state_string_long(ssl));
+	}
+	else if (where & SSL_CB_WRITE)
+	{
+		Ns_Log(Debug, "%s: Write : %s", SSL_LIBRARY_NAME,
+							SSL_state_string_long(ssl));
+	}
+	else if (where & SSL_CB_ALERT)
+	{
+		str = (where & SSL_CB_READ) ? "read" : "write";
+		Ns_Log(Debug, "%s: Alert : %s:%s:%s", SSL_LIBRARY_NAME,
+							str,
+							SSL_alert_type_string_long(rc),
+							SSL_alert_desc_string_long(rc));
+	}
+	else if (where & SSL_CB_EXIT)
+	{
+    	if (rc == 0)
+		{
+			Ns_Log(Debug, "%s: Exit : failed  in  %s", SSL_LIBRARY_NAME,
+								SSL_state_string_long(ssl));
+		}
+		else if (rc < 0)
+		{
+			Ns_Log(Debug, "%s: Exit : error in  %s", SSL_LIBRARY_NAME,
+								SSL_state_string_long(ssl));
+		}
+
+	}
+}
+
+
