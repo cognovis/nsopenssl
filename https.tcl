@@ -213,20 +213,7 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 # Side effects:
 #
 
-proc ns_httpspost {url {rqset ""} {qsset ""} {timeout 30}} {
-    #
-    # Build the query string to POST with
-    #
-
-    set querystring ""
-    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
-	set key [ns_set key $qsset $i]
-	set value [ns_set value $qsset $i]
-	set querystring "$querystring&$key=$value"
-    }
-    ns_log notice "QS that will be sent is $querystring"
-    set querystring [ns_urlencode $querystring]
-
+proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     #
     # Build the request. Since we're posting, we have to set
     # content-type and content-length ourselves. We'll add these to
@@ -239,8 +226,32 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {timeout 30}} {
 	ns_set put $rqset "Accept" "*/*\r"
 	ns_set put $rqset "User-Agent" "[ns_info name]-Tcl/[ns_info version]\r"
     }
-    ns_set put $rqset "Content-length" [string length $querystring]
-    ns_set put $rqset "Content-type" "application/x-www-form-urlencoded"
+    if {$type == ""} {
+	ns_set put $rqset "Content-type" "application/x-www-form-urlencoded"
+    } else {
+	ns_set put $rqset "Content-type" "$type"
+    }
+
+    #
+    # Build the query string to POST with
+    #
+
+    set querystring ""
+    if {![string match "" $qsset]} {
+	for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
+	    set key [ns_set key $qsset $i]
+	    set value [ns_set value $qsset $i]
+	    if { $i > 0 } {
+		append querystring "&"
+	    }
+	    append querystring "$key=[ns_urlencode $value]"
+	}
+	ns_log notice "QS that will be sent is $querystring"
+	ns_set put $rqset "Content-length" [string length $querystring]
+    } else {
+	ns_log notice "QS string is empty"
+	ns_set put $rqset "Content-length" "0"
+    }
 
     #
     # Perform the actual request.
