@@ -703,13 +703,13 @@ retry:
         case SSL_ERROR_SYSCALL:
             err = ERR_get_error();
             if (err) {
-                Ns_Log(Warning, "%s (%s): SSL %s interrupted: %s",
+                Ns_Log(Debug, "%s (%s): SSL %s interrupted: %s",
                     MODULE, sslconn->server, dir, ERR_reason_error_string(err));
             } else if (n == 0) {
-                Ns_Log(Warning, "%s (%s): SSL %s interrupted: unexpected eof",
+                Ns_Log(Debug, "%s (%s): SSL %s interrupted: unexpected eof",
                     MODULE, sslconn->server, dir);
             } else {
-                Ns_Log(Warning, "%s (%s): SSL %s interrupted: %s",
+                Ns_Log(Debug, "%s (%s): SSL %s interrupted: %s",
                     MODULE, sslconn->server, dir, ns_sockstrerror(ns_sockerrno));
             }
             n = -1;
