@@ -2,6 +2,8 @@ Todo List:
 
 ---------------------------------------------------------------------
 
+* Should probably fix form.tcl to do the right thing.
+
 form.tcl doesn't respect the fact that a boundary
 value declaration may be wrapped in double quotes. It will work
 with this:
@@ -12,6 +14,21 @@ but not this:
 
    multipart/form-data, boundary="--123456789"
 
-* Should probably fix form.tcl to do the right thing.
        
 ---------------------------------------------------------------------
+
+* Change EOF / peer aborts connection error message to be a notice or
+  debug statement.
+
+---------------------------------------------------------------------
+
+* Add IP to EOF's and other errors logged.
+
+---------------------------------------------------------------------
+
+* Update the documentation to reflect latest changes for 2.1.
+
+---------------------------------------------------------------------
+
+* Take out nsdserver's message about client cert being valid.
+
