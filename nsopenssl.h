@@ -33,6 +33,8 @@
  * $Header$
  */
 
+/* XXX remove from production */
+#define NSOPENSSL_DEBUG
 
 /* Required for Tcl channels to work */
 #ifndef USE_TCL8X
@@ -93,77 +95,99 @@
 struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
-    struct NsOpenSSLDriver *nextPtr;/* Next in driver list */
     Ns_Driver driver;               /* Ns_RegisterDriver handle */
+    struct NsOpenSSLDriver *nextPtr;/* Next in driver list */
+    struct Ns_OpenSSLConn *firstFreePtr; /* First free conn (per-driver) */
+    Ns_Mutex lock;
     char    *server;		/* Server name */
     char    *module;		/* Module config name */
-    char    *location;		/* E.g. https://example.com:8443 */
-    char    *address;		/* Advertised address */
-    int      port;		/* Bind port */
-    char    *bindaddr;		/* Bind address - might be 0.0.0.0 */
-#if 0
-    char backlog;               /* listen() backlog */
-#endif
-    SOCKET   lsock;             /* Listening socket */
-    struct Ns_OpenSSLConn *firstFreePtr; /* First free conn (per-driver) */
-
-    Ns_Mutex lock;
-    int      refcnt;
     char    *configPath;	/* E.g. ns/server/s1/module/nsopenssl */
     char    *dir;		/* Module directory (on disk) */
-    int      bufsize;
-    int      timeout;
-
-    SSL_CTX *context;		/* XXX change to nsdServerContext */
+    char    *location;		/* E.g. https://example.com:8443 */
+    char    *address;		/* Advertised address */
+    char    *bindaddr;		/* Bind address - might be 0.0.0.0 */
+    char    *randomFile;	/* Used to seed PRNG */
+    SSL_CTX *nsdServerContext;
     SSL_CTX *sockClientContext;
     SSL_CTX *sockServerContext;
-    
-    char    *randomFile;	/* Used to seed PRNG */
+    SOCKET   lsock;             /* Listening socket */
+    int      port;		/* Bind port */
+#if 0
+    int      backlog;               /* listen() backlog */
+#endif
+    int      refcnt;
+    int      bufsize;
+    int      timeout;
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
     struct Ns_OpenSSLConn *nextPtr; /* Next conn in the list */
-    struct NsOpenSSLDriver *sdPtr;  /* Pointer to the driver */
-
-	/* These are NOT to be freed by NsOpenSSLDestroyConn */
-    char    *server;		/* Server name */
-    char    *module;		/* Module name (e.g. 'nsopenssl') */
-    char    *configPath;	/* Path to the configuration file */
-    char    *dir;		/* Module directory (on disk) */
-    char    *location;		/* E.g. https://example.com:8443 */
-    char    *address;		/* Advertised address for this module instance */
-    char    *bindaddr;		/* Bind address for this module instance - might be 0.0.0.0 */
-    int      port;		/* The port the server is listening on for this module instance */
-    int      bufsize;
-    int      timeout;
-
-    SSL_CTX *context;		/* Read-only context for creating SSL structs */
-        
-    /* These must be freed by NsOpenSSLDestroyConn */
-    int      refcnt;            /* Don't destroy struct if refcnt > 0 (tclcmds.c) */
-    int      role;		/* client or server */
-    int      conntype;		/* nsd server, sock server or client server conn */
+    struct NsOpenSSLDriver *driver;  /* Pointer to the driver */
+    SSL_CTX *context;		/* SSL context for this particular conn */
     char    *type;		/* 'nsdserver', 'sockserver', sockclient' */
-    SOCKET   sock;
-    SOCKET   wsock;
     SSL     *ssl;
     BIO     *io;		/* All SSL i/o goes through this BIO */
     X509    *peercert;		/* Certificate for peer, may be NULL if no cert */
-    char     peer[16];		/* Not used by nsd server conns in 4.x API */
+    int      refcnt;            /* Don't destroy struct if refcnt > 0 (tclcmds.c) */
+    int      role;		/* client or server */
+    int      conntype;		/* nsd server, sock server or client server conn */
     int      peerport;		/* Not used by nsd server conns in 4.x API */
-
-    /* XXX These two used to be ifdef'd out of AOLserver 4.x compiles
-       need to reevaluate. */
-
+    SOCKET   sock;
+    SOCKET   wsock;
+    char     peer[16];		/* Not used by nsd server conns in 4.x API */
 } Ns_OpenSSLConn;
+
+
+/*
+ * Holds the information for each SSL context definition. These contexts
+ * are used only for the Tcl API's ns_openssl_sock* commands. The core server
+ * SSL context is stored in the driver's structure. These are not tied to
+ * any driver.
+ */
+
+/* XXX Currently used to hold default info for SockServer and SockClient */
+/* XXX Later uses will include creating new contexts via Tcl API */
+
+/* XXX Find a way to hash these so lookups by name are fast */
+
+typedef struct Ns_OpenSSLContext {
+    struct Ns_OpenSSLContext *next;     /* Points to next SSL context */
+    char     *name;              /* Each context has a name */
+    char     *server;            /* What server this context was defined in */
+    char     *module;            /* What module this context belongs to (unneeded?) */
+    int       role;              /* Role is SSL server=0 or SSL client=1 */
+    char     *defkey;            /* Default key file, PEM format */
+    char     *defcert;           /* Default cert file, PEM format */
+    char     *defca;             /* Default CA file, PEM format, concatenated */
+    char     *defcadir;          /* Default CA dir (unneeded?) */
+    char     *defcrl;            /* Default CRL file */
+    char     *defcrldir;         /* Default CRL directory */
+    int       abortoninvalid;    /* 1 if you want conn to abort on invalid peer cert */
+    char     *abortproc;         /* Tcl proc that will handle the aborted conn */
+    SSL_CTX  *sslctx;            /* SSL context template */
+} Ns_OpenSSLContext;
+
+/*
+ * Global - points to first in chain of SSL drivers
+ */
+
+static NsOpenSSLDriver *firstSSLDriverPtr;
+
+/*
+ * Global - points to first in the chain of SSL context structs
+ */
+
+static Ns_OpenSSLContext *firstSSLContextPtr;
+
+/* XXX Temporary - used to store non-comm API SSL conn contexts */
+static SSL_CTX *sockServerContext = NULL;
+static SSL_CTX *sockClientContext = NULL;
 
 
 typedef struct SSLTclCmd {
-
     char *name;
     Tcl_CmdProc *proc;
     ClientData clientData;
-
 } SSLTclCmd;
 
 
@@ -175,17 +199,12 @@ typedef struct SSLTclCmd {
 #define DEFAULT_PROTOCOL                      "https"
 
 /*
- * Used to determine whether NSD is handling the
- * underlying socket or not.
+ * Used to determine whether the connection is going
+ * through the comm API or not.
  */
 
 #define CONNTYPE_SSL_NSD                       0
 #define CONNTYPE_SSL_SOCK                      1
-
-/*
- * Used to determine if we're the client or the server
- * for the connection.
- */
 
 #define ROLE_SSL_CLIENT                        0
 #define ROLE_SSL_SERVER                        1
@@ -346,37 +365,30 @@ typedef struct SSLTclCmd {
  * init.c
  */
 
-#ifndef NS_MAJOR_VERSION
+#ifdef AOLSERVER_3
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module,
 					       Ns_DrvProc * procs);
 #else
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module);
 #endif
-extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
+extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * driver);
 
 /*
  * ssl.c
  */
 
-extern int NsOpenSSLCreateConn (Ns_OpenSSLConn * ccPtr);
-extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr);
-extern int NsOpenSSLFlush (Ns_OpenSSLConn * ccPtr);
-extern int NsOpenSSLRecv (Ns_OpenSSLConn * ccPtr, void *buffer, int toread);
-extern int NsOpenSSLSend (Ns_OpenSSLConn * ccPtr, void *buffer, int towrite);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, int port, int async,
-					      int timeout);
+extern Ns_OpenSSLConn * NsOpenSSLCreateConn (SOCKET sock,
+           NsOpenSSLDriver * driver, int role, int conntype);
+extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn * conn);
+extern int NsOpenSSLFlush (Ns_OpenSSLConn * conn);
+extern int NsOpenSSLRecv (Ns_OpenSSLConn * conn, void *buffer, int toread);
+extern int NsOpenSSLSend (Ns_OpenSSLConn * conn, void *buffer, int towrite);
 extern int Ns_OpenSSLFetchPage (Ns_DString * dsPtr, char *url, char *server);
 extern int Ns_OpenSSLFetchURL (Ns_DString * dsPtr, char *url,
 			       Ns_Set * headers);
-extern int Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc * proc,
-				   void *arg, int when);
-extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
-					 Ns_SockProc * proc, void *arg);
-extern SOCKET Ns_OpenSSLSockListen (char *address, int port);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
 extern void NsOpenSSLTrace (SSL * ssl, int where, int rc);
 extern int NsOpenSSLShutdown (SSL * ssl);
-extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * ccPtr);
+extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * conn);
 
 /*
  * tclcmds.c
@@ -409,6 +421,14 @@ extern Tcl_CmdProc NsTclSSLGetByCmd;
  * nsopenssl.c
  */
 
+extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, int port, int async,
+					      int timeout);
+extern int Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc * proc,
+				   void *arg, int when);
+extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
+					 Ns_SockProc * proc, void *arg);
+extern SOCKET Ns_OpenSSLSockListen (char *address, int port);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
 extern char *NsOpenSSLGetModuleName (void);
 extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
 extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);

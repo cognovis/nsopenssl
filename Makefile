@@ -69,6 +69,13 @@ OBJS     =  nsopenssl.o init.o ssl.o thread.o tclcmds.o
 HDRS     =  nsopenssl.h
 
 #
+# Turn on debugging in nsopenssl module
+#
+ifdef DEBUG
+    CFLAGS += -DNSOPENSSL_DEBUG
+endif
+
+#
 # Extra libraries required by your module (-L and -l go here)
 #
 ifdef BSAFE

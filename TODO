@@ -1,7 +1,5 @@
 TODO and IDEAS:
 
-- Add static compilation ability
-
 - Create fully automated tests for nsopenssl that can run without a browser. Issues
   will include how to configure AOLserver's nsd.tcl file for the testing. OpenSSL
   and other programs may be required for testing as well. Not sure how to handle this,
@@ -11,17 +9,8 @@ TODO and IDEAS:
 
 - Apply patch to fix OpenSSL version info in nsopenssl.
 
-- Apply patch to make OpenSSL compile with AOLserver 4.x
-
 - Add a version.h file, like the one found in nsoracle. See if I can get 
   tag-release and file-release to automatically update the release number in the file.
-
-
-
-QUESTIONS
-
-- for AS 4.x how do I know what the module's name is? I get it from sdPtr
-  in AS3. See nsopenssl.c NsOpenSSLGetModuleName.
 
 
 NOTES ON C CODE:
