@@ -842,52 +842,65 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, struct iovec * bufs, int nbufs)
 {
     Ns_OpenSSLConn *scPtr;
     Ns_Driver *driver = sock->driver;
-    struct msghdr msg;
-    int n;
-
-    /*          
-     * Initialize the connection context on the first I/O.
-     */
-    
-    scPtr = sock->arg;
-    if (scPtr == NULL) {
-	scPtr = ns_calloc (1, sizeof (*scPtr));
-	scPtr->role = ROLE_SSL_SERVER;
-	scPtr->conntype = CONNTYPE_SSL_NSD;
-	scPtr->type = STR_NSD_SERVER;
-	scPtr->sdPtr = driver->arg;
-	scPtr->module = scPtr->sdPtr->module;
-	scPtr->bufsize = scPtr->sdPtr->bufsize;
-	scPtr->timeout = scPtr->sdPtr->timeout;
-	scPtr->context = scPtr->sdPtr->context;
-	scPtr->refcnt = 0;	/* always 0 for nsdserver conns */
-	scPtr->sock = sock->sock;
-	sock->arg = scPtr;
-	
-	if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) scPtr) != NS_OK) {
-	    return NS_ERROR;
-	}
-    }
+    int n, total;
 
     switch (cmd) {
     case DriverRecv:
-	n = recvmsg(sock->sock, &msg, 0);
-        if (n < 0 && errno == EWOULDBLOCK
-            && Ns_SockWait(sock->sock, NS_SOCK_READ, sock->driver->recvwait) == NS_OK) {
-            n = recvmsg(sock->sock, &msg, 0);
-        }
-        break;
-
     case DriverSend:
-	n = sendmsg(sock->sock, &msg, 0);
-        if (n < 0 && errno == EWOULDBLOCK
-            && Ns_SockWait(sock->sock, NS_SOCK_WRITE, sock->driver->sendwait) == NS_OK) {
-            n = sendmsg(sock->sock, &msg, 0);
-        }
-        break;
+
+	/*          
+	 * On first I/O, initialize the connection context.
+	 */
+
+	scPtr = sock->arg;
+	if (scPtr == NULL) {
+	    scPtr = ns_calloc (1, sizeof (*scPtr));
+	    scPtr->role = ROLE_SSL_SERVER;
+	    scPtr->conntype = CONNTYPE_SSL_NSD;
+	    scPtr->type = STR_NSD_SERVER;
+#if 0
+	    scPtr->sdPtr = driver->arg;
+#endif
+	    scPtr->module = driver->module;
+	    scPtr->bufsize = driver->bufsize;
+
+	    scPtr->timeout = driver->recvwait;
+	    scPtr->context = driver->context;
+	    scPtr->refcnt = 0;	/* always 0 for nsdserver conns */
+	    scPtr->sock = sock->sock;
+	    sock->arg = scPtr;
+
+	    if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) scPtr) != NS_OK) {
+		return NS_ERROR;
+	    }
+	}
+
+	/*
+	 * Process each buffer one at a time.
+	 */
+
+	total = 0;
+	do {
+	    if (cmd == DriverSend) {
+		n =
+		    NsOpenSSLSend ((Ns_OpenSSLConn *) sock->arg, bufs->ns_buf,
+				   bufs->ns_len);
+	    } else {
+		n =
+		    NsOpenSSLRecv ((Ns_OpenSSLConn *) sock->arg, bufs->ns_buf,
+				   bufs->ns_len);
+	    }
+	    if (n < 0 && total > 0) {
+		/* NB: Mask error if some bytes were read. */
+		n = 0;
+	    }
+	    ++bufs;
+	    total += n;
+	} while (n > 0 && --nbufs > 0);
+	n = total;
+	break;
 
     case DriverKeep:
-	/* XXX Revisit */
 	if (sock->arg != NULL && NsOpenSSLFlush (sock->arg) == NS_OK) {
 	    n = 0;
 	} else {
@@ -896,7 +909,6 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, struct iovec * bufs, int nbufs)
 	break;
 
     case DriverClose:
-	/* Revisit */
 	if (sock->arg != NULL) {
 	    (void) NsOpenSSLFlush (sock->arg);
 	    NsOpenSSLDestroyConn (sock->arg);
