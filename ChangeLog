@@ -1,3 +1,21 @@
+2004-08-25  Dossy Shiobara <dossy@panoptic.com>
+
+	* ssl.c (1.67), nsopenssl.c (1.75): Cleanup of code and fix a bug
+	  relating to "broken" SSL connections being returned to the
+	  connection pool for HTTP Keep-Alive when they should be shut down
+	  and discarded.  This was resulting in connection threads using up
+	  100% of the CPU, trying to read the next HTTP request from a dead
+	  socket, then returning it back to the Keep-Alive pool.  Fixes a
+	  portion of the SF Bug #1012892.
+
+2004-08-25  Dossy Shiobara <dossy@panoptic.com>
+
+	* README (1.6), nsd.tcl (1.12): If SSLv2 isn't in the list of
+	  configured protocols, then it shouldn't be in the list of
+	  ciphersuites either -- this can cause the server to crash if a
+	  client tries to negotiate a SSLv2 connection (as it's advertised
+	  as available in ciphersuites).
+
 2004-06-23  Scott Goodwin  <scott@scottg.net>
 
         * sslcontext.c, defaults.h: Merged SSLContextCertInit,
