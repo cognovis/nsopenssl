@@ -95,14 +95,18 @@ NsOpenSSLShutdown(SSL *ssl)
 int
 NsOpenSSLFlush(NsOpenSSLConnection *scPtr)
 {
+    NsOpenSSLDriver     *sdPtr = scPtr->sdPtr;
+
     if (scPtr->ssl == NULL) {
 
 	return NS_ERROR;
 
     } else {
 
-	/* XXX check return code */
-	BIO_flush(SSL_get_wbio(scPtr->ssl));
+	if (BIO_flush(SSL_get_wbio(scPtr->ssl)) < 1) {
+            Ns_Log(Error, "%s: BIO returned error on flushing buffer",
+                sdPtr->module);
+        }
 	return NS_OK;
 
     }

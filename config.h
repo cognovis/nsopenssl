@@ -76,6 +76,10 @@
 
 #define CONFIG_RANDOMFILE           "RandomFile"
 
+/* If PRNG fails to seed, up this number in your nsd.tcl */
+#define CONFIG_SEEDBYTES            "SeedBytes"
+#define DEFAULT_SEEDBYTES           1024
+
 char *ConfigStringDefault(char *module, char *path, char *name,
     char *def);
 int ConfigBoolDefault(char *module, char *path, char *name,

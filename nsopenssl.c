@@ -16,10 +16,10 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz.
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 2000 Freddie Mendoza
+ * Copyright (C) 1999 Stefan Arentz.
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -37,22 +37,15 @@
  *
  * This module implements an SSL socket driver using the OpenSSL library.
  *
- * WARNING THIS IS ALPHA SOFTWARE. IT HAS NOT BEEN TESTED AND SHOULD NOT
- * BE USED IN A PRODUCTION ENVIRONMENT. USE AT YOUR OWN RISK.
- *
  * Originally by Stefan Arentz <stefan.arentz@soze.com>.
  *
  * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
  *
- * Client certificate support and general cleanup by Scott Goodwin
- * <scott@scottg.net> and Rob Mayoff <mayoff@arsdigita.com>.
+ * Client certificate support, Tcl interface, bug fixes 
+ * by Scott Goodwin <scott@scottg.net>
  *
- * Todo:
- *
- *  Add configuration options to configure OpenSSL caching.
- *  Better error messages in the logfile
- *  Bind on all interfaces if 'address' if not specified.
- *  Test test test test and test.
+ * Some serious code refactoring and cleanup by Rob Mayoff
+ * <mayoff@arsdigita.com>.
  *
  * References:
  *
@@ -60,6 +53,7 @@
  *  OpenSSL - http://www.openssl.org
  *  AOLServer Home - http://www.aolserver.com
  *  SSL for Apache - http://www.modssl.org
+ *  nsopenssl home - http://scottg.net
  *
  */
 

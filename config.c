@@ -146,19 +146,12 @@ ConfigPathDefault(char *module, char *path, char *name, char *dir, char *def)
     Ns_DString  ds;
 
     value = Ns_ConfigGetValue(path, name);
-#if 0
-    if (value == NULL) {
-	value = def;
-    }
-#endif
-#if 1
     if (value == NULL) {
         if (def == NULL) {
             return value;
         }
 	value = def;
     }
-#endif
 
     if (Ns_PathIsAbsolute(value)) {
 	value = ns_strdup(value);

@@ -14,6 +14,10 @@
 
 <table border=1 cellspacing=0>
 
+<tr><td><font color=red>ns_openssl info</font></td><td>
+<%=[ns_openssl info]%>
+</td></tr>
+
 <tr><td><font color=red>ns_openssl clientcert exists</font></td><td>
 <%
   if {[ns_openssl clientcert exists]} {
@@ -22,10 +26,6 @@
         ns_puts "Client cert does NOT exist"
   }
 %>
-</td></tr>
-
-<tr><td><font color=red>ns_openssl info</font></td><td>
-<%=[ns_openssl info]%>
 </td></tr>
 
 <tr><td><font color=red>ns_openssl protocol</font></td><td>

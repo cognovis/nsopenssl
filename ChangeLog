@@ -1,3 +1,30 @@
+2001-05-05  Scott S. Goodwin  <scott@scottg.net>
+
+	* nsopenssl 1.1 released.
+ 
+2001-05-04  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: Now checking for errors returned by BIO_flush in
+	NsOpenSSLFlush; we don't return an error though from the function
+	though, we just report it in the log.
+
+	* init.c, config.h: made seedbytes a config parameter, which
+	allows you to set the number of bytes that will be used to seed
+	the PRNG.
+
+2001-05-03  Scott S. Goodwin  <scott@scottg.net>
+
+	* test.adp: renamed test.adp to nsopenssl-tests.adp.
+
+	* init.c: cleanup code; moved PRNG functions to bottom;
+	cleaned up NsOpenSSLInitSessionCache.
+
+2001-05-01  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: Solaris problem: SeedPRNG failed because I wasn't
+	adding enough randomness; I bumped up the number of bytes
+	from 16 to 1024 and it's working now. Yay!
+
 2001-04-30  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsd.tcl: added ns_param RandomFile.

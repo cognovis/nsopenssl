@@ -36,7 +36,7 @@ export OPENSSL=/usr/local/ssl
 gmake
 gmake install INST=/usr/local/aolserver
 
-Solaris Users:
+**** NOTE: Solaris Users:
 
 You may have to add an extra library search path and the gcc library
 for the linker to work. Specifically, you may need to change this:
@@ -111,6 +111,7 @@ ns_param CADir                    ca
 ns_param CAFile                   ca.pem 
 ns_param Trace                    false
 ns_param RandomFile               /some/file
+ns_param SeedBytes                1024
 
 # NOT IMPLEMENTED YET:
 #ns_param VerifyDepth            3
@@ -129,6 +130,10 @@ Session caching enabled by default.
 RandomFile isn't necessary, but if you want to use your own random
 bits, you can set this. On Linux, it won't matter: OpenSSL will use
 /dev/urandom to transparently seed the PRNG.
+
+SeedBytes is optional; it tells how many bytes to seed the PRNG with, but
+only if the PRNG actually needs seeding. It defaults to 1024 bytes. If
+seeding the PRNG fails, bump this number up.
 
 WARNING!!! If the client sends an invalid certificate, the connection
 is still accepted. Use 'ns_openssl clientcert valid' in your Tcl code or ADP
