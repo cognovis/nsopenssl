@@ -159,7 +159,7 @@ Ns_ModuleInit(char *server, char *module)
     NsClientSSLDriver *cdPtr;
     NsOpenSSLModuleData *mPtr = NULL;
 
-    if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
+    if (Ns_TclInitInterps(server, NsOpenSSLCreateCmds, NULL)
 	    != NS_OK) {
 	return NS_ERROR;
     }

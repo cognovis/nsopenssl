@@ -45,11 +45,20 @@ static char *ValidTime(ASN1_UTCTIME *tm);
 static char *PEMCertificate(X509 *clientcert);
 static NsServerSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
 
+static SSLTclCmd nsopensslCmds[ ] = {
+    {
+        "ns_openssl", NsOpenSSLCmd, NULL
+    },
+    {
+        NULL, NULL, NULL
+    }                                                   
+};   
+
 
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLInterpInit --
+ * NsOpenSSLCreateCmds --
  *
  *      Add nsopenssl commands to Tcl interpreter.
  *
@@ -63,14 +72,25 @@ static NsServerSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
  */
 
 int
-NsOpenSSLInterpInit(Tcl_Interp *interp, void *arg)
+NsOpenSSLCreateCmds(Tcl_Interp *interp, void *arg)
 {
-    if (Tcl_CreateCommand(interp, "ns_openssl", NsOpenSSLCmd, NULL, NULL)
+    SSLTclCmd *cmds = (SSLTclCmd *) &nsopensslCmds;
+
+    while (cmds->name != NULL) {
+
+        if (Tcl_CreateCommand(interp,
+			      cmds->name,
+			      cmds->proc,
+			      cmds->clientData,
+			      NULL)
 	    == NULL) {
-	return NS_ERROR;
-    } else {
-	return NS_OK;
-    }
+
+	    return NS_ERROR;
+	}
+	++cmds;
+    }         
+
+    return NS_OK;
 }
 
 

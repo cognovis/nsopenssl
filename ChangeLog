@@ -1,5 +1,9 @@
 2001-06-23  Scott S. Goodwin  <scott@scottg.net>
 
+	* tclcmds.h, tclcmds.c: added struct to hold list of Tcl commands
+	to create and made the creation process loop over all the commands
+	and create them.
+
 	* init.c: rewrote SetProtocols to allow the protocols to be set on
 	one line in nsd.tcl. Added protocols and cipherSuite to structs.
 
