@@ -13,10 +13,10 @@ NSHOME ?= ../aolserver
 endif
 
 #
-# Version number to use in release tags. Valid tags are "1.1c", "2.1", "2.2beta7"
+# Version number used in release tags. Valid VERs are "1.1c", "2.1", 
+# "2.2beta7". VER "1.1c" will be translated into "v1_1c" by this Makefile.
 #
-# XXX add if check here to ensure RELVER doesn't start with a letter
-RELVER_ = $(subst .,_,$(RELVER))
+VER_ = $(subst .,_,$(VER))
 
 #
 # Module name
@@ -59,33 +59,33 @@ TCLMOD   =  https.tcl
 include  $(NSHOME)/include/Makefile.module
 
 #
-# Create a tagged release. This moves the 'stable' tag to coincide with the v$(RELVER_) tag.
+# Create a tagged release. This moves the 'stable' tag to coincide with the v$(VER_) tag.
 #
 tag-release:
-	@if [ "$$RELVER" = "" ]; then echo 1>&2 "RELVER must be set to version number!"; exit 1; fi
-	cvs rtag -r stable v$(RELVER_) nsopenssl
+	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
+	cvs rtag -r stable v$(VER_) nsopenssl
 
 #
 # Create a tagged release (force it)
 #
 tag-release-force:
-	@if [ "$$RELVER" = "" ]; then echo 1>&2 "RELVER must be set to version number!"; exit 1; fi
-	cvs rtag -F -r stable v$(RELVER_) nsopenssl
+	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
+	cvs rtag -F -r stable v$(VER_) nsopenssl
 
 #
 # Create a distribution file release
 #
 file-release:
-	@if [ "$$RELVER" = "" ]; then echo 1>&2 "RELVER must be set to version number!"; exit 1; fi
+	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	rm -rf work
 	mkdir work
-	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(RELVER_) nsopenssl
-	mv work/nsopenssl work/nsopenssl-$(RELVER)
-	( cd work && tar cvf - nsopenssl-$(RELVER) ) | gzip -9 > nsopenssl-$(RELVER).tar.gz
+	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) nsopenssl
+	mv work/nsopenssl work/nsopenssl-$(VER)
+	( cd work && tar cvf - nsopenssl-$(VER) ) | gzip -9 > nsopenssl-$(VER).tar.gz
 	rm -rf work
 
 # XXX alter this to work with sed or tcl instead of perl
-# perl -pi -e 's/\@RELVER\@/$(RELVER)/g' work/nscache/index.html work/nscache/tclcache.c
+# perl -pi -e 's/\@VER\@/$(VER)/g' work/nscache/index.html work/nscache/tclcache.c
 
 #
 # Check to see that the OPENSSL variable has been set
