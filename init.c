@@ -1018,12 +1018,39 @@ static int
 LoadKey (char *module, SSL_CTX * context, char *keyFile)
 {
     int rc;
+    int fd;
+
+    /*
+     * We should check for a passphrase to try on the key file if it fails to
+     * load, but we don't yet.
+     */
 
     rc = SSL_CTX_use_PrivateKey_file (context, keyFile, SSL_FILETYPE_PEM);
 
     if (rc == 0) {
+
 	Ns_Log (Error, "%s: error loading private key file \"%s\"",
 		module, keyFile);
+
+	/*
+	 * Try to give the user some idea of why the key file wasn't
+	 * loadable...
+	 */
+
+	fd = open (keyFile, O_RDONLY);
+	if (fd < 0) {
+	    if (errno == ENOENT) {
+		Ns_Log (Notice, "%s: the private key file does not exist", module);
+	    } else if (errno == EACCES) {
+		Ns_Log (Error, "%s: permission denied trying to open the private key file for read", module);
+	    } else {
+		Ns_Log (Error, "%s: errno %d reported opening the private key file", module, errno);
+	    }
+	} else {
+	    Ns_Log (Error, "%s: the private key file *is* readable; make sure it is not passphrase-protected", module, keyFile);
+	    close (fd);
+	}
+
     }
 
     ns_free (keyFile);
