@@ -16,7 +16,7 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 1999 Stefan Arentz.
  *
@@ -188,10 +188,13 @@ NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr)
 	    SSL_free(scPtr->ssl);
 	    scPtr->ssl = NULL;
 	}
+
+#ifdef AS3
 	if (scPtr->sock != INVALID_SOCKET) {
 	    ns_sockclose(scPtr->sock);
 	    scPtr->sock = INVALID_SOCKET;
 	}
+#endif
 
 	Ns_Log(Debug, "%s: done destroying conn", scPtr->sdPtr->module);
     }
@@ -219,38 +222,51 @@ NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer, int toread)
 {
   int rc;
 
+#if 0
 again:
+#endif
 
+#if AS3
     do {
 	rc = BIO_read(scPtr->io, buffer, toread);
     } while (rc < 0 && BIO_should_retry(scPtr->io));
+#else
+    rc = BIO_read(scPtr->io, buffer, toread);
+    if (rc < 0
+        && BIO_should_retry(scPtr->io)
+        && Ns_SockWait(scPtr->sock, NS_SOCK_READ, 2) == NS_OK) {
+            rc = BIO_read(scPtr->io, buffer, toread);
+    }
+    Ns_Log(Debug, "read: %d %d\n", toread, rc);
+#endif
 
 #if 0
     rd = SSL_read(conn->ssl, (char *)buffer, toread);
     switch (SSL_get_error(conn->ssl,rd)) {
 
     case SSL_ERROR_NONE:
-	break;
+        break;
 
     case SSL_ERROR_WANT_WRITE:
     case SSL_ERROR_WANT_READ:
     case SSL_ERROR_WANT_X509_LOOKUP:
-	Ns_Log(Debug, "NsOpenSSLRecv: WANT_SOMETHING\n");
-	SSL_renegotiate(conn->ssl);
-	SSL_write(conn->ssl,NULL,0);
-	goto again;
+        Ns_Log(Debug, "NsOpenSSLRecv: WANT_SOMETHING\n");
+        SSL_renegotiate(conn->ssl);
+        SSL_write(conn->ssl,NULL,0);
+        goto again;
 
     case SSL_ERROR_SYSCALL:
     case SSL_ERROR_SSL:
-	Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_SYSCALL\n");
-	break;
+        Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_SYSCALL\n");
+        break;
 
     case SSL_ERROR_ZERO_RETURN:
-	Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_ZERO_RETURN\n");
-	break;
+        Ns_Log(Debug, "NsOpenSSLRecv: SSL_ERROR_ZERO_RETURN\n");
+        break;
 
     }
 #endif
+
 
   return rc;
 }
@@ -460,7 +476,7 @@ RunSSLHandshake(NsOpenSSLConnection *scPtr)
     fd_set         *rfds;
     fd_set          fds;
 
-
+    /* XXX take a close look at the nonblocking stuff here w/respect to new comm model */
     if (SetNonBlocking(scPtr, 1) == NS_ERROR) {
 	Ns_Log(Warning,
 	    "%s: could not put socket in non-blocking mode; "
@@ -528,12 +544,14 @@ RunSSLHandshake(NsOpenSSLConnection *scPtr)
 
     scPtr->clientcert = SSL_get_peer_certificate(scPtr->ssl);
 
+#ifdef AS3
     if (SetNonBlocking(scPtr, 0) == NS_ERROR) {
 	Ns_Log(Warning,
 	    "%s: could not put socket in blocking mode; "
 	    "results unpredictable: %s",
 	    scPtr->sdPtr->module, ns_sockstrerror(errno));
     }
+#endif
 
     return NS_OK;
 }

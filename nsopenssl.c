@@ -37,23 +37,29 @@
  *
  * This module implements an SSL socket driver using the OpenSSL library.
  *
- * Originally by Stefan Arentz <stefan.arentz@soze.com>.
+ * Currently maintained by Scott S. Goodwin <scott@scottg.net>
  *
- * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
- *
- * Client certificate support, Tcl interface, bug fixes 
- * by Scott Goodwin <scott@scottg.net>
+ * Code to make nsopenssl work with AOLserver 4.x's new comm API hacked
+ * and generously contributed by Jim Davidson and Kris Rehberg.
  *
  * Some serious code refactoring and cleanup by Rob Mayoff
  * <mayoff@arsdigita.com>.
  *
+ * Client certificate support, Tcl interface, bug fixes 
+ * by Scott Goodwin <scott@scottg.net>
+ *
+ * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
+ *
+ * Originally by Stefan Arentz <stefan.arentz@soze.com>.
+ *
  * References:
  *
- *  Distribution - http://stefan.arentz.nl/software/
- *  OpenSSL - http://www.openssl.org
- *  AOLServer Home - http://www.aolserver.com
- *  SSL for Apache - http://www.modssl.org
- *  nsopenssl home - http://scottg.net
+ *  nsopenssl home        - http://scottg.net
+ *  OpenNSD Home          - http://www.opennsd.org
+ *  AOLServer Home        - http://www.aolserver.com
+ *  OpenSSL               - http://www.openssl.org
+ *  SSL for Apache        - http://www.modssl.org
+ *  Original Distribution - http://stefan.arentz.nl/software/
  *
  */
 
@@ -78,6 +84,8 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
 /*
  * Local functions defined in this file
  */
+
+#ifdef AS3
 
 static Ns_ThreadProc SockThread;
 static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr);
@@ -120,6 +128,12 @@ static Ns_DrvProc sockProcs[] = {
     {0,                    NULL}
 };
 
+#else
+
+static Ns_DriverProc OpenSSLProc;
+
+#endif
+
 
 /*
  *----------------------------------------------------------------------
@@ -148,17 +162,28 @@ Ns_ModuleInit(char *server, char *module)
 	return NS_ERROR;
     }
 
+#ifdef AS3
     sdPtr = NsOpenSSLCreateDriver(server, module, sockProcs);
+#else
+    sdPtr = NsOpenSSLCreateDriver(server, module);
+#endif
+
     if (sdPtr == NULL) {
 	return NS_ERROR;
     }
 
+#ifdef AS3
     sdPtr->nextPtr = firstSSLDriverPtr;
     firstSSLDriverPtr = sdPtr;
 
     return NS_OK;
+#else
+    return Ns_DriverInit(server, module, "nsopenssl", OpenSSLProc, sdPtr, NS_DRIVER_SSL);
+#endif
+
 }
 
+#ifdef AS3
 
 /*
  *----------------------------------------------------------------------
@@ -714,3 +739,98 @@ SockInit(void *arg)
     }
 }
 
+#else /* default to the new comm model in AS4 */
+
+
+/*            
+ *----------------------------------------------------------------------
+ *
+ * OpenSSLProc --
+ *
+ *      SSL driver callback proc.  This driver performs the necessary
+ *      handshake and encryption of SSL.
+ *
+ * Results:   
+ *      For close, always 0.  For keep, 0 if connection could be
+ *      properly flushed, -1 otherwise.  For send and recv, # of bytes
+ *      processed or -1 on error.
+ *
+ * Side effects:
+ *      None. 
+ *            
+ *----------------------------------------------------------------------
+ */
+
+static int
+OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
+{
+    NsOpenSSLConnection *scPtr;
+    Ns_Driver *driver = sock->driver;
+    int n, total;                    
+
+    switch (cmd) {
+    case DriverRecv:
+    case DriverSend:
+        /*          
+         * On first I/O, initialize the connection context.
+         */
+           
+        scPtr = sock->arg;
+        if (scPtr == NULL) {
+            scPtr = ns_calloc(1, sizeof(*scPtr));
+            scPtr->sdPtr = driver->arg;
+            scPtr->sock = sock->sock;
+            sock->arg = scPtr;
+            if (NsOpenSSLCreateConn(scPtr) != NS_OK) {
+                return -1;
+            }
+        }    
+
+        /*
+         * Process each buffer one at a time.
+         */
+
+        total = 0;
+        do {      
+            if (cmd == DriverSend) {
+                n = NsOpenSSLSend(sock->arg, bufs->ns_buf, bufs->ns_len);
+            } else {
+                n = NsOpenSSLRecv(sock->arg, bufs->ns_buf, bufs->ns_len);
+            }
+            if (n < 0 && total > 0) {
+                /* NB: Mask error if some bytes were read. */
+                n = 0;
+            }
+            ++bufs;
+            total += n;
+        } while (n > 0 && --nbufs > 0);
+        n = total;
+        break;
+              
+    case DriverKeep:
+        if (sock->arg != NULL && NsOpenSSLFlush(sock->arg) == NS_OK) {
+            n = 0;
+        } else {
+            n = -1;
+        }
+        break;
+              
+    case DriverClose:
+        if (sock->arg != NULL) {
+            (void) NsOpenSSLFlush(sock->arg);
+            NsOpenSSLDestroyConn(sock->arg);
+            ns_free(sock->arg);
+            sock->arg = NULL;
+        }
+        n = 0;
+        break;
+              
+    default:  
+        /* Unsupported command. */
+        n = -1;
+        break;
+    }         
+    return n;
+}
+
+#endif

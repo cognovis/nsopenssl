@@ -91,8 +91,10 @@ typedef struct NsOpenSSLConnection {
     struct NsOpenSSLDriver   *sdPtr;
 
     SOCKET  sock;
+#ifdef AS3
     char    peer[16];
     int     port;
+#endif
 
     SSL    *ssl;
     BIO    *io;
@@ -104,8 +106,12 @@ typedef struct NsOpenSSLConnection {
  * init.c
  */
 
+#ifdef AS3
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
     Ns_DrvProc *procs);
+#else
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
+#endif
 extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
 
 /*

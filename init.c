@@ -85,7 +85,11 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
  */
 
 NsOpenSSLDriver *
+#ifdef AS3
 NsOpenSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
+#else
+NsOpenSSLCreateDriver(char *server, char *module)
+#endif
 {
     NsOpenSSLDriver *sdPtr = NULL;
 
@@ -128,14 +132,16 @@ NsOpenSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
 	sdPtr->bufsize = DEFAULT_BUFFERSIZE;
     }
 
+    sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
+                                          CONFIG_RANDOMFILE, sdPtr->dir, NULL);
+
+#ifdef AS3
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
     if (sdPtr->driver == NULL) {
 	NsOpenSSLFreeDriver(sdPtr);
 	return NULL;
     }
-
-    sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-                                          CONFIG_RANDOMFILE, sdPtr->dir, NULL);
+#endif
 
     return sdPtr;
 }
@@ -201,10 +207,6 @@ InitializeSSL(void)
 {
     SSL_load_error_strings();
     OpenSSL_add_ssl_algorithms();
-#if 0
-    /* replaced with the above line - same thing */
-    SSLeay_add_ssl_algorithms();
-#endif
     SSL_library_init();
     X509V3_add_standard_extensions();
 
@@ -514,10 +516,6 @@ LoadKey(NsOpenSSLDriver *sdPtr)
     if (rc == 0) {
 	Ns_Log(Error, "%s: error loading private key file \"%s\"",
 	    sdPtr->module, file);
-	Ns_Log(Error, "%s: maybe your private key is encrypted with a passphrase?",
-	    sdPtr->module);
-	Ns_Log(Error, "%s: you can try taking off the passphrase with 'openssl rsa -in key1.pem -out key2.pem'",
-	    sdPtr->module);
     }
 
     ns_free(file);
