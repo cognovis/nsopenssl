@@ -1,3 +1,26 @@
+2002-10-28    <scott@scottg.net>
+
+	* https.tcl: Added ability to pass multiple files with ns_httpspost:
+
+        "filesets" is a list of ns_sets, each ns_set contains information
+	about each file to upload and has four keys:
+
+               name:         the name of the form element for this file
+               filename:     the name of the file
+               content:      the actual contents of the file
+               content-type: the type of contents in the file, such as text/plain
+        
+        filesets are only used with multipart/form-data
+
+	The filesets parameter has been added to the parameters passed in:
+		
+	ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30}}
+
+	IF YOU USE timeout IN YOUR CURRENT ns_httpspost CODE, YOU MUST
+	CHANGE YOUR CALL.
+
+	Also modified ns_httpspost to accept "" to mean the default timeout.
+
 2002-10-18    <scott@scottg.net>
 
 	* ca, tests: Moved the tests and ca to a separate test
