@@ -24,6 +24,8 @@
  * Module originally written by Stefan Arentz. Early contributions made by
  * Freddie Mendoze and Rob Mayoff.
  *
+ * Portions created by AOL are Copyright (C) 1999 America Online, Inc.
+ * All Rights Reserved.
  */
 
 /*
@@ -32,78 +34,32 @@
  *    Implements SSLv2, SSLv3 and TLSv1 module using OpenSSL.
  */
 
-static const char *RCSID =
-    "@(#) $Header$, compiled: "
-    __DATE__ " " __TIME__;
+static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
 
-/*
- * Globals defined in this file
- */
+extern Tcl_HashTable NsOpenSSLServers;
+extern void     NsOpenSSLDriversLoad(char *server);
+extern int      NsMakeTmpRSAKey(int keylen);
 
-extern Tcl_HashTable
-NsOpenSSLServers;
+static Ns_Mutex *locks;
+static Ns_DriverProc OpenSSLProc;
 
-extern void
-NsOpenSSLDriversLoad(char *server);
+static int      InitOpenSSL(void);
+static void     InitServerState(char *server);
+static int      SeedPRNG(void);
+static void     ThreadLockCallback(int mode, int n, const char *file, int line);
+static unsigned long ThreadIdCallback(void);
+static struct CRYPTO_dynlock_value *ThreadDynlockCreateCallback(char *file, int line);
+static void     ThreadDynlockLockCallback(int mode, struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
+static void     ThreadDynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
+static void     ServerShutdown(void *arg);
+static void     LoadSSLContexts(char *server);
+static NsOpenSSLContext *LoadSSLContext(char *server, char *name);
+static int      InitSSLDriver(char *server, NsOpenSSLDriver *ssldriver);
+static void     LoadSSLDrivers(char *server);
 
-/*
- * Local functions defined in this file.
- */
-
-static int
-InitOpenSSL(void);
-
-static void
-InitServerState(char *server);
-
-static int
-SeedPRNG(void);
-
-static Ns_Mutex
-*locks;
-
-static void
-ThreadLockCallback(int mode, int n, const char *file, int line);
-
-static unsigned long
-ThreadIdCallback(void);
-
-static struct
-CRYPTO_dynlock_value *ThreadDynlockCreateCallback(char *file, int line);
-
-static void 
-ThreadDynlockLockCallback(int mode, struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
-
-static void
-ThreadDynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
-
-static void
-ServerShutdown(void *arg);
-
-static void 
-LoadSSLContexts(char *server);
-
-static NsOpenSSLContext *
-LoadSSLContext(char *server, char *name);
-
-static int
-InitSSLDriver(char *server, NsOpenSSLDriver *ssldriver);
-
-static void
-LoadSSLDrivers(char *server);
-
-#if 0
-static void
-OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver);
-#endif
-
-static Ns_DriverProc
-OpenSSLProc;
-
-NS_EXPORT int 
-Ns_ModuleVersion = 1;
+int Ns_ModuleVersion = 1;
 
 
 /*
@@ -121,16 +77,17 @@ Ns_ModuleVersion = 1;
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 Ns_ModuleInit(char *server, char *module)
 {
-    static int globalInit = 0;
+    static int  initialized = NS_FALSE;
+    int         i;
 
     /* 
      * Initialize one-time global stuff.
      */
 
-    if (!globalInit) {
+    if (initialized == NS_FALSE) {
         if (!STREQ(module, MODULE)) {
             Ns_Log(Fatal, "Module '%s' should be named '%s'", module, MODULE);
         }
@@ -139,7 +96,15 @@ Ns_ModuleInit(char *server, char *module)
             return NS_ERROR;
         }
         Tcl_InitHashTable(&NsOpenSSLServers, TCL_STRING_KEYS);
-        globalInit = 1;
+
+        /*
+         * Pre-generate temporary RSA keys for 512 and 1024 bit keys.
+         */
+
+        NsMakeTmpRSAKey(512);
+        NsMakeTmpRSAKey(1024);
+
+        initialized = NS_TRUE;
     }
 
     /* 

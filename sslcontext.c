@@ -23,6 +23,9 @@
  *
  * Module originally written by Stefan Arentz. Early contributions made by
  * Freddie Mendoze and Rob Mayoff.
+ *
+ * Portions created by AOL are Copyright (C) 1999 America Online, Inc.
+ * All Rights Reserved.
  */
 
 /*
@@ -31,53 +34,26 @@
  *       Manages SSL context state structures.
  */
 
-static const char *RCSID =
-    "@(#) $Header$, compiled: "
-    __DATE__ " " __TIME__;
+static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
 
-Tcl_HashTable
-NsOpenSSLServers;
+Tcl_HashTable NsOpenSSLServers;
+RSA *rsa_512, *rsa_1024;
 
-static RSA *
-IssueTmpRSAKey(SSL *ssl, int export, int keylen);
-
-static char *
-SSLContextSessionCacheIdNew(char *server);
-
-static void
-OpenSSLTrace(SSL *ssl, int where, int rc);
-
-static void
-SSLContextCAFileInit(NsOpenSSLContext *sslcontext);
-
-static void
-SSLContextCADirInit(NsOpenSSLContext *sslcontext);
-
-static int 
-SSLContextCiphersInit(NsOpenSSLContext *sslcontext);
-
-static int
-SSLContextProtocolsInit(NsOpenSSLContext *sslcontext);
-
-static int
-SSLContextCertFileInit(NsOpenSSLContext *sslcontext);
-
-static void
-SSLContextPeerVerifyInit(NsOpenSSLContext *sslcontext);
-
-static void
-SSLContextPeerVerifyDepthInit(NsOpenSSLContext *sslcontext);
-
-static void
-SSLContextSessionCacheInit(NsOpenSSLContext *sslcontext);
-
-static void
-SSLContextTraceInit(NsOpenSSLContext *sslcontext);
-
-static int
-PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static RSA      *IssueTmpRSAKey(SSL *ssl, int export, int keylen);
+static char     *SSLContextSessionCacheIdNew(char *server);
+static void     OpenSSLTrace(SSL *ssl, int where, int rc);
+static void     SSLContextCAFileInit(NsOpenSSLContext *sslcontext);
+static void     SSLContextCADirInit(NsOpenSSLContext *sslcontext);
+static int      SSLContextCiphersInit(NsOpenSSLContext *sslcontext);
+static int      SSLContextProtocolsInit(NsOpenSSLContext *sslcontext);
+static int      SSLContextCertFileInit(NsOpenSSLContext *sslcontext);
+static void     SSLContextPeerVerifyInit(NsOpenSSLContext *sslcontext);
+static void     SSLContextPeerVerifyDepthInit(NsOpenSSLContext *sslcontext);
+static void     SSLContextSessionCacheInit(NsOpenSSLContext *sslcontext);
+static void     SSLContextTraceInit(NsOpenSSLContext *sslcontext);
+static int      PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 
 
 /*
@@ -1356,11 +1332,11 @@ NsOpenSSLContextClientDefaultGet(char *server)
  *
  * IssueTmpRSAKey --
  *
- *       Give out the temporary key when needed. This is a callback function
- *       used by OpenSSL and is required for 40-bit browsers.
+ *       Give out the temporary key when needed.  This is a callback
+ *       function used by OpenSSL and is required for 40-bit browsers.
  *
  * Results:
- *       Returns a pointer to the new temporary key.
+ *       Returns a pointer to the server's temporary RSA key.
  *
  * Side effects:
  *       None
@@ -1371,25 +1347,56 @@ NsOpenSSLContextClientDefaultGet(char *server)
 static RSA *
 IssueTmpRSAKey(SSL *ssl, int export, int keylen)
 {
-    NsOpenSSLConn *sslconn;
-    RSA *rsa_tmp;
-    char *server = "none";
+    NsOpenSSLConn   *sslconn;
+    char            *server = "none";
+    RSA             *rsaPtr = NULL;
 
     sslconn = (NsOpenSSLConn *) SSL_get_app_data(ssl);
-    if (sslconn && sslconn->ssldriver) {
+    if (sslconn != NULL && sslconn->ssldriver != NULL) {
         server = sslconn->ssldriver->server;
     }
 
-    rsa_tmp = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
-    if (rsa_tmp == NULL) {
-        Ns_Log(Error, "%s (%s): Error generating %u-bit temporary RSA key",
-                MODULE, server, keylen);
-    } else {
-        Ns_Log(Notice, "%s (%s): Generated %u-bit temporary RSA key",
-                MODULE, server, keylen);
+    switch (keylen) {
+    case 512:
+        rsaPtr = rsa_512;
+        break;
+
+    case 1024:
+        rsaPtr = rsa_1024;
+        break;
+
+    default:
+        Ns_Log(Error, "nsopenssl (%s): unexpected request for a %d-bit temporary RSA key", server, keylen);
+        break;
     }
 
-    return rsa_tmp;
+    return rsaPtr;
+}
+
+int 
+NsMakeTmpRSAKey(int keylen)
+{
+    RSA **rsaPtrPtr;
+
+    switch (keylen) {
+    case 512:
+        rsaPtrPtr = &rsa_512;
+        break;
+
+    case 1024:
+        rsaPtrPtr = &rsa_1024;
+        break;
+
+    default:
+        Ns_Log(Error, "nsopenssl: unexpected request to generate a %d-bit temporary RSA key", keylen);
+        return NS_ERROR;
+    }
+
+    Ns_Log(Notice, "nsopenssl: generating %d-bit temporary RSA key ...",
+            keylen);
+    *rsaPtrPtr = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
+
+    return NS_OK;
 }
 
 

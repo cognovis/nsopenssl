@@ -21,18 +21,28 @@
 #
 # Copyright (C) 2001-2003 Scott S. Goodwin
 #
+# Portions created by AOL are Copyright (C) 1999 America Online, Inc.  All
+# Rights Reserved.
+#
+#
 # $Header$
 #
 
-# XXX AOLserver 3.x defines this, but AOLserver 4.x uses the install binary
-# XXX instead. We'll need to update all the modules to use install
-CP = /bin/cp -fp
+AOLSERVER ?= ../aolserver
 
-ifdef INST
-NSHOME ?= $(INST)
+ifndef OPENSSL
+
+all:
+	@echo "** "
+	@echo "** OPENSSL variable not set."
+	@echo "** nsopenssl will not be built."
+	@echo "** "
+
+install: all
+
+clean:
+
 else
-NSHOME ?= ../aolserver
-endif
 
 #
 # Version number used in release tags. Valid VERs are "1.1c", "2.1", 
@@ -47,24 +57,17 @@ LIBOBJS  = sslcontext.o ssl.o tclcmds.o x509.o
 LIBLIBS  = -L$(OPENSSL)/lib -lssl -lcrypto 
 
 MOD      = nsopenssl.so
-OBJS     = nsopenssl.o
+MODOBJS  = nsopenssl.o
 HDRS     = nsopenssl.h
 MODLIBS  = -L$(OPENSSL)/lib -lssl -lcrypto
 
 TCLMOD   = https.tcl
 
-# XXX take out the -g for production
-CFLAGS += -g
-
-#
-# Extra libraries required by your module (-L and -l go here)
-#
-
 # Add static compilation ability, per grax3272
-#MODLIBS  =  -L$(OPENSSL)/lib ../openssl-0.9.6g/libssl.a ../openssl-0.9.6g/libcrypto.a#-lssl -lcrypto
+ifeq ($(STATIC),1)
+	MODLIBS	= $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a
+endif
 
-#
-# Compiler flags required by your module (-I for external headers goes here).
 #
 # Kerberos headers are included in case your OpenSSL library was built with
 # Kerberos support. This is generally true on RedHat 9 and possibly Fedora
@@ -74,10 +77,18 @@ CFLAGS += -g
 
 CFLAGS   += -I$(OPENSSL)/include -I/usr/kerberos/include
 
-#
-# The common Makefile defined by AOLserver for making modules
-#
-include  $(NSHOME)/include/Makefile.module
+INSTALL	= install-https.tcl
+
+include  $(AOLSERVER)/include/Makefile.module
+
+##
+## Extra install targets.
+##
+
+install-https.tcl:
+	$(INSTALL_SH) $(TCLMOD) $(INSTTCL)
+
+.PHONY: install-https.tcl
 
 #
 # Help the poor developer
@@ -104,68 +115,17 @@ help:
 # Tag the code in CVS right now
 #
 tag:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
+	@if [ "$(VER)" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	cvs rtag v$(VER_) $(MODNAME)
 
 #
 # Create a distribution file release
 #
 file-release:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	/bin/rm -rf /tmp/file-release
-	/bin/mkdir /tmp/file-release
-	echo "(Just hit the return key when prompted for CVS password)"
-	cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver login
-	(cd /tmp/file-release && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) $(MODNAME))
-	mv /tmp/file-release/$(MODNAME) /tmp/file-release/$(MODNAME)-$(VER)
-	(cd /tmp/file-release && tar czf $(MODNAME)-$(VER).tar.gz $(MODNAME)-$(VER))
-	/bin/mv /tmp/file-release/$(MODNAME)-$(VER).tar.gz /tmp
-	rm -rf /tmp/file-release
+	@if [ "$(VER)" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
+	@echo "(Just hit the return key when prompted for CVS password)"
+	cvs -d :pserver:anonymous@cvs.sf.net:/cvsroot/aolserver login
+	cd /tmp && cvs -d :pserver:anonymous@cvs.sf.net:/cvsroot/aolserver co -rv$(VER_) -d$(MODNAME)-$(VER) $(MODNAME) && tar cf - $(MODNAME)-$(VER) | gzip -c > $(MODNAME)-$(VER).tar.gz
 	echo "--- FILE RELEASE is: /tmp/$(MODNAME)-$(VER).tar.gz"
 
-# XXX alter this to work with sed or tcl instead of perl
-# perl -pi -e 's/\@VER\@/$(VER)/g' work/nscache/index.html work/nscache/tclcache.c
-
-#
-# Check to see that the OPENSSL variable has been set
-#
-.PHONY: check-env
-nsopenssl.h: check-env
-check-env:
-	@if [ "$(OPENSSL)" = "" ]; then \
-	    echo "** "; \
-	    echo "** OPENSSL variable not set."; \
-	    echo "** nsopenssl.so will not be built."; \
-	    echo "** Usage: make OPENSSL=/path/to/openssl"; \
-	    echo "** Usage: make install OPENSSL=/path/to/openssl INST=/path/to/aolserver"; \
-	    echo "** "; \
-	    exit 1; \
-	fi
-
-#
-# This overrides the install directive in $(NSHOME)/include/Makefile.module because we
-# have a Tcl module (https.tcl) to install as well.
-#
-install: all
-	$(RM) $(INSTBIN)/$(MOD)
-	$(CP) $(MOD) $(INSTBIN)
-	$(MKDIR) $(INSTTCL)
-	$(CP) $(TCLMOD) $(INSTTCL)
-
-## NOTES #################################################################################
-
-# Solaris users *might* need the following, 
-# but you'll need to modify it to point to where 
-# your libgcc.a lives. Replace the MODLIBS above with
-# this:
-#
-#   MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto \
-#   -L/usr/local/products/gcc-2.95/lib/gcc-lib/sparc-sun-solaris2.5.1/2.95 -lgcc
-
-
-# For development purposes, put the GCCOPT above somewhere
-# to turn off 'no-unused' so gcc will report unused funcs
-# and variables.
-#
-#   GCCOPT       =   $(GCCOPTIMIZE) -fPIC -Wall
-
+endif
