@@ -80,12 +80,12 @@ static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock);
 
 static int
-GetSet(Tcl_Interp * interp, char *flist, int write, fd_set ** setPtrPtr,
-        fd_set * setPtr, SOCKET * maxPtr);
+GetSet(Tcl_Interp *interp, char *flist, int write, fd_set **setPtrPtr,
+        fd_set *setPtr, SOCKET *maxPtr);
 
 static void
-AppendReadyFiles (Tcl_Interp * interp, fd_set * setPtr, int write,
-        char *flist, Tcl_DString * dsPtr);
+AppendReadyFiles (Tcl_Interp *interp, fd_set *setPtr, int write,
+        char *flist, Tcl_DString *dsPtr);
 
 static Ns_SockProc
 SSLSockListenCallbackProc;
@@ -298,6 +298,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
      * we need to get the connection information back another way.
      */
 
+    /* XXX needs rewiring to allow for reporting info on non-nsd-driven conns */
     conn = Ns_TclGetConn(interp);
     if (conn == NULL) {
         Tcl_AppendResult(interp, "this is not a connection thread", NULL);
@@ -1599,73 +1600,27 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
 {
     Tcl_Channel chan = NULL;
     Tcl_DString ds;
-    /* XXX not initialized */
-    char        channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[16 + TCL_INTEGER_SPACE];
 
     Tcl_DStringInit(&ds);
-
-    /* channel for reading */
     sprintf(channelName, "openssl%d", sslconn->socket);
-
-    /*
-     * Although it's the read channel we make it writable
-     * so we can do an ns_openssl_sockcheck on it to see if
-     * it's still alive.
-     */
-
     chan = Tcl_CreateChannel(
             &opensslChannelType,
             channelName,
             (ClientData) sslconn,
             (TCL_READABLE | TCL_WRITABLE)
             );
-
     if (chan == (Tcl_Channel) NULL) {
         Ns_Log(Error, "%s: %s: could not create new Tcl channel",
                 MODULE, sslconn->server);
         Tcl_AppendResult (interp, "could not create new Tcl channel", NULL);
         return TCL_ERROR;
     }
-
-    sslconn->readchan = chan;
+    sslconn->chan = chan;
     Tcl_SetChannelBufferSize(chan, BUFSIZ);
     Tcl_SetChannelOption(interp, chan, "-translation", "binary");
     Tcl_RegisterChannel(interp, chan);
     Tcl_DStringAppendElement(&ds, Tcl_GetChannelName (chan));
-
-    /* channel for writing */
-    sslconn->wsock = ns_sockdup(sslconn->socket);
-
-    sprintf(channelName, "openssl%d", sslconn->wsock);
-
-    chan = 
-        Tcl_CreateChannel(
-                &opensslChannelType, 
-                channelName, 
-                (ClientData) sslconn, 
-                TCL_WRITABLE
-                );
-
-    if (chan == (Tcl_Channel) NULL) {
-        Ns_Log(Error, "%s: %s: could not create new Tcl channel",
-                MODULE, sslconn->server);
-        Tcl_AppendResult(interp, "could not create new Tcl channel", NULL);
-        return TCL_ERROR;
-    }
-
-    /* 
-     * Although we've wrapped two channels around the conn, we only increment
-     * the conn's reference count once because refcnt is already set to 1 from
-     * when the SSL conn was created.
-     */
-
-    sslconn->refcnt++;
-
-    sslconn->writechan = chan;
-    Tcl_SetChannelBufferSize(chan, BUFSIZ);
-    Tcl_SetChannelOption(interp, chan, "-translation", "binary");
-    Tcl_RegisterChannel(interp, chan);
-    Tcl_DStringAppendElement (&ds, Tcl_GetChannelName (chan));
     Tcl_DStringResult(interp, &ds);
 
     return TCL_OK;
@@ -1766,12 +1721,9 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
-    //Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
-    //Ns_Log(Debug, "--->>> BEFORE ConnDestroy: ChanCloseProc");
-    Tcl_UnregisterChannel(interp, sslconn->readchan);
-    Tcl_UnregisterChannel(interp, sslconn->writechan);
-    ns_sockclose(sslconn->wsock);
-    ns_sockclose(sslconn->socket);
+    Tcl_UnregisterChannel(interp, sslconn->chan);
+    sslconn->chan = NULL;
+    /* socket is close by ConnDestroy */
     NsOpenSSLConnDestroy(sslconn);
 
     return TCL_OK;
@@ -1826,11 +1778,7 @@ ChanGetHandleProc(ClientData arg, int direction, ClientData *handlePtr)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
-    if (direction == TCL_READABLE) {
-        *handlePtr = (ClientData) sslconn->socket;
-    } else {
-        *handlePtr = (ClientData) sslconn->wsock;
-    }
+    *handlePtr = (ClientData) sslconn->socket;
 
     return TCL_OK;
 }

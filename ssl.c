@@ -111,7 +111,7 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
     sslconn->socket          = socket;
     sslconn->sendwait        = DEFAULT_SENDWAIT;
     sslconn->recvwait        = DEFAULT_RECVWAIT;
-    sslconn->wsock           = INVALID_SOCKET;
+    //sslconn->wsock           = INVALID_SOCKET;
     sslconn->ssl             = NULL;
     sslconn->sslctx          = NULL;
     sslconn->peerport        = -1;
@@ -207,6 +207,10 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
 	}
     }
 
+    if (sslconn->ssl != NULL) {
+	SSL_free(sslconn->ssl);
+    }
+
     /*
      * We disallow sending through the socket, since BIO_free_all triggers
      * SSL_shutdown, which is sending something (2 bytes).  It confuses Win32
@@ -215,11 +219,11 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
      * in MSIE when socket is freed by keepalive thread).
      */
 
-    if (sslconn->socket != INVALID_SOCKET) 
-	shutdown(sslconn->socket, SHUT_WR);
-
-    if (sslconn->ssl != NULL) 
-	SSL_free(sslconn->ssl);
+    if (sslconn->socket != INVALID_SOCKET) {
+	shutdown(sslconn->socket, SHUT_RDWR);
+        ns_sockclose(sslconn->socket);
+        sslconn->socket = INVALID_SOCKET;
+    }
 
     ns_free(sslconn);
     sslconn = NULL;
@@ -639,10 +643,12 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
             case SSL_ERROR_SYSCALL:
                 Ns_Log(Debug, "Send(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 // XXX should check for invalid socket here ?
+                exit(1);
+                return -2;
                 break;
 
             case SSL_ERROR_SSL:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 // XXX should check for invalid socket here ?
                 break;
 

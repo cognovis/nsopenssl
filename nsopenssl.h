@@ -66,6 +66,9 @@
  * Defaults
  */
 
+/* Turn this on to show debug info */
+#define NSOPENSSL_DEBUG                1
+
 #define MODULE                         "nsopenssl"
 #define MODULE_SHORT                   "ssl"
 
@@ -162,8 +165,6 @@ typedef struct NsOpenSSLConn {
     SSL_CTX                  *sslctx;
     SSL                      *ssl;       /* initialized SSL instance itself */
     SOCKET                    socket;
-    /* XXX change the code to use the one socket for both read / write */
-    SOCKET                    wsock;
     int                       refcnt;    /* don't ns_free() unless this is 0 */
     int                       timeout;
     int                       sendwait;
@@ -171,8 +172,7 @@ typedef struct NsOpenSSLConn {
     struct timeval            timer;      /* for performance measurement */
     struct Ns_Driver         *driver;    /* the core sock driver this conn belongs to */
     struct NsOpenSSLDriver   *ssldriver; /* the SSL driver this conn belongs to */
-    Tcl_Channel               readchan;
-    Tcl_Channel               writechan;
+    Tcl_Channel               chan;
 } NsOpenSSLConn;
 
 /*
