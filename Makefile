@@ -112,12 +112,16 @@ tag:
 #
 file-release:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	rm -rf work
-	mkdir work
-	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) $(MODNAME)
-	mv work/$(MODNAME) work/$(MODNAME)-$(VER)
-	(cd work && tar cvf - $(MODNAME)-$(VER)) | gzip -9 > $(MODNAME)-$(VER).tar.gz
-	rm -rf work
+	/bin/rm -rf /tmp/file-release
+	/bin/mkdir /tmp/file-release
+	echo "(Just hit the return key when prompted for CVS password)"
+	cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver login
+	(cd /tmp/file-release && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) $(MODNAME))
+	mv /tmp/file-release/$(MODNAME) /tmp/file-release/$(MODNAME)-$(VER)
+	(cd /tmp/file-release && tar czf $(MODNAME)-$(VER).tar.gz $(MODNAME)-$(VER))
+	/bin/mv /tmp/file-release/$(MODNAME)-$(VER).tar.gz /tmp
+	rm -rf /tmp/file-release
+	echo "--- FILE RELEASE is: /tmp/$(MODNAME)-$(VER).tar.gz"
 
 # XXX alter this to work with sed or tcl instead of perl
 # perl -pi -e 's/\@VER\@/$(VER)/g' work/nscache/index.html work/nscache/tclcache.c
