@@ -1,3 +1,15 @@
+2001-09-27  Scott S. Goodwin  <scott@scottg.net>
+
+	* tclcmds.c: Bug fixes contributed by Rich Fredericks, AOL Local
+	Technology group. In his own words: "As I said on the phone, All I
+	really did was make sure NsTclOpenSSLCmd returns out (TCL_ERROR)
+	if the argc req isn't met (line 205) and add a check for NULL on
+	scPtr (lines 220-223). I also moved the "scPtr =
+	NsOpenSSLGetConn(interp)" statement to below the code for the
+	"info" option to the tcl ns_openssl command (previously it was
+	executed first), since that specific variant of the command does
+	not require an SSL conn context." Thanks, Rich!
+
 2001-08-29  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: made fixes to ns_httpspost per Rick Lansky at

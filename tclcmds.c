@@ -197,18 +197,14 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
     SSL_CIPHER          *cipher;
     char                *string;
     int                  integer;
-    int                  status;
+    int                  status = TCL_OK;
 
     if (argc < 2) {
 	Tcl_AppendResult (interp, "wrong # args:  should be \"",
 			  argv[0], " command \"", NULL);
-	status = TCL_ERROR;
-    } else {
-	status = TCL_OK;
+	return TCL_ERROR;
     }
-
-    scPtr = NsOpenSSLGetConn(interp);
-
+    
     if (STREQ (argv[1], "info")) {
 
 	Tcl_AppendElement(interp, SSL_LIBRARY_NAME);
@@ -216,7 +212,19 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_NAME);
 	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_VERSION);
 
-    } else if (STREQ(argv[1], "protocol")) {
+        return TCL_OK;
+    } 
+
+    scPtr = NsOpenSSLGetConn(interp);
+
+    if (scPtr == NULL) {
+        Tcl_AppendResult (interp, "no SSL connection", NULL);
+        return TCL_ERROR;
+    }
+  
+    /* The following variants of the cmd require an active SSL connection */
+
+    if (STREQ(argv[1], "protocol")) {
 
         switch(scPtr->ssl->session->ssl_version) {
             case SSL2_VERSION:
@@ -1856,13 +1864,13 @@ SSLSockListenCallback(SOCKET sock, void *arg, int why)
     char         **sockv;
     int            sockc, result;
 
-    interp = Ns_TclAllocateInterp(NULL);
-
     ccPtr = Ns_OpenSSLSockAccept(sock);
     if (ccPtr == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
-        return NS_FALSE;
+        return TCL_ERROR;
     }
+
+    interp = Ns_TclAllocateInterp(NULL);
 
     result = CreateTclChannel(ccPtr, interp);
 
