@@ -28,6 +28,12 @@ nsopenssl 1.1a:
  upgrade when the next release is available.
 
 
+nsopenssl 1.1b:
+
+ Added ability to have the server pass the server certificate's
+ CA cert chain.
+
+
 nsopenssl 1.2 is currently in DEVELOPMENT:
 
  * - adding outgoing HTTPS support so you can connect to SSL sites

@@ -298,7 +298,8 @@ NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer, int towrite)
  *
  * NsServerSSLTrace --
  *
- *	Log the progress of an Server SSL connection.
+ *	Log the progress of an when a client connects to our server
+ *	via SSL.
  *
  * Results:
  *      None.
@@ -306,7 +307,7 @@ NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer, int towrite)
  * Side effects:
  *      Server log output.
  *
- *----------------------------------------------------------------------
+ *---------------------------------------------------------------------- 
  */
 
 void
@@ -332,7 +333,53 @@ NsServerSSLTrace(SSL *ssl, int where, int rc)
 	alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log(Notice, "%s: trace: %s%s%s%s%s", sdPtr->module->name,
+    Ns_Log(Notice, "%s: server trace: %s%s%s%s%s", sdPtr->module->name,
+	SSL_state_string_long(ssl),
+	alertTypePrefix, alertType, alertDescPrefix, alertDesc);
+
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsClientSSLTrace --
+ *
+ *	Log the progress of our server connecting to another server
+ *	via SSL.
+ *
+ * Results:
+ *      None.
+ *
+ * Side effects:
+ *      Server log output.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+NsClientSSLTrace(SSL *ssl, int where, int rc)
+{
+    NsClientSSLConnection *ccPtr;
+    NsClientSSLDriver     *cdPtr;
+    char                *alertTypePrefix;
+    char                *alertType;
+    char                *alertDescPrefix;
+    char                *alertDesc;
+
+    ccPtr = (NsClientSSLConnection*) SSL_get_app_data(ssl);
+    cdPtr = ccPtr->cdPtr;
+
+    if (where & SSL_CB_ALERT) {
+	alertTypePrefix = "; alert type = ";
+	alertType = SSL_alert_type_string_long(rc);
+	alertDescPrefix = "; alert desc = ";
+	alertDesc = SSL_alert_desc_string_long(rc);
+    } else {
+	alertTypePrefix = alertType = "";
+	alertDescPrefix = alertDesc = "";
+    }
+
+    Ns_Log(Notice, "%s: client trace: %s%s%s%s%s", cdPtr->module->name,
 	SSL_state_string_long(ssl),
 	alertTypePrefix, alertType, alertDescPrefix, alertDesc);
 

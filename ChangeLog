@@ -1,5 +1,11 @@
 2001-06-15  Scott S. Goodwin  <scott@scottg.net>
 
+	* all: changed define names for server
+	(i.e. CONFIG_CIPHERSUITE became CONFIG_SERVER_CIPHERSUITE). Added
+	defines for the upcoming client code. Got the SSL_CTX for the
+	client working via ClientMakeContext. Added
+	ClientVerifyServerCallback routine, NsClientSSLTrace routine.
+
 	* readme.txt: updated.
 
 	* init.c, nsopenssl.c, nsopenssl.h, ssl.c: created

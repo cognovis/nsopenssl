@@ -78,7 +78,9 @@ static int ClientLoadKey(NsClientSSLDriver *cdPtr);
 static int ClientCheckKey(NsClientSSLDriver *cdPtr);
 static int ClientLoadCACerts(NsClientSSLDriver *cdPtr);
 static int ClientInitLocation(NsClientSSLDriver *cdPtr);
-static int ClientVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+#endif
+static int ClientVerifyServerCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+#if 0
 static int ClientInitSessionCache(NsClientSSLDriver *cdPtr);
 #endif
 /* What happens if we run multiple copies of nsopenssl in the same server? */
@@ -128,8 +130,8 @@ NsInitOpenSSL()
  *
  * NsOpenSSLModuleDataInit --
  *
- *       Fill the structure that maintains data common between the
- *       server and the client nsopenssl functions.
+ *       Create and fill the structure that maintains data common
+ *       between the server and the client nsopenssl functions.
  *
  * Results:
  *       An NsOpenSSLModuleData* or NULL.
@@ -165,7 +167,7 @@ NsOpenSSLModuleDataInit(char *server, char *module)
  *
  * NsOpenSSLModuleDataFree --
  *
- *      Destroy an NsOpenSSLModuleDataFree.
+ *      Destroy an NsOpenSSLModuleData*.
  *
  * Results:
  *      None.
@@ -243,15 +245,15 @@ NsServerSSLCreateDriver(char *server, char *module,
     }
 
     sdPtr->timeout = ConfigIntDefault(module, sdPtr->module->configPath,
-	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
+	CONFIG_SERVER_SOCKTIMEOUT, DEFAULT_SERVER_SOCKTIMEOUT);
     if (sdPtr->timeout < 1) {
-	sdPtr->timeout = DEFAULT_SOCKTIMEOUT;
+	sdPtr->timeout = DEFAULT_SERVER_SOCKTIMEOUT;
     }
 
     sdPtr->bufsize = ConfigIntDefault(module, sdPtr->module->configPath,
-	CONFIG_BUFFERSIZE, DEFAULT_BUFFERSIZE);
+	CONFIG_SERVER_BUFFERSIZE, DEFAULT_SERVER_BUFFERSIZE);
     if (sdPtr->bufsize < 1) {
-	sdPtr->bufsize = DEFAULT_BUFFERSIZE;
+	sdPtr->bufsize = DEFAULT_SERVER_BUFFERSIZE;
     }
 
     sdPtr->randomFile = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
@@ -315,15 +317,15 @@ NsClientSSLCreateDriver(char *server, char *module,
     }
 
     cdPtr->timeout = ConfigIntDefault(module, cdPtr->module->configPath,
-	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
+	CONFIG_CLIENT_SOCKTIMEOUT, DEFAULT_CLIENT_SOCKTIMEOUT);
     if (cdPtr->timeout < 1) {
-	cdPtr->timeout = DEFAULT_SOCKTIMEOUT;
+	cdPtr->timeout = DEFAULT_CLIENT_SOCKTIMEOUT;
     }
 
     cdPtr->bufsize = ConfigIntDefault(module, cdPtr->module->configPath,
-	CONFIG_BUFFERSIZE, DEFAULT_BUFFERSIZE);
+	CONFIG_CLIENT_BUFFERSIZE, DEFAULT_CLIENT_BUFFERSIZE);
     if (cdPtr->bufsize < 1) {
-	cdPtr->bufsize = DEFAULT_BUFFERSIZE;
+	cdPtr->bufsize = DEFAULT_CLIENT_BUFFERSIZE;
     }
 
     /* XXX this should probably be moved to a common init function */
@@ -512,13 +514,13 @@ ServerMakeContext(NsServerSSLDriver *sdPtr)
     SSL_CTX_set_tmp_rsa_callback(sdPtr->context, IssueTmpRSAKey);
 
     if (ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
+	    CONFIG_SERVER_VERIFIES_PEER, DEFAULT_SERVER_VERIFIES_PEER)) {
 	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_PEER,
 	    ServerVerifyClientCallback);
     }
 
     if (ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_TRACE, DEFAULT_TRACE)) {
+	    CONFIG_SERVER_TRACE, DEFAULT_SERVER_TRACE)) {
 	SSL_CTX_set_info_callback(sdPtr->context, NsServerSSLTrace);
     }
 
@@ -544,8 +546,7 @@ ServerMakeContext(NsServerSSLDriver *sdPtr)
 static int
 ClientMakeContext(NsClientSSLDriver *cdPtr)
 {
-#if 0
-    cdPtr->context = SSL_CTX_new(SSLv23_server_method());
+    cdPtr->context = SSL_CTX_new(SSLv23_client_method());
     if (cdPtr->context == NULL) {
 	Ns_Log(Error, "%s: error creating client SSL context", cdPtr->module->name);
 	return NS_ERROR;
@@ -554,25 +555,19 @@ ClientMakeContext(NsClientSSLDriver *cdPtr)
     /* Enable SSL bug compatibility. */
     SSL_CTX_set_options(cdPtr->context, SSL_OP_ALL);
 
-    /* This apparently prevents some sort of DH attack. */
-    SSL_CTX_set_options(cdPtr->context, SSL_OP_SINGLE_DH_USE);
-
     SSL_CTX_set_app_data(cdPtr->context, cdPtr);
 
-    /* Temporary key callback required for 40-bit export browsers */
-    SSL_CTX_set_tmp_rsa_callback(cdPtr->context, IssueTmpRSAKey);
-
     if (ConfigBoolDefault(cdPtr->module->name, cdPtr->module->configPath,
-	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
+	    CONFIG_CLIENT_VERIFIES_PEER, DEFAULT_CLIENT_VERIFIES_PEER)) {
 	SSL_CTX_set_verify(cdPtr->context, SSL_VERIFY_PEER,
-	    ServerVerifyClientCallback);
+	    ClientVerifyServerCallback);
     }
 
     if (ConfigBoolDefault(cdPtr->module->name, cdPtr->module->configPath,
-	    CONFIG_TRACE, DEFAULT_TRACE)) {
+	    CONFIG_CLIENT_TRACE, DEFAULT_CLIENT_TRACE)) {
 	SSL_CTX_set_info_callback(cdPtr->context, NsClientSSLTrace);
     }
-#endif
+
     return NS_OK;
 }
 
@@ -598,7 +593,7 @@ ServerSetCipherSuite(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *value = ConfigStringDefault(sdPtr->module->name, sdPtr->module->configPath,
-	CONFIG_CIPHERSUITE, DEFAULT_CIPHERSUITE);
+	CONFIG_SERVER_CIPHERSUITE, DEFAULT_CIPHERSUITE);
 
     rc = SSL_CTX_set_cipher_list(sdPtr->context, value);
 
@@ -654,7 +649,8 @@ ServerSetProtocols(NsServerSSLDriver *sdPtr)
     config = Ns_ConfigGetSection(sdPtr->module->configPath);
     if (config != NULL) {
 	for (i = 0, l = Ns_SetSize(config); i < l; i++) {
-	    if (!STRIEQ(Ns_SetKey(config, i), "Protocol")) {
+	    /* XXX ServerProtocol should be in config.c, not here */
+	    if (!STRIEQ(Ns_SetKey(config, i), CONFIG_SERVER_PROTOCOL)) {
 		continue;
 	    }
 
@@ -705,7 +701,7 @@ int
 ServerInitSessionCache(NsServerSSLDriver *sdPtr)
 {
     int cacheEnabled = ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
-        CONFIG_SESSIONCACHE, DEFAULT_SESSIONCACHE);
+        CONFIG_SERVER_SESSIONCACHE, DEFAULT_SERVER_SESSIONCACHE);
     int cacheSize;
     long timeout;
 
@@ -719,11 +715,11 @@ ServerInitSessionCache(NsServerSSLDriver *sdPtr)
             sizeof(s_server_session_id_context));
 
 	timeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_SESSIONTIMEOUT, DEFAULT_SESSIONTIMEOUT);
+	    CONFIG_SERVER_SESSIONTIMEOUT, DEFAULT_SERVER_SESSIONTIMEOUT);
 	SSL_CTX_set_timeout(sdPtr->context, timeout);
 
 	cacheSize = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_SESSIONCACHESIZE, DEFAULT_SESSIONCACHESIZE);
+	    CONFIG_SERVER_SESSIONCACHESIZE, DEFAULT_SERVER_SESSIONCACHESIZE);
 	SSL_CTX_sess_set_cache_size(sdPtr->context, cacheSize);
 
     } else {
@@ -761,7 +757,7 @@ ServerLoadCertificate(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
-	CONFIG_CERTFILE, sdPtr->module->dir, DEFAULT_CERTFILE);
+	CONFIG_SERVER_CERTFILE, sdPtr->module->dir, DEFAULT_SERVER_CERTFILE);
 
     rc = SSL_CTX_use_certificate_chain_file(sdPtr->context, file);
 #if 0
@@ -799,7 +795,7 @@ ServerLoadKey(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
-	CONFIG_KEYFILE, sdPtr->module->dir, DEFAULT_KEYFILE);
+	CONFIG_SERVER_KEYFILE, sdPtr->module->dir, DEFAULT_SERVER_KEYFILE);
 
     rc = SSL_CTX_use_PrivateKey_file(sdPtr->context, file, SSL_FILETYPE_PEM);
 
@@ -871,7 +867,7 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
     status = NS_OK;
 
     file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
-	CONFIG_CAFILE, sdPtr->module->dir, DEFAULT_CAFILE);
+	CONFIG_SERVER_CAFILE, sdPtr->module->dir, DEFAULT_SERVER_CAFILE);
 
     fd = open(file, O_RDONLY);
     if (fd < 0) {
@@ -892,7 +888,7 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
     }
 
     dir = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
-	CONFIG_CADIR, sdPtr->module->dir, DEFAULT_CADIR);
+	CONFIG_SERVER_CADIR, sdPtr->module->dir, DEFAULT_SERVER_CADIR);
 
     dd = opendir(dir);
     if (dd == NULL) {
@@ -1007,7 +1003,7 @@ ServerInitLocation(NsServerSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * ServerClienVerifyCallback --
+ * ServerVerifyClientCallback --
  *
  *	Called by the SSL library at each stage of client certificate
  *	verification.
@@ -1026,6 +1022,32 @@ ServerInitLocation(NsServerSSLDriver *sdPtr)
 
 static int
 ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
+{
+    return 1;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ClientVerifyServerCallback --
+ *
+ *	Called by the SSL library at each stage of server certificate
+ *	verification.
+ *
+ * Results:
+ *
+ *	Always returns 1 to prevent verification errors from halting
+ *      the SSL handshake.  We'd rather finish the handshake so we
+ *      can either authenticate by other means or return an HTTP error.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+ClientVerifyServerCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 {
     return 1;
 }

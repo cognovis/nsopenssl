@@ -72,7 +72,7 @@
 #  define SSL_LIBRARY_VERSION  "Unknown"
 #endif
 
-#define SSL_CRYPTO_LIBRARY_NAME   "OpenSSL"
+#define SSL_CRYPTO_LIBRARY_NAME   SSL_LIBRARY_NAME
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
 typedef struct NsOpenSSLModuleData {
@@ -152,6 +152,7 @@ typedef struct NsClientSSLDriver {
 
 typedef struct NsClientSSLConnection {
     struct NsClientSSLConnection *nextPtr;
+    struct NsClientSSLDriver   *cdPtr;
 
     SOCKET  sock;
 
@@ -197,12 +198,14 @@ extern void NsServerSSLDestroyConn(NsServerSSLConnection *scPtr);
 extern void NsServerSSLTrace(SSL *ssl, int where, int rc);
 extern int NsServerSSLShutdownConn(SSL *ssl);
 
+extern void NsClientSSLTrace(SSL *ssl, int where, int rc);
+
 /*
  * nsopenssl.c
  */
 
 extern int NsServerSSLFlushConn(NsServerSSLConnection *scPtr);
-extern void NsDestroySSLConn(NsServerSSLConnection *scPtr);
+extern void NsServerSSLDestroyConn(NsServerSSLConnection *scPtr);
 extern int NsServerSSLRecv(NsServerSSLConnection *scPtr, void *buffer,
     int toread);
 extern int NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer,
