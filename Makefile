@@ -54,6 +54,11 @@ endif
 VER_ = $(subst .,_,$(VER))
 
 #
+# Module Pretty-name
+#
+MODNAME  = nsopenssl
+
+#
 # Module name
 #
 MOD      =  nsopenssl.so
@@ -108,7 +113,7 @@ include  $(NSHOME)/include/Makefile.module
 #
 help:
 	@echo "**" 
-	@echo "** DEVELOPER HELP FOR THIS MODULE"
+	@echo "** DEVELOPER HELP FOR THIS $(MODNAME)"
 	@echo "**"
 	@echo "** make tag VER=X.Y"
 	@echo "**     Tags the module CVS code with the given tag."
@@ -129,7 +134,7 @@ help:
 #
 tag:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag v$(VER_) nsopenssl
+	cvs rtag v$(VER_) $(MODNAME)
 
 #
 # Create a distribution file release
@@ -138,9 +143,9 @@ file-release:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	rm -rf work
 	mkdir work
-	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) nsopenssl
-	mv work/nsopenssl work/nsopenssl-$(VER)
-	(cd work && tar cvf - nsopenssl-$(VER)) | gzip -9 > nsopenssl-$(VER).tar.gz
+	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) $(MODNAME)
+	mv work/$(MODNAME) work/$(MODNAME)-$(VER)
+	(cd work && tar cvf - $(MODNAME)-$(VER)) | gzip -9 > $(MODNAME)-$(VER).tar.gz
 	rm -rf work
 
 # XXX alter this to work with sed or tcl instead of perl
