@@ -57,7 +57,7 @@
 #define DEFAULT_CADIR               "ca"
 
 #define CONFIG_SESSIONCACHE         "SessionCache"
-#define DEFAULT_SESSIONCACHE        NS_FALSE
+#define DEFAULT_SESSIONCACHE        NS_TRUE
 
 #define CONFIG_SESSIONCACHESIZE     "SessionCacheSize"
 #define DEFAULT_SESSIONCACHESIZE    128

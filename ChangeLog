@@ -1,9 +1,26 @@
+2001-04-17  scottg  <scott@scottg.net>
+
+	* TODO: Updated.
+
+        * config.h: Session caching is now on by default.
+	
+	* Makefile: Updated to reflect absence of cache.c.
+	
+	* cache.c, cache.h: Removed these files. See item below.
+	
+	* init.c, cache.c: Moved NsOpenSSLInitSessionCache from cache.c to
+	init.c and removed the callback setups. We don't need to use our
+	own caching mechanism; OpenSSL already has one
+	built-in. Apparently when the nsopenssl module was created, it was
+	based on mod_ssl which needs an external, disk-based session
+	caching mechanism because Apache isn't multithreaded.
+
 2001-03-12  root  <scott@scottg.net>
 
 	* tclcmds.c: Replaced Ns_GetConn with Ns_TclGetConn. Latest
 	AOLserver 4.x no longer offers Ns_GetConn.
 
-2000-12-12  root  <scott@>
+2000-12-12  root  <scott@scottg.net>
 
 	* nsopenssl.c: made it a fatal error to bind to a socket already
 	in use. What sometimes happens is someone will forget to take out
@@ -14,7 +31,7 @@
 	* sock.c: somehow this file was left lying around. All of these
 	functions are in nsopenssl.c, so I removed sock.c.
 
-2000-11-18  root  <scott@>
+2000-11-18  root  <scott@scottg.net>
 
 	* nsopenssl.h: changed library version to 0.9.6. Gotta find a way
 	to automatically set this based on what version of OpenSSL you

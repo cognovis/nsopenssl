@@ -13,8 +13,8 @@ NSHOME ?= ../aolserver
 endif
 
 MOD      =  nsopenssl.so
-OBJS     =  nsopenssl.o config.o cache.o init.o ssl.o thread.o tclcmds.o
-HDRS     =  nsopenssl.h tclcmds.h config.h cache.h thread.h
+OBJS     =  nsopenssl.o config.o init.o ssl.o thread.o tclcmds.o
+HDRS     =  nsopenssl.h tclcmds.h config.h thread.h
 
 # Client certificate verification (experimental)
 ifdef VERIFY_CLIENT

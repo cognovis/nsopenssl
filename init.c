@@ -42,7 +42,6 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
 #include "config.h"
-#include "cache.h"
 #include "thread.h"
 
 
@@ -59,6 +58,7 @@ static int LoadCACerts(NsOpenSSLDriver *sdPtr);
 static int InitSessionCache(NsOpenSSLDriver *sdPtr);
 static int InitLocation(NsOpenSSLDriver *sdPtr);
 static int ClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static int NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr);
 
 
 
@@ -381,6 +381,57 @@ SetProtocols(NsOpenSSLDriver *sdPtr)
 
     if (foundConfig) {
 	SSL_CTX_set_options(sdPtr->context, bits);
+    }
+
+    return NS_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsOpenSSLInitSessionCache --
+ *
+ *       Initialize the session cache for the SSL server as specified
+ *       in the server config. This is an internal OpenSSL cache, so
+ *       we don't do anything other than set a timeout and size.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR.
+ *
+ * Side effects:
+ *       None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
+{
+    char *module = sdPtr->module;
+    char *path = sdPtr->configPath;
+    int   cacheEnabled;
+    int   cacheSize;
+    long  timeout;
+
+    cacheEnabled = ConfigBoolDefault(module, path, CONFIG_SESSIONCACHE,
+	DEFAULT_SESSIONCACHE);
+
+    if (cacheEnabled) {
+
+	timeout = (long) ConfigIntDefault(module, path,
+	    CONFIG_SESSIONTIMEOUT, DEFAULT_SESSIONTIMEOUT);
+	SSL_CTX_set_timeout(sdPtr->context, timeout);
+
+	SSL_CTX_set_session_cache_mode(sdPtr->context,
+	    SSL_SESS_CACHE_SERVER);
+
+	cacheSize = ConfigIntDefault(module, path,
+	    CONFIG_SESSIONCACHESIZE, DEFAULT_SESSIONCACHESIZE);
+	SSL_CTX_sess_set_cache_size(sdPtr->context, cacheSize);
+
+    } else {
+
+	SSL_CTX_set_session_cache_mode(sdPtr->context, SSL_SESS_CACHE_OFF);
     }
 
     return NS_OK;

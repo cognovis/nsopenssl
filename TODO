@@ -1,25 +1,17 @@
 Things that need to be done:
 
+- Find a way to automatically retrieve the OpenSSL version so
+  we can put that in the info command.
+
+- Add back option to specify client verification depth
+
 - Add ability for server to return nice error page to client when
   they've connected to the HTTPS port with HTTP (it happens). Maybe
   even a nice link they can click on, and/or a redirect to the same
   page via HTTPS.
 
-- Find a way to automatically retrieve the OpenSSL version so
-  we can put that in the info command.
-
-- Test all combos of protocols
-
-- Add back option to specify client verification depth
-
-- Figure out whether there's any point to cache.c.  SSL_CTX does its
-  own caching; are the cache callbacks intended for caching to disk,
-  etc.?
-
-- Think about whether an SSL_SESSION can be used from multiple
-  threads.
-
-- Think about setting CRYPTO_malloc hooks.
+- Add an ErrorPage option to the config file to give user friendly
+  error message when they have an invalid or no certificate.
 
 - Add more Tcl commands for examining the server's cert, generating
   keypairs and CSRs etc.
@@ -30,21 +22,16 @@ Things that need to be done:
   site-specific Tcl implentation. At DoD, our CRL is really just a
   list of the revoked certificate's serial numbers.
 
-- Testing -- lots of it. Maybe even a regression suite to run against
-  each release.
-
-- Add an ErrorPage option to the config file to give user friendly
-  error message when they have an invalid or no certificate.
-
 - Have 'make' automatically run at server start time in the ssl.ca
   directory.
 
-- There might be a need for cache callbacks to distribute a session to
-  other AOLservers in a cluster.  I haven't even considered
-  implementing this.
+- Add multiple-server support. If you have three virtual servers in
+  OpenNSD/AOLserver 4.x, you must use the same SSL cert for each. Why?
+  Because the nsopenssl module has no way of knowing which server
+  you're trying to connect to apriori so it cannot select a different
+  server cert. Only way to get around this is to have each virtual
+  server have it's own IP address, set nsopenssl to map an IP to
+  a server certificate and off you go. You can (usually) set multiple 
+  IPs to one network card, or have multiple network cards on your
+  system.
 
-- I anticipate adding a preauth filter to nsopenssl that you can
-  register to various URLs in the config file.  The filter will send
-  some HTTP error to clients if there was no certificate or if the
-  certificate was invalid.  This could easily be implemented in Tcl
-  but I'll do it in C for efficiency.
