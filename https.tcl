@@ -58,7 +58,7 @@
 #	May throw an error on failure.
 #
 
-proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
+proc ns_httpsopen {method url {timeout 30} {pdata ""} {rqset ""} {module ""}} {
     #
     # Determine if url is local; prepend site address if so
     #             
