@@ -340,7 +340,7 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30
 	#
 	
 	while 1 {
-	    set buf [_ns_http_read $timeout $rfd $length]
+	    set buf [_ns_https_read $timeout $rfd $length]
 	    append page $buf
 	    if [string match "" $buf] {
 		break
