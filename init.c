@@ -676,7 +676,12 @@ ServerInitSessionCache(NsServerSSLDriver *sdPtr)
  * ServerLoadCertificate --
  *
  *       Load the certificate for the SSL server from the file
- *       specified in the server config.
+ *       specified in the server config. Also loads a certificate
+ *       chain that follows the certificate in the same file. To use a
+ *       cert chain, simply append the CA certs to the end of your
+ *       certificate file and they'll be passed to the client at
+ *       connection time. If no certs are appended, no cert chain will
+ *       be passed to the client.
  *
  * Results:
  *       NS_OK or NS_ERROR.
@@ -694,7 +699,10 @@ ServerLoadCertificate(NsServerSSLDriver *sdPtr)
     char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
 	CONFIG_CERTFILE, sdPtr->dir, DEFAULT_CERTFILE);
 
+    rc = SSL_CTX_use_certificate_chain_file(sdPtr->context, file);
+#if 0
     rc = SSL_CTX_use_certificate_file(sdPtr->context, file, SSL_FILETYPE_PEM);
+#endif
 
     if (rc == 0) {
 	Ns_Log(Error, "%s: error loading certificate file \"%s\"",

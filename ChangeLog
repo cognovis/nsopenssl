@@ -1,4 +1,11 @@
-2001-06-13  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
+2001-06-15  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: changed ServerLoadCertificate to look for a certificate
+	chain after the server's certificate. Simply append all of the
+	certs in the chain to the end of the server cert file. Having a
+	chain is optional.
+
+2001-06-13  Scott S. Goodwin  <scott@scottg.net>
 
 	* init.c: added NsClientSSLCreateDriver and NsClientSSLFreeDriver.
 
