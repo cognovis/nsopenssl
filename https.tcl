@@ -304,23 +304,21 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30
 	ns_set put $rqset "Content-length" [string length $querystring]
 
     } elseif {![string match "" $qsset]} {
-	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
-		set key [ns_set key $qsset $i]
-		set value [ns_set value $qsset $i]
-		if { $i > 0 } {
-		    append querystring "&"
-		}
-		append querystring "$key=[ns_urlencode $value]"
+	for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
+	    set key [ns_set key $qsset $i]
+	    set value [ns_set value $qsset $i]
+	    if { $i > 0 } {
+		append querystring "&"
 	    }
-	    ns_set put $rqset "Content-length" [string length $querystring]
-	} else {
-	    ns_set put $rqset "Content-length" "0"
+	    append querystring "$key=[ns_urlencode $value]"
 	}
+	ns_set put $rqset "Content-length" [string length $querystring]
     } else {
 	#
 	# Send $body as the POST request data.
 	#
 	set querystring $body
+	ns_set put $rqset "Content-length" [string length $querystring]
     }
 
     #
