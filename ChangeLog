@@ -1,3 +1,10 @@
+2002-10-07    <scott@scottg.net>
+
+	* ca: Created the 'ca' directory to generate and hold test CA
+	certs, web server certs, and client certs.
+
+	* tests: Added more files to the tests directory.
+
 2002-10-04    <scott@scottg.net>
 
 	* TODO: Added back to the repository.
