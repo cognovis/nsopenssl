@@ -54,16 +54,17 @@ static int ServerLoadCertificate(NsOpenSSLDriver *sdPtr);
 static int ServerLoadKey(NsOpenSSLDriver *sdPtr);
 static int ServerCheckKey(NsOpenSSLDriver *sdPtr);
 static int ServerLoadCACerts(NsOpenSSLDriver *sdPtr);
-static int InitLocation(NsOpenSSLDriver *sdPtr);
+static int ServerInitLocation(NsOpenSSLDriver *sdPtr);
 static int ServerClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
-static int NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr);
+static int ServerInitSessionCache(NsOpenSSLDriver *sdPtr);
 
 /* What happens if we run multiple copies of nsopenssl in the same server? */
 static int s_server_session_id_context = 1;
 
 /*
  * For generating temporary RSA keys. Temp RSA keys are REQUIRED if
- * you want 40-bit encryption to work in old export browsers.
+ * you want 40-bit encryption to work in old export browsers. This is
+ * only used by the server-side.
  */
 static int AddEntropyFromRandomFile(NsOpenSSLDriver *sdPtr, long maxbytes);
 static int PRNGIsSeeded(NsOpenSSLDriver *sdPtr);
@@ -106,21 +107,20 @@ NsOpenSSLCreateDriver(char *server, char *module)
     if (
 	   NsOpenSSLInitThreads()                      == NS_ERROR
 	|| InitializeSSL()                             == NS_ERROR
-	|| ServerMakeSSLContext(sdPtr)                 == NS_ERROR
 	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
+	|| ServerMakeSSLContext(sdPtr)                 == NS_ERROR
 	|| ServerSetProtocols(sdPtr)                   == NS_ERROR
 	|| ServerSetCipherSuite(sdPtr)                 == NS_ERROR
 	|| ServerLoadCertificate(sdPtr)                == NS_ERROR
 	|| ServerLoadKey(sdPtr)                        == NS_ERROR
 	|| ServerCheckKey(sdPtr)                       == NS_ERROR
 	|| ServerLoadCACerts(sdPtr)                    == NS_ERROR
-	|| NsOpenSSLInitSessionCache(sdPtr)            == NS_ERROR
-	|| InitLocation(sdPtr)                         == NS_ERROR
+	|| ServerInitSessionCache(sdPtr)               == NS_ERROR
+	|| ServerInitLocation(sdPtr)                   == NS_ERROR
     ) {
 	NsOpenSSLFreeDriver(sdPtr);
 	return NULL;
     }
-
 
     sdPtr->timeout = ConfigIntDefault(module, sdPtr->configPath,
 	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
@@ -410,7 +410,7 @@ ServerSetProtocols(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLInitSessionCache --
+ * ServerInitSessionCache --
  *
  *       Initialize the session cache for the SSL server as specified
  *       in the server config. This is an internal OpenSSL cache, so
@@ -426,7 +426,7 @@ ServerSetProtocols(NsOpenSSLDriver *sdPtr)
  */
 
 int
-NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
+ServerInitSessionCache(NsOpenSSLDriver *sdPtr)
 {
     int cacheEnabled = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
         CONFIG_SESSIONCACHE, DEFAULT_SESSIONCACHE);
@@ -648,7 +648,7 @@ ServerLoadCACerts(NsOpenSSLDriver *sdPtr)
 /*
  *----------------------------------------------------------------------
  *
- * InitLocation --
+ * ServerInitLocation --
  *
  *       Set the location, hostname, advertised address, bind address,
  *       and port of the driver as specified in the server config.
@@ -663,7 +663,7 @@ ServerLoadCACerts(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-InitLocation(NsOpenSSLDriver *sdPtr)
+ServerInitLocation(NsOpenSSLDriver *sdPtr)
 {
     char       *module = sdPtr->module;
     char       *path = sdPtr->configPath;
