@@ -205,13 +205,13 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 	return TCL_ERROR;
     }
     
+    /* ns_openssl info doesn't require a conn to run */
+
     if (STREQ (argv[1], "info")) {
-
-	Tcl_AppendElement(interp, SSL_LIBRARY_NAME);
-	Tcl_AppendElement(interp, SSL_LIBRARY_VERSION);
-	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_NAME);
-	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_VERSION);
-
+        Tcl_AppendElement(interp, SSL_LIBRARY_NAME);
+        Tcl_AppendElement(interp, SSL_LIBRARY_VERSION);
+        Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_NAME);
+        Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_VERSION);
         return TCL_OK;
     } 
 
@@ -224,7 +224,24 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
   
     /* The following variants of the cmd require an active SSL connection */
 
-    if (STREQ(argv[1], "protocol")) {
+    if (STREQ(argv[1], "module")) {
+
+	    if (argc != 3) {
+
+		    Tcl_AppendResult (interp, "wrong # args:  should be \"", argv[0], argv[1], " name\"", NULL);
+		    status = TCL_ERROR;
+
+        } else if (STREQ(argv[2], "name")) {
+
+            Tcl_SetResult(interp, scPtr->module, TCL_VOLATILE);
+
+        } else if (STREQ(argv[2], "port")) {
+ 
+            sprintf(interp->result, "%d", scPtr->bindport);
+
+        }
+
+    } else if (STREQ(argv[1], "protocol")) {
 
         switch(scPtr->ssl->session->ssl_version) {
             case SSL2_VERSION:
@@ -247,17 +264,18 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 
         cipher = SSL_get_current_cipher(scPtr->ssl);
 
-	if (STREQ(argv[2], "name")) {
+        if (STREQ(argv[2], "name")) {
 
-	    if (argc != 3) {
-		Tcl_AppendResult (interp, "wrong # args:  should be \"",
+	        if (argc != 3) {
+		        Tcl_AppendResult (interp, "wrong # args:  should be \"",
 				  argv[0], argv[1], " name\"", NULL);
-		status = TCL_ERROR;
+		        status = TCL_ERROR;
 
-	    } else {
+    	    } else {
                 string = (scPtr->ssl != NULL ? (char *)SSL_CIPHER_get_name(cipher) : NULL);
                 Tcl_SetResult(interp, string, TCL_VOLATILE);
-	    }
+	        }
+
         } else if (STREQ(argv[2], "strength")) { 
 
             if (argc != 3) {
@@ -266,7 +284,7 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
                 status = TCL_ERROR;
             } else {
                 integer = SSL_CIPHER_get_bits(cipher, &integer);
-		sprintf(interp->result, "%d", integer); 
+                sprintf(interp->result, "%d", integer); 
             }
         }
 

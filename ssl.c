@@ -94,9 +94,9 @@ int
 NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr)
 {
     if (
-	CreateSSL(ccPtr)           == NS_ERROR
-	|| CreateBIOStack(ccPtr)   == NS_ERROR
-	|| RunSSLHandshake(ccPtr)  == NS_ERROR
+        CreateSSL(ccPtr)           == NS_ERROR
+        || CreateBIOStack(ccPtr)   == NS_ERROR
+        || RunSSLHandshake(ccPtr)  == NS_ERROR
     ) {
 	Ns_Log(Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
 	    ccPtr->type);
@@ -1072,16 +1072,16 @@ CreateSSL(Ns_OpenSSLConn *ccPtr)
 
     ccPtr->ssl = SSL_new(ccPtr->context);
     if (ccPtr->ssl == NULL) {
-	Ns_Log(Error, "%s: error creating new SSL", ccPtr->module);
-	return NS_ERROR;
+        Ns_Log(Error, "%s: error creating new SSL", ccPtr->module);
+        return NS_ERROR;
     }
 
     SSL_clear(ccPtr->ssl);
 
     if (ccPtr->role == ROLE_SSL_SERVER) {
-	SSL_set_accept_state(ccPtr->ssl);
+        SSL_set_accept_state(ccPtr->ssl);
     } else {
-	SSL_set_connect_state(ccPtr->ssl);
+        SSL_set_connect_state(ccPtr->ssl);
     }
 
     SSL_set_app_data(ccPtr->ssl, ccPtr);

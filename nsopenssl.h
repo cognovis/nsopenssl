@@ -143,6 +143,10 @@ typedef struct Ns_OpenSSLConn {
     char         peer[16];   /* Not used by nsd server conns in 4.x API */
     int          port;       /* Not used by nsd server conns in 4.x API */
 
+    char        *address;    /* Advertised address for this module instance */
+    char        *bindaddr;   /* Bind address for this module instance - might be 0.0.0.0 */
+    int          bindport;   /* The port the server is listening on for this module instance */
+
 #ifndef NS_MAJOR_VERSION
     struct Ns_OpenSSLConn   *nextPtr;
     struct NsOpenSSLDriver  *sdPtr;

@@ -1,3 +1,14 @@
+2002-03-04  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c, nsopenssl.c, nsopenssl.h, tclcmds.c: Added 'ns_openssl
+	module name' and 'ns_openssl module port' commands. The first
+	tells you what the name of the loaded module is for the current
+	connection (you may have more than one copy of nsopenssl
+	loaded). The second tells you which port your current connection's
+	nsopenssl driver is listening on. This would allow you to do
+	access control by determining what module name and or module port
+	the connection is coming through.
+
 2002-02-18  Scott S. Goodwin  <scott@scottg.net>
 
 	* tclcmds.c: added ns_openssl port command. It returns the

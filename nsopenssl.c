@@ -446,10 +446,13 @@ SockThread(void *ignored)
 		    scPtr->type      = STR_NSD_SERVER;
 		    scPtr->bufsize   = sdPtr->bufsize;
 		    scPtr->timeout   = sdPtr->timeout;
-             	    scPtr->context   = sdPtr->context;
-		    scPtr->refcnt    = 0; /* always 0 for server conns */
+            scPtr->context   = sdPtr->context;
+		    scPtr->refcnt    = 0;               /* always 0 for server conns */
 		    scPtr->sdPtr     = sdPtr;
 		    scPtr->sock      = sock;
+            scPtr->address   = sdPtr->address;  /* Do not free - driver frees it */
+            scPtr->bindaddr  = sdPtr->bindaddr; /* Do not free - driver frees it */
+            scPtr->bindport  = sdPtr->port;
 		    scPtr->port      = ntohs(sa.sin_port);
 		    strcpy(scPtr->peer, ns_inet_ntoa(sa.sin_addr));
 
