@@ -43,7 +43,7 @@ static void SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name);
 static void SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj);
 static char *ValidTime(ASN1_UTCTIME *tm);
 static char *PEMCertificate(X509 *clientcert);
-static NsOpenSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
+static NsServerSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
 
 
 /*
@@ -94,7 +94,7 @@ static int
 NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,	
     char **argv)
 {
-    NsOpenSSLConnection *scPtr;
+    NsServerSSLConnection *scPtr;
     X509                *clientcert;
     SSL_CIPHER          *cipher;
     Ns_DString           ds;
@@ -346,7 +346,7 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
  *      Return the SSL connection struct for the current connection.
  *
  * Results:
- *      NsOpenSSLConnection* or NULL.
+ *      NsServerSSLConnection* or NULL.
  *
  * Side effects:
  *      None.
@@ -354,7 +354,7 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-static NsOpenSSLConnection *
+static NsServerSSLConnection *
 NsOpenSSLGetConn(Tcl_Interp *interp)
 {
     Ns_Conn             *conn;
@@ -364,7 +364,7 @@ NsOpenSSLGetConn(Tcl_Interp *interp)
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
 	if (name != NULL && STREQ (name, DRIVER_NAME)) {
-	    return (NsOpenSSLConnection *) Ns_ConnDriverContext(conn);
+	    return (NsServerSSLConnection *) Ns_ConnDriverContext(conn);
 	}
     }
 

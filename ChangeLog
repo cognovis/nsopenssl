@@ -1,3 +1,8 @@
+2001-06-13  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
+
+	* all: changed NsOpenSSLConnection struct name to
+	NsServerSSLConnection in preparation for adding client structures.
+
 2001-06-12  Scott S. Goodwin  <scott@scottg.net>
 
 	* init.c, nsopenssl.c, nsopenssl.h: prefixed static functions that

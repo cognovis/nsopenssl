@@ -88,7 +88,7 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
 #ifndef NS_MAJOR_VERSION
 
 static Ns_ThreadProc SockThread;
-static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr);
+static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsServerSSLConnection *scPtr);
 static Ns_Thread sockThread;
 static SOCKET trigPipe[2];
 
@@ -244,7 +244,7 @@ SockStart(char *server, char *label, void **drvDataPtr)
  */
 
 static void
-SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr)
+SockFreeConn(NsOpenSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
 {
     int refcnt;
 
@@ -286,7 +286,7 @@ SockThread(void *ignored)
     char c;
     int slen, n, stop;
     NsOpenSSLDriver *sdPtr, *nextPtr;
-    NsOpenSSLConnection *scPtr;
+    NsServerSSLConnection *scPtr;
     struct sockaddr_in sa;
     SOCKET max, sock;
 
@@ -356,7 +356,7 @@ SockThread(void *ignored)
 		    }
 		    Ns_MutexUnlock(&sdPtr->lock);
 		    if (scPtr == NULL) {
-			scPtr = (NsOpenSSLConnection *)
+			scPtr = (NsServerSSLConnection *)
 			    ns_malloc(sizeof *scPtr);
 		    }
 
@@ -442,7 +442,7 @@ SockStop(void *arg)
 static int
 SockClose(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
     NsOpenSSLDriver *sdPtr = scPtr->sdPtr;
 
     Ns_Log(Debug, "%s: SockClose", sdPtr->module);
@@ -477,7 +477,7 @@ SockClose(void *arg)
 static int
 SockRead(void *arg, void *vbuf, int toread)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return NsServerSSLRecv(scPtr, vbuf, toread);
 }
@@ -503,7 +503,7 @@ SockRead(void *arg, void *vbuf, int toread)
 static int
 SockWrite(void *arg, void *buf, int towrite)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return NsServerSSLSend(scPtr, buf, towrite);
 }
@@ -528,7 +528,7 @@ SockWrite(void *arg, void *buf, int towrite)
 static char *
 SockHost(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return scPtr->sdPtr->address;
 }
@@ -553,7 +553,7 @@ SockHost(void *arg)
 static int
 SockPort(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return scPtr->sdPtr->port;
 }
@@ -578,7 +578,7 @@ SockPort(void *arg)
 static char *
 SockName(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return DRIVER_NAME;
 }
@@ -603,7 +603,7 @@ SockName(void *arg)
 static char *
 SockPeer(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return scPtr->peer;
 }
@@ -628,7 +628,7 @@ SockPeer(void *arg)
 static int
 SockConnectionFd(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     if (NsServerSSLFlushConn(scPtr) == NS_ERROR) {
 	return -1;
@@ -680,7 +680,7 @@ SockDetach(void *arg)
 static int
 SockPeerPort(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return scPtr->port;
 }
@@ -705,7 +705,7 @@ SockPeerPort(void *arg)
 static char *
 SockLocation(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     return scPtr->sdPtr->location;
 }
@@ -730,7 +730,7 @@ SockLocation(void *arg)
 static int
 SockInit(void *arg)
 {
-    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
 
     if (scPtr->ssl == NULL) {
 	return NsServerSSLCreateConn(scPtr);
@@ -764,7 +764,7 @@ SockInit(void *arg)
 static int
 OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
 {
-    NsOpenSSLConnection *scPtr;
+    NsServerSSLConnection *scPtr;
     Ns_Driver *driver = sock->driver;
     int n, total;                    
 

@@ -70,11 +70,11 @@
 #define SSL_CRYPTO_LIBRARY_NAME   "OpenSSL"
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
-struct NsOpenSSLConnection;
+struct NsServerSSLConnection;
 
 typedef struct NsOpenSSLDriver {
     struct NsOpenSSLDriver   *nextPtr;
-    struct NsOpenSSLConnection *firstFreePtr;
+    struct NsServerSSLConnection *firstFreePtr;
 
     Ns_Mutex         lock;
     int              refcnt;
@@ -98,8 +98,8 @@ typedef struct NsOpenSSLDriver {
     char            *randomFile;   /* Used to seed PRNG */
 } NsOpenSSLDriver;
 
-typedef struct NsOpenSSLConnection {
-    struct NsOpenSSLConnection *nextPtr;
+typedef struct NsServerSSLConnection {
+    struct NsServerSSLConnection *nextPtr;
     struct NsOpenSSLDriver   *sdPtr;
 
     SOCKET  sock;
@@ -112,7 +112,7 @@ typedef struct NsOpenSSLConnection {
     BIO    *io;
 
     X509   *clientcert;
-} NsOpenSSLConnection;
+} NsServerSSLConnection;
 
 /*
  * init.c
@@ -130,8 +130,8 @@ extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
  * ssl.c
  */
 
-extern int NsServerSSLCreateConn(NsOpenSSLConnection *scPtr);
-extern void NsServerSSLDestroyConn(NsOpenSSLConnection *scPtr);
+extern int NsServerSSLCreateConn(NsServerSSLConnection *scPtr);
+extern void NsServerSSLDestroyConn(NsServerSSLConnection *scPtr);
 extern void NsServerSSLTrace(SSL *ssl, int where, int rc);
 extern int NsServerSSLShutdownConn(SSL *ssl);
 
@@ -139,10 +139,10 @@ extern int NsServerSSLShutdownConn(SSL *ssl);
  * nsopenssl.c
  */
 
-extern int NsServerSSLFlushConn(NsOpenSSLConnection *scPtr);
-extern void NsDestroySSLConn(NsOpenSSLConnection *scPtr);
-extern int NsServerSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
+extern int NsServerSSLFlushConn(NsServerSSLConnection *scPtr);
+extern void NsDestroySSLConn(NsServerSSLConnection *scPtr);
+extern int NsServerSSLRecv(NsServerSSLConnection *scPtr, void *buffer,
     int toread);
-extern int NsServerSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
+extern int NsServerSSLSend(NsServerSSLConnection *scPtr, void *buffer,
     int towrite);
 

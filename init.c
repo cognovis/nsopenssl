@@ -167,7 +167,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
 void
 NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr)
 {
-    NsOpenSSLConnection *scPtr;
+    NsServerSSLConnection *scPtr;
 
     Ns_Log(Debug, "%s: freeing(%p)",
 	sdPtr == NULL ? DRIVER_NAME : sdPtr->module, sdPtr);
@@ -871,11 +871,11 @@ PRNGIsSeeded (NsOpenSSLDriver *sdPtr)
 static RSA *
 IssueTmpRSAKey(SSL *ssl, int export, int keylen)
 {
-    NsOpenSSLConnection *scPtr;
+    NsServerSSLConnection *scPtr;
     NsOpenSSLDriver     *sdPtr;
     static RSA *rsa_tmp = NULL;
 
-    scPtr = (NsOpenSSLConnection*) SSL_get_app_data(ssl);
+    scPtr = (NsServerSSLConnection*) SSL_get_app_data(ssl);
     sdPtr = scPtr->sdPtr;
 
     if (SeedPRNG(sdPtr)) {
