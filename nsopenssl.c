@@ -1132,8 +1132,8 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
                 }
                 sslconn->refcnt++;
 
-                Ns_Log(Debug, "OpenSSLProc: ssldriver = (%p), sslcontext = (%p), sslconn = (%p)", 
-                        ssldriver, ssldriver->sslcontext, sslconn);
+                // XXX Ns_Log(Debug, "OpenSSLProc: ssldriver = (%p), sslcontext = (%p), sslconn = (%p)", 
+                // XXX        ssldriver, ssldriver->sslcontext, sslconn);
 
                 /* XXX find way to ditch this part -- set later or on-demand */
                 sslconn->peerport = ssldriver->port;
@@ -1147,12 +1147,10 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             total = 0;
             do {
                 if (cmd == DriverSend) {
-                    //n = NsOpenSSLConnSend(sslconn->bio, bufs->iov_base, (int) bufs->iov_len);
-		    Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
+		    // XXX Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 } else {
-                    //n = NsOpenSSLConnRecv(sslconn->bio, bufs->iov_base, (int) bufs->iov_len);
-		    Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
+		    // XXX Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 }
                 if (n < 0 && total > 0) {

@@ -159,7 +159,7 @@ typedef struct NsOpenSSLConn {
     struct NsOpenSSLContext  *sslcontext;
     SSL_CTX                  *sslctx;
     SSL                      *ssl;       /* initialized SSL instance itself */
-    BIO                      *bio;        /* block i/o */
+    //xxx BIO                      *bio;        /* block i/o */
     SOCKET                    socket;
     SOCKET                    wsock;
     int                       refcnt;    /* don't ns_free() unless this is 0 */
