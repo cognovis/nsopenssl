@@ -64,9 +64,15 @@ CFLAGS += -g
 #MODLIBS  =  -L$(OPENSSL)/lib ../openssl-0.9.6g/libssl.a ../openssl-0.9.6g/libcrypto.a#-lssl -lcrypto
 
 #
-# Compiler flags required by your module (-I for external headers goes here)
+# Compiler flags required by your module (-I for external headers goes here).
 #
-CFLAGS   += -I$(OPENSSL)/include
+# Kerberos headers are included in case your OpenSSL library was built with
+# Kerberos support. This is generally true on RedHat 9 and possibly Fedora
+# Core. If OPENSSL_NO_KRB5 is define in <openssl/opensslconf.h> then OpenSSL
+# *was not* compiled with Kerberos support.
+#
+
+CFLAGS   += -I$(OPENSSL)/include -I/usr/kerberos/include
 
 #
 # The common Makefile defined by AOLserver for making modules

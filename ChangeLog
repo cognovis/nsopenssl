@@ -1,5 +1,10 @@
 2004-01-19  Scott Goodwin  <scott@scottg.net>
 
+      * Makefile: added kerberos headers to CFLAGS to resolve issue when
+      OpenSSL has been compile with Kerberos support. This appears to be true
+      if you're running RedHat 9, and possibly Fedora. Thanks to C.R. Oldham
+      for this fix.
+
       * nsopenssl.h, nsopenssl.c, ssl.c: Removed rest of BIO stuff in lieu of
       straight SSL calls. Cleaned up NsOpenSSLConnHandshake().
 
