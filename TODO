@@ -1,5 +1,7 @@
 TODO and IDEAS:
 
+- Get working with AOLserver 4.x
+
 - Create fully automated tests for nsopenssl that can run without a browser. Issues
   will include how to configure AOLserver's nsd.tcl file for the testing. OpenSSL
   and other programs may be required for testing as well. Not sure how to handle this,
