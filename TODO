@@ -10,9 +10,6 @@ Things that need to be done:
 
 - Test all combos of protocols
 
-- Put back ns_openssl Tcl command to return serial number as a string
-  (e.g. "27c6")
-
 - Add back option to specify client verification depth
 
 - Figure out whether there's any point to cache.c.  SSL_CTX does its
