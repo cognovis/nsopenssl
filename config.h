@@ -32,9 +32,12 @@
 
 /* @(#) $Header$ */
 
-#define DEFAULT_PORT                443
-#define DEFAULT_PROTOCOL            "https"
-#define DEFAULT_NAME                "nsopenssl"
+#define DEFAULT_PORT                       443
+#define DEFAULT_PROTOCOL                   "https"
+#define DEFAULT_NAME                       "nsopenssl"
+
+#define SERVER_STRING                      "server"
+#define CLIENT_STRING                      "client"
 
 #define CONFIG_CLIENT_TRACE                "ClientTrace"
 #define DEFAULT_CLIENT_TRACE               NS_FALSE
@@ -56,7 +59,7 @@
 #define DEFAULT_SERVER_KEYFILE             "serverkey.pem"
 
 #define CONFIG_CLIENT_CERTFILE             "ClientCertFile"
-#define DEFAULT_CLIENT_CERTFILE            "clientcert.pem"
+#define DEFAULT_CLIENT_CERTFILE            NULL
 
 #define CONFIG_CLIENT_KEYFILE              "ClientKeyFile"
 #define DEFAULT_CLIENT_KEYFILE             "Clientkey.pem"

@@ -76,9 +76,13 @@
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
 typedef struct NsOpenSSLModuleData {
+    Ns_Mutex        lock;
+    int             refcnt;
     char            *name;         /* Module name */
     char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
     char            *dir;          /* Module directory (on disk) */
+    int             *serveron;     /* Set to 1 if server is on, 0 if off */
+    int             *clienton;     /* Set to 1 if client is on, 0 if off */
 } NsOpenSSLModuleData;
 
 /* Forward reference */
@@ -89,9 +93,66 @@ struct NsServerSSLConnection;
  */
 
 typedef struct NsServerSSLDriver {
-    struct NsServerSSLDriver   *nextPtr;
+
+    /*
+     * Visible in NsOpenSSLContext
+     */
+
+    char                         *type;   /* client or server */
+    struct NsOpenSSLModuleData   *module;
+    SSL_CTX                      *context;
+    char                         *certfile;
+    char                         *keyfile;
+    char                         *cafile;
+    char                         *cadir;
+    char                         *randomFile;   /* Used to seed PRNG */
+
+    /*
+     * Private to NsServerSSLDriver
+     */
+
+    struct NsServerSSLDriver     *nextPtr;
     struct NsServerSSLConnection *firstFreePtr;
-    struct NsOpenSSLModuleData *module;
+
+    Ns_Mutex                     lock;
+    int                          refcnt;
+    Ns_Driver                    driver;
+
+    char                         *location;     /* E.g. https://example.com:8443 */
+    char                         *address;      /* Advertised address */
+    char                         *bindaddr;     /* Bind address - might be 0.0.0.0 */
+    int                          port;         /* Bind port */
+
+    int                          bufsize;
+    int                          timeout;
+    SOCKET                       lsock;
+
+} NsServerSSLDriver;
+
+/* Forward reference */
+struct NsClientSSLConnection;
+
+typedef struct NsClientSSLDriver {
+
+    /*
+     * Visible in NsOpenSSLContext
+     */
+
+    char                         *type;   /* client or server */
+    struct NsOpenSSLModuleData   *module;
+    SSL_CTX                      *context;
+    char                         *certfile;
+    char                         *keyfile;
+    char                         *cafile;
+    char                         *cadir;
+    char                         *randomFile;   /* Used to seed PRNG */
+
+    /*
+     * Private to NsClientSSLDriver
+     */
+
+    struct NsClientSSLDriver   *nextPtr;
+    struct NsClientSSLConnection *firstFreePtr;
 
     Ns_Mutex         lock;
     int              refcnt;
@@ -99,17 +160,28 @@ typedef struct NsServerSSLDriver {
 
     char            *location;     /* E.g. https://example.com:8443 */
     char            *address;      /* Advertised address */
-    char            *bindaddr;     /* Bind address - might be 0.0.0.0 */
-    int              port;         /* Bind port */
-
     int              bufsize;
     int              timeout;
     SOCKET           lsock;
 
-    SSL_CTX         *context;
+} NsClientSSLDriver;
 
-    char            *randomFile;   /* Used to seed PRNG */
-} NsServerSSLDriver;
+
+/*
+ * Used to access the common fields in NsServerSSLDriver and NsClientSSLDriver
+ */
+
+typedef struct NsOpenSSLContext {
+    char                         *type;   /* client or server */
+    struct NsOpenSSLModuleData   *module;
+    SSL_CTX                      *context;
+    char                         *certfile;
+    char                         *keyfile;
+    char                         *cafile;
+    char                         *cadir;
+    char                         *randomFile;   /* Used to seed PRNG */
+} NsOpenSSLContext;
+
 
 typedef struct NsServerSSLConnection {
     struct NsServerSSLConnection *nextPtr;
@@ -126,29 +198,6 @@ typedef struct NsServerSSLConnection {
 
     X509   *clientcert;
 } NsServerSSLConnection;
-
-/* Forward reference */
-struct NsClientSSLConnection;
-
-typedef struct NsClientSSLDriver {
-    struct NsClientSSLDriver   *nextPtr;
-    struct NsClientSSLConnection *firstFreePtr;
-    struct NsOpenSSLModuleData *module;
-
-    Ns_Mutex         lock;
-    int              refcnt;
-    Ns_Driver        driver;
-
-    char            *location;     /* E.g. https://example.com:8443 */
-    char            *address;      /* Advertised address */
-    int              bufsize;
-    int              timeout;
-    SOCKET           lsock;
-
-    SSL_CTX         *context;
-
-    char            *randomFile;   /* Used to seed PRNG */
-} NsClientSSLDriver;
 
 typedef struct NsClientSSLConnection {
     struct NsClientSSLConnection *nextPtr;
