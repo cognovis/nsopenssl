@@ -1,5 +1,7 @@
 2003-05-08  Scott S. Goodwin  <scott@scottg.net>
 
+        * Released nsopenssl 2.1a
+
         * ssl.c: fixed problem where if an nsopenssl connection was broken
         during a file upload or other POST request, the thread would
         continue trying to read from the socket. Thanks to Wayport Inc's
