@@ -103,12 +103,39 @@ check-env:
 	    exit 1; \
 	fi
 
-# This overrides the install directive in $(NSHOME)/include/Makefile.module
+#
+# This overrides the install directive in $(NSHOME)/include/Makefile.module because we
+# have a Tcl module (https.tcl) to install as well.
+#
 install: all
 	$(RM) $(INSTBIN)/$(MOD)
 	$(CP) $(MOD) $(INSTBIN)
 	$(MKDIR) $(INSTTCL)
 	$(CP) $(TCLMOD) $(INSTTCL)
+
+## TEST FRAMEWORK (under development)  ####################################################
+
+#
+# Install test code
+#
+TESTMODS = \
+	ns_openssl_sockcallback.tcl \
+	ns_openssl_socklistencallback.tcl \
+	ns_openssl_socklisten.tcl \
+	ns_openssl_socknread.tcl \
+	ns_openssl_sockopen.tcl
+
+TESTPAGES = \
+	index.adp
+
+install-tests: install
+	@if [ -n "$(TESTMODS)" ]; then \
+		for i in $(TESTMODS); do \
+			echo "...installing $$i"; \
+			$(INSTALL) $$i $(INST)/servers/test/modules/tcl/nsopenssl; \
+		done \
+	fi
+
 
 ## NOTES #################################################################################
 
