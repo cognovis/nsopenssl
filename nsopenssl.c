@@ -43,56 +43,14 @@ static const char *RCSID =
     __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
-
 
-static NsOpenSSLDriver *NsOpenSSLDriverCreate (char *server, char *module);
-
-static void NsOpenSSLDriverFree (NsOpenSSLDriver *driver);
-
-static void DriverStructClear (void);
-static int InitOpenSSL (void);
-static int SessionCacheIdGetNext (void);
-static int AddEntropyFromRandomFile (NsOpenSSLDriver *driver, long maxbytes);
-static int SeedPRNG (NsOpenSSLDriver *driver);
-static RSA *IssueTmpRSAKey (SSL *ssl, int export, int keylen);
-static int ConfigLoadSSLContexts (char *server, char *module);
-
-static Ns_OpenSSLContext *ConfigLoadSSLContext (char *server, char *module, 
-		char *name, char *desc, char *type);
-static int InitSSLContexts ();
-
-static int SetProtocols (Ns_OpenSSLContext *context);
-static int SetCipherSuite (Ns_OpenSSLContext *context);
-
-static int LoadCertificate (char *module, SSL_CTX *context, char *certFile);
-static int LoadKey (char *module, SSL_CTX *context, char *keyFile);
-static int CheckKey (char *module, SSL_CTX *context);
-static int LoadCACerts (char *module, SSL_CTX *context, char *caFile,
-		char *caDir);
-static int InitLocation (NsOpenSSLDriver *driver);
-static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
-static char *GetModuleDir (char *server, char *module);
-
-static char *ConfigGetStringDefault (char *module, char *path, char *name,
-		char *def);
-static int ConfigGetBoolDefault (char *module, char *path, char *name, int def);
-static int ConfigGetIntDefault (char *module, char *path, char *name, int def);
-static char *
-ConfigGetPathValue (char *path, char *name, char *dir);
-
-static char *ConfigGetPathDefault (char *module, char *path, char *name, char *dir, char *def);
-static char *ConfigGetPathValueDefault (char *path, char *name, char *dir, char *def);
-static char *ConfigGetPathValueRequired (char *path, char *name, char *dir);
-static char *ConfigGetPath (char *path, char *name, char *dir, char *def, int required);
-
-/* XXX needed still? */
-static Ns_Mutex *locks;
-
-
 /*
- * OpenSSL Callbacks
+ * OpenSSL library initialization
  */
-
+ 
+static int InitOpenSSL (void);
+static int SeedPRNG (void);
+static Ns_Mutex *locks;
 static void LockCallback (int mode, int n, const char *file, int line);
 static unsigned long IdCallback (Ns_OpenSSLContext *contextid);
 static struct CRYPTO_dynlock_value *DynlockCreateCallback (char *file,
@@ -102,23 +60,46 @@ static void DynlockLockCallback (int mode,
 		const char *file, int line);
 static void DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
 		const char *file, int line);
-
-
-static int SetProtocols (Ns_OpenSSLContext *context);
-
-
-typedef struct SessionCacheId {
-	Ns_Mutex lock;
-	int id;
-} SessionCacheId;
-
-static SessionCacheId *nextSessionCacheId;
-
+		
 /*
- * AOLserver 4.x Comm API (hmmm...seems much simpler.)
+ * Get information from the config file
+ */
+ 
+static int ConfigGetSSLContexts (char *server, char *module);
+static Ns_OpenSSLContext *ConfigGetSSLContext (char *server, char *module, 
+	char *name, char *desc, char *type);
+	
+/*
+ * Initialize SSL Contexts
  */
 
+static int InitSSLContexts ();
+static int SetProtocols (Ns_OpenSSLContext *context);
+static int SetCipherSuite (Ns_OpenSSLContext *context);
+static int LoadCertificate (char *module, SSL_CTX *context, char *certFile);
+static int LoadKey (char *module, SSL_CTX *context, char *keyFile);
+static int CheckKey (char *module, SSL_CTX *context);
+static int LoadCACerts (char *module, SSL_CTX *context, char *caFile, char *caDir);
+static int InitLocation (NsOpenSSLDriver *driver);
+static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
+static char *GetModuleDir (char *server, char *module);
+static int SessionCacheIdGetNext (void);
+
+/*
+ * Driver initialization/destruction
+ */
+ 
+static NsOpenSSLDriver *NsOpenSSLDriverCreate (char *server, char *module);
+static void NsOpenSSLDriverFree (NsOpenSSLDriver *driver);
+static void DriverStructClear (NsOpenSSLDriver *driver);
+
+/*
+ * SSL Operations on active connections
+ */
+ 
 static Ns_DriverProc OpenSSLProc;
+static RSA *IssueTmpRSAKey (SSL *ssl, int export, int keylen);	
+
 
 NS_EXPORT int Ns_ModuleVersion = 1;
 
@@ -144,12 +125,11 @@ NS_EXPORT int
 Ns_ModuleInit (char *server, char *module)
 {
     NsOpenSSLDriver *driver;
-    static int globalInit = 0;
     static int loaded = 0;
-    int seedcount = 0;
+    static int globalInit = 0;
 
 #ifdef NSOPENSSL_DEBUG
-    Ns_Log(Debug, "%s: NSOPENSSL_DEBUG is set", MODULE);
+    Ns_Log(Debug, "%s: Compile-time NSOPENSSL_DEBUG is set", MODULE);
 #endif
 
     /*
@@ -180,7 +160,7 @@ Ns_ModuleInit (char *server, char *module)
          */
 
         if (InitOpenSSL () == NS_ERROR) {
-	        Ns_Log(Error, MODULE, ": Failed to initialize OpenSSL");
+	        Ns_Log(Error, MODULE, ": OpenSSL failed to initialize");
 	        return NS_ERROR;
         }
 
@@ -199,7 +179,7 @@ Ns_ModuleInit (char *server, char *module)
      * structures as defined in nsd.tcl
      */
      
-    if (ConfigLoadSSLContexts(server, module) == NS_ERROR) {
+    if (ConfigGetSSLContexts(server, module) == NS_ERROR) {
 	    Ns_Log(Error, MODULE, ": Failed to load the SSL Contexts");
 	    return NS_ERROR;
     }
@@ -215,7 +195,7 @@ Ns_ModuleInit (char *server, char *module)
 
     /* XXX how do we set up to listen on multiple ports within the same virtual server? */
 
-    if ((driver = NsOpenSSLCreateDriver (server, module)) == NULL) {
+    if ((driver = NsOpenSSLDriverCreate (server, module)) == NULL) {
 	    return NS_ERROR;
     }
 
@@ -224,8 +204,8 @@ Ns_ModuleInit (char *server, char *module)
      * server a particular driver serves by looking at driver->server.
      */
     
-    driver->nextPtr = firstSSLDriverPtr;
-    firstSSLDriverPtr = driver;
+    driver->next = firstSSLDriver;
+    firstSSLDriver = driver;
 
     /*
      * Register the driver with AOLserver.
@@ -279,19 +259,14 @@ NsOpenSSLDriverCreate (char *server, char *module)
 
     Ns_MutexSetName(&driver->lock, module);
 
-    /* XXX this is now global and needs to be moved to AddEntropyFromFile */
-    driver->randomFile = ConfigGetPathDefault (driver->module, driver->configPath,
-					   CONFIG_RANDOMFILE, driver->dir,
-					   NULL);
-
-    driver->timeout = ConfigIntDefault (module, driver->configPath,
+    driver->timeout = ConfigGetIntDefault (module, driver->configPath,
 				       CONFIG_SERVER_SOCKTIMEOUT,
 				       DEFAULT_SERVER_SOCKTIMEOUT);
     if (driver->timeout < 1) {
 	driver->timeout = DEFAULT_SERVER_SOCKTIMEOUT;
     }
 
-    driver->bufsize = ConfigIntDefault (module, driver->configPath,
+    driver->bufsize = ConfigGetIntDefault (module, driver->configPath,
 				       CONFIG_SERVER_BUFFERSIZE,
 				       DEFAULT_SERVER_BUFFERSIZE);
     if (driver->bufsize < 1) {
@@ -299,7 +274,7 @@ NsOpenSSLDriverCreate (char *server, char *module)
     }
 
     if (SetModuleDir (driver) == NS_ERROR || InitLocation (driver) == NS_ERROR) {
-	NsOpenSSLFreeDriver (driver);
+	NsOpenSSLDriverFree (driver);
 	return NULL;
     }
 
@@ -458,21 +433,8 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
 	return NULL;
     }
 
-    /*
-     * XXX temporary solution -- note that use of firstSSLDriverPtr
-     * XXX forces you to use the cert and key from the LAST loaded
-     * XXX nsopenssl module for outgoing and incoming SSL sock operations.
-     * XXX This does not apply to the regular SSL conns coming into the
-     * XXX core server. Also note that firstSSLDriverPtr isn't really
-     * XXX necessary for AOLserver 4.x, but is used for now just to store
-     * XXX the SockClient and SockServer stuff.
-     * XXX
-     * XXX This will be fixed in the upcoming 3.0 release of nsopenssl.
-     * XXX For now, just duplicate the sections for SockServer and SockClient
-     * XXX in your nsd.tcl file for all loaded nsopenssl modules.
-     */
-
-    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriverPtr, ROLE_SSL_CLIENT, CONNTYPE_SSL_SOCK)) == NULL) {
+    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriver, 
+             ROLE_SSL_CLIENT, CONNTYPE_SSL_SOCK)) == NULL) {
 	return NULL;
     }
 
@@ -521,7 +483,8 @@ Ns_OpenSSLSockAccept (char *name, SOCKET sock)
         return NULL;
 
     /* XXX these args must be changed */
-    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriverPtr, ROLE_SSL_SERVER, CONNTYPE_SSL_SOCK)) == NULL) {
+    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriver, 
+	ROLE_SSL_SERVER, CONNTYPE_SSL_SOCK)) == NULL) {
 	return NULL;
     }
 
@@ -957,46 +920,6 @@ DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
 /*
  *----------------------------------------------------------------------
  *
- * AddEntropyFromRandomFile --
- *
- *       Grabs a number of bytes from a file to seed the OpenSSL
- *       PRNG.
- *
- * Results:
- *       None.
- *
- * Side effects:
- *       Directly seeds OpenSSL's PRNG by calling RAND_load_file.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-AddEntropyFromRandomFile (NsOpenSSLDriver *driver, long maxbytes)
-{
-    int readbytes;
-
-    if (driver->randomFile == NULL) {
-	return NS_FALSE;
-    }
-
-    if (access (driver->randomFile, F_OK) == 0) {
-	if ((readbytes = RAND_load_file (driver->randomFile, maxbytes))) {
-	    Ns_Log (Debug, "%s: Obtained %d random bytes from %s",
-		    driver->module, readbytes, driver->randomFile);
-	    return NS_TRUE;
-	} else {
-	    Ns_Log (Warning, "%s: Unable to retrieve any random data from %s",
-		    driver->module, driver->randomFile);
-	    return NS_FALSE;
-	}
-    }
-    return NS_FALSE;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * SeedPRNG --
  *
  *       Seed OpenSSL's PRNG. Note that OpenSSL will seed the PRNG
@@ -1016,8 +939,6 @@ AddEntropyFromRandomFile (NsOpenSSLDriver *driver, long maxbytes)
  *----------------------------------------------------------------------
  */
 
-/* XXX need to eliminate looking to config file here, and need to incorporate
- * XXX AddEntropyFromRandomFile into this routine */
 static int
 SeedPRNG (void)
 {
@@ -1025,50 +946,64 @@ SeedPRNG (void)
     double *buf_ptr = NULL;
     double *bufoffset_ptr = NULL;
     size_t size;
-    int seedbytes;
+    int seedBytes;
+    int readBytes;
 
     if (RAND_status ()) 
 	return NS_TRUE;
 
-    Ns_Log (Notice, "%s: Seeding the PRNG", MODULE);
+    Ns_Log (Notice, MODULE, ": Seeding OpenSSL's PRNG");
 
-    seedbytes = ConfigGetIntDefault (driver->module, driver->configPath,
-				  CONFIG_SEEDBYTES, DEFAULT_SEEDBYTES);
+    if (Ns_ConfigGetInt(path, "seedBytes", &seedBytes) == NS_FALSE) {
+	    seedBytes = DEFAULT_SEEDBYTES;
+    }
 
     /*
      * Try to use the file specified by the user.
      */
 
-    AddEntropyFromRandomFile (driver, seedbytes);
-
-    if (RAND_status ()) {
-	return NS_TRUE;
+    if (randomFile != NULL && access (randomFile, F_OK) == 0) {
+	if ((readBytes = RAND_load_file (randomFile, maxbytes))) {
+	    Ns_Log (Notice, MODULE, ": Obtained %d random bytes from %s",
+		    readBytes, randomFile);
+	} else {
+	    Ns_Log (Warning, MODULE, ": Unable to retrieve any random data from %s",
+		    randomFile);
+	}
     }
+
+    if (RAND_status ()) 
+	return NS_TRUE;
+
+    Ns_Log (Notice, MODULE, ": Seeding PRNG from file failed; let's try Ns_DRand()");
 
     /*
-     * Use Ns API; I have no idea how to measure the amount of entropy, so for
-     * now I just pass the same number as the 2nd arg to RAND_add. Not all of
-     * the buffer is used.
+     * Use Ns_DRand(); I have no idea how to measure the amount of entropy, so for
+     * now I just pass seedBytes as the 2nd arg to RAND_add. Not all of the
+     * buffer is used. It's on my list of research topics.
      */
 
-    size = sizeof (double) * seedbytes;
-    buf_ptr = Ns_Malloc (size);
+    size          = sizeof (double) * seedBytes;
+    buf_ptr       = Ns_Malloc (size);
     bufoffset_ptr = buf_ptr;
-    for (i = 0; i < seedbytes; i++) {
-	*bufoffset_ptr = Ns_DRand ();
+
+    for (i = 0; i < seedBytes; i++) {
+       *bufoffset_ptr = Ns_DRand ();
 	bufoffset_ptr++;
     }
-    RAND_add (buf_ptr, seedbytes, (long) seedbytes);
+
+    RAND_add (buf_ptr, seedBytes, (long) seedBytes);
     Ns_Free (buf_ptr);
-    Ns_Log (Notice, "%s: Seeded PRNG with %d bytes from Ns_DRand",
-	    MODULE, seedbytes);
 
     if (RAND_status ())
-	return NS_TRUE;
+        Ns_Log (Notice, MODULE, ": Successfully seeded PRNG with %d bytes from Ns_DRand",
+	    seedBytes);
+    } else {
+        Ns_Log (Warning, MODULE, ": Failed to seed PRNG with Ns_DRand");
+        return NS_FALSE;
+    }
 
-    Ns_Log (Warning, "%s: Failed to seed PRNG with enough entropy",
-	    MODULE);
-    return NS_FALSE;
+    return NS_TRUE;
 }
 
 /*
@@ -1116,9 +1051,10 @@ IssueTmpRSAKey (SSL * ssl, int export, int keylen)
 /*
  *----------------------------------------------------------------------
  *
- * ConfigLoadSSLContexts --
+ * ConfigGetSSLContexts --
  *
- *      Load SSL Contexts that are defined in the configuration file.
+ *      Load SSL Contexts that are defined in the configuration file
+ *      for a given virtual server.
  *
  * Results:
  *      NS_OK or NS_ERROR
@@ -1128,8 +1064,9 @@ IssueTmpRSAKey (SSL * ssl, int export, int keylen)
  *
  *----------------------------------------------------------------------
  */
+ 
 static int
-ConfigLoadSSLContexts(char *server, char *module)
+ConfigGetSSLContexts(char *server, char *module)
 {
 	Ns_Set *servers;
 	Ns_Set *sockservers;
@@ -1139,41 +1076,51 @@ ConfigLoadSSLContexts(char *server, char *module)
 	char *configPath = Ns_ConfigGetPath(server, module, NULL);
 
 	/*
-	 * Identify defined servers, sockservers and sockclients
-	 */
-
-	servers     = Ns_ConfigGetSection("servers");
-	sockservers = Ns_ConfigGetSection("sockservers");
-	sockclients = Ns_ConfigGetSection("sockclients");
-
-	/*
 	 * Load server contexts
 	 */
 
-	for (i = 0; i < Ns_SetSize(servers); ++i) {
+	servers = Ns_ConfigGetSection("servers");
+
+	if (servers != NULL) {
+	    for (i = 0; i < Ns_SetSize(servers); ++i) {
 		key = Ns_SetKey(servers, i);
-		LoadSSLContext(server, module, servers, key, 
+		ConfigGetSSLContext(server, module, key, 
 				Ns_SetGet(servers, key), "server");
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL servers defined for server %s", server);
 	}
 
 	/*
 	 * Load sockserver contexts
 	 */
 
-	for (i = 0; i < Ns_SetSize(sockservers); ++i) {
+	sockservers = Ns_ConfigGetSection("sockservers");
+
+	if (servers != NULL) {
+	    for (i = 0; i < Ns_SetSize(sockservers); ++i) {
 		key = Ns_SetKey(sockservers, i);
-		LoadSSLContext(server, module, sockservers, key, 
+		ConfigGetSSLContext(server, module, sockservers, key, 
 				Ns_SetGet(sockservers, key), "sockserver");
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL sockservers defined for server %s", server);
 	}
 
 	/*
 	 * Load sockclient contexts
 	 */
 
-	for (i = 0; i < Ns_SetSize(sockclients); ++i) {
+	sockclients = Ns_ConfigGetSection("sockclients");
+
+	if (sockclients != NULL) {
+	    for (i = 0; i < Ns_SetSize(sockclients); ++i) {
 		key = Ns_SetKey(sockclients, i);
-		LoadSSLContext(server, module, sockclients, key, 
+		ConfigGetSSLContext(server, module, sockclients, key, 
 				Ns_SetGet(sockclients, key), "sockclient");
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL sockclients defined for server %s", server);
 	}
 
 	return NS_OK;
@@ -1293,7 +1240,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
  *       Load values for a given SSL context from the configuration file.
  *
  * Results:
- *       NS_OK or NS_ERROR
+ *       Pointer to SSL Context or NULL
  *
  * Side effects:
  *       Memory may be allocated
@@ -1352,11 +1299,14 @@ ConfigLoadSSLContext (char *server, char *module, char *name, char *desc, char *
      * Protocols and CipherSuite will default
      */
 
-    context->protocols = ConfigGetStringDefault (configPath, 
-		    "protocols", DEFAULT_PROTOCOLS);
+    context->protocols = Ns_ConfigGetValue (path, "protocols");
+    if (context->protocols == NULL)
+        context->protocols = DEFAULT_PROTOCOLS;
 
-    context->ciphersuite = ConfigGetStringDefault (configPath, 
-		    "ciphersuite", DEFAULT_CIPHERSUITE);
+    context->ciphersuite = Ns_ConfigGetValue (path, "ciphersuite");
+    if (context->ciphersuite == NULL)
+    	context->ciphersuite = DEFAULT_CIPHERSUITE;
+
 
     /*
      * The CA file/dir isn't really necessary unless you actually intend use
@@ -1373,30 +1323,35 @@ ConfigLoadSSLContext (char *server, char *module, char *name, char *desc, char *
 
     context->crldir  = NULL;
 
-    context->peerverifyon = ConfigGetBoolDefault (configPath, 
-		    "peerverifyon", DEFAULT_PEERVERIFYON);
+    if (!Ns_ConfigGetBool(configPath, "peerverifyon", &context->peerverifyon)) {
+        context->peerverifyon = DEFAULT_PEERVERIFYON;
+    }
 
-    context->peerverifydepth = (int) ConfigGetIntDefault (configPath, 
-		    "peerverifydepth", DEFAULT_PEERVERIFYDEPTH);
+    if (Ns_ConfigGetInt(path, "peerverifydepth", &context->peerverifydepth) == NS_FALSE) {
+        context->peerverifydepth = DEFAULT_PEERVERIFYDEPTH;
+    }
 
     context->peerabortoninvalid = 0;
 
     context->peerabortproc = NULL;
 
-    context->sessioncacheon = ConfigGetBoolDefault (configPath, 
-		    "sessioncacheon", DEFAULT_SESSIONCACHEON);
+    if (!Ns_ConfigGetBool(configPath, "sessioncacheon", &context->sessioncacheon)) {
+        context->sessioncacheon = DEFAULT_SESSIONCACHEON;
+    }
 
-    context->sessioncacheid = (int) ConfigGetIntDefault (configPath, 
-		    "sessioncacheid", NsSessionIdGenerate());
+    context->sessioncacheid = NsSessionIdGenerate();
 
-    context->sessioncachesize = ConfigGetIntDefault (configPath, 
-		    "sessioncachesize", DEFAULT_SESSIONCACHESIZE);
+    if (Ns_ConfigGetInt(path, "sessioncachesize", &context->sessionscachesize) == NS_FALSE) {
+        context->sessioncachesize = DEFAULT_SESSIONCACHESIZE;
+    }
 
-    context->sessioncachetimeout = (long) ConfigGetIntDefault (configPath, 
-		    "sessioncachetimeout", DEFAULT_SESSIONCACHETIMEOUT);
+    if (Ns_ConfigGetInt(path, "sessioncachetimeout", context->sessioncachetimeout) == NS_FALSE) {
+        context->sessioncachetimeout = DEFAULT_SESSIONCACHETIMEOUT;
+    }
 
-    context->trace = ConfigGetBoolDefault (configPath, 
-		    "trace", DEFAULT_TRACE);
+    if (!Ns_ConfigGetBool(configPath, "trace", &context->trace)) {
+        context->trace = DEFAULT_TRACE;
+    }
 
     context->sslctx = NULL;
 
@@ -1497,9 +1452,9 @@ InitSSLContext (Ns_OpenSSLContext *context)
      * Set cipher suite
      */
 
-    cipherSuite = ConfigStringDefault (context->module, context->configPath,
-				       CONFIG_SERVER_CIPHERSUITE,
-				       DEFAULT_SERVER_CIPHERSUITE);
+    cipherSuite = Ns_ConfigGetValue (path, "ciphersuite");
+    if (cipherSuite == NULL)
+        cipherSuite = DEFAULT_SERVER_CIPHERSUITE;
 
     if (SetCipherSuite (context->module, context->sslctx, cipherSuite) != NS_OK)
 	/* XXX unlock struct */
@@ -1906,10 +1861,10 @@ InitLocation (NsOpenSSLDriver * driver)
     char *lookupHostname;
     Ns_DString ds;
 
-    driver->bindaddr = ConfigStringDefault (driver->module, driver->configPath,
+    driver->bindaddr = ConfigGetStringDefault (driver->module, driver->configPath,
 					   "ServerAddress", NULL);
 
-    hostname = ConfigStringDefault (driver->module, driver->configPath,
+    hostname = ConfigGetStringDefault (driver->module, driver->configPath,
 				    "ServerHostname", NULL);
 
     if (driver->bindaddr == NULL) {
@@ -1937,10 +1892,11 @@ InitLocation (NsOpenSSLDriver * driver)
 	}
     }
 
-    driver->port = ConfigIntDefault (driver->module, driver->configPath,
+    /* XXX - handle multiple ports */
+    driver->port = ConfigGetIntDefault (driver->module, driver->configPath,
 				    "ServerPort", DEFAULT_PORT);
 
-    driver->location = ConfigStringDefault (driver->module, driver->configPath,
+    driver->location = ConfigGetStringDefault (driver->module, driver->configPath,
 					   "ServerLocation", NULL);
     if (driver->location != NULL) {
 	driver->location = ns_strdup (driver->location);
@@ -2071,68 +2027,6 @@ ConfigGetStringDefault (char *path, char *name, char *def)
 /*
  *----------------------------------------------------------------------
  *
- * ConfigBoolDefault --
- *
- *       Get the config value requested, or return the default
- *       specified.
- *
- * Results:
- *       Config value as a boolean.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-ConfigGetBoolDefault (char *path, char *name, int def)
-{
-    int value;
-
-    if (Ns_ConfigGetBool (path, name, &value) == NS_FALSE) {
-	value = def;
-    }
-
-    Ns_Log (Notice, "%s: %s = %d", MODULE, name, value);
-
-    return value;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * ConfigIntDefault --
- *
- *       Get the config value requested, or return the default
- *       specified.
- *
-  Results:
- *       Config value as an int.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-ConfigGetIntDefault (char *path, char *name, int def)
-{
-    int value;
-
-    if (Ns_ConfigGetInt (path, name, &value) == NS_FALSE) {
-	value = def;
-    }
-
-    Ns_Log (Notice, "%s: %s = %d", MODULE, name, value);
-
-    return value;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * ConfigPath --
  *
  *       Get the config value requested, or return the default
@@ -2144,7 +2038,7 @@ ConfigGetIntDefault (char *path, char *name, int def)
  *
  * Side effects:
  *       Caller is responsible for freeing the returned value (unlike
- *       ConfigStringDefault).
+ *       ConfigGetStringDefault).
  *
  *----------------------------------------------------------------------
  */

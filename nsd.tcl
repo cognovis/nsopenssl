@@ -20,6 +20,7 @@ ns_param SeedBytes                 1024
 # All of the listening ports to be defined. These are the servers that are
 # driven by the core nsd process. They are used immediately and are running
 # before AOLserver finishes it's startup process.
+
 ns_section "ns/server/${servername}/module/nsopenssl/servers"
 ns_param users                 "Main SSL Port for Users"
 ns_param admins                "SSL Port for Administrators only"
@@ -28,17 +29,20 @@ ns_param admins                "SSL Port for Administrators only"
 # driven by the core nsd process, but are driven by nsopenssl itself via C API
 # and Tcl API. They must be started manually by the C or Tcl API calls after
 # AOLserver his already started.
+
 ns_section "ns/server/${servername}/module/nsopenssl/sockservers"
 ns_param tasklistener          "SSL Task Listener"
 
 # All of the sockclients to be defined. These sockclients can connect to
 # sockservers or to standard nsd core process driven servers, or any other SSL
 # listener. These are used via the C and/or Tcl API. 
+
 ns_section "ns/server/${servername}/module/nsopenssl/sockclients"
 ns_param taskdispatcher        "SSL Task Dispatcher"
 
 # Define an SSL context that will be used by the core nsd process to listen and
 # handle connections coming from normal users.
+
 ns_section "ns/server/${servername}/module/nsopenssl/servers/users"
 ns_param Port                  443
 ns_param Hostname              $hostname
@@ -60,6 +64,7 @@ ns_param Trace                 false
 
 # Define an SSL context that will be used by the core nsd process to listen and
 # handle connections coming from administrative users.
+
 ns_section "ns/server/${servername}/module/nsopenssl/servers/admins"
 ns_param Port                  8443
 ns_param Hostname              $hostname
@@ -81,6 +86,7 @@ ns_param Trace                 false
 
 # Define an SSL sockserver context that will be used to listen for connections
 # and handle them directly inside of nsopenssl.
+
 ns_section "ns/server/${servername}/module/nsopenssl/sockservers/tasklistener"
 ns_param Port                  9443  /* default listen port; can be overridden */
 ns_param Hostname              $hostname
@@ -102,6 +108,7 @@ ns_param Trace                 false
 
 # Define an SSL sockclient context that will be used to send out connections to
 # the given default port and host.
+
 ns_section "ns/server/${servername}/module/nsopenssl/sockclients/taskdispatcher"
 ns_param Port                  9443 /* default port to connect to; can be overridden */
 ns_param Hostname              $hostname /* default host to connect to; can be overridden */
@@ -122,7 +129,7 @@ ns_param CAFile                ca.pem
 ns_param Trace                 false
 
 
-/**********************************************************************************/
+#########################################################################################
 
 #
 # Applies to nsopenssl 2.x

@@ -200,6 +200,17 @@ static Ns_OpenSSLConn    *firstSSLConn    = NULL;
 static NsOpenSSLDriver   *firstSSLDriver  = NULL;
 
 /*
+ * Session cache id management
+ */
+ 
+typedef struct SessionCacheId {
+	Ns_Mutex lock;
+	int id;
+} SessionCacheId;
+
+static SessionCacheId *nextSessionCacheId;
+
+/*
  * Tcl Commands
  */
 
