@@ -304,9 +304,6 @@ extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
         char *module);
 
-extern int Ns_OpenSSLContextValidate (char *server, 
-        char *module, Ns_OpenSSLContext *sslcontext);
-
 extern int Ns_OpenSSLContextInit(char *server, char *module, 
         Ns_OpenSSLContext *sslcontext);
 
