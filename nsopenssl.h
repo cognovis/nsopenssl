@@ -45,7 +45,12 @@
 
 #include <ns.h>
 
-#define DRIVER_NAME                   "nsopenssl"
+#define DRIVER_NAME      "nsopenssl"
+
+#if 0
+/* XXX set this to have nsopenssl compile with aolserver 4.x */
+#define NS_MAJOR_VERSION 4
+#endif
 
 /*
  * The encryption library may be different. For example, you may have
@@ -70,6 +75,12 @@
 #define SSL_CRYPTO_LIBRARY_NAME   "OpenSSL"
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
+typedef struct NsOpenSSLModuleData {
+    char            *name;         /* Module name */
+    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
+    char            *dir;          /* Module directory (on disk) */
+} NsOpenSSLModuleData;
+
 /* Forward reference */
 struct NsServerSSLConnection;
 
@@ -80,14 +91,11 @@ struct NsServerSSLConnection;
 typedef struct NsServerSSLDriver {
     struct NsServerSSLDriver   *nextPtr;
     struct NsServerSSLConnection *firstFreePtr;
+    struct NsOpenSSLModuleData *module;
 
     Ns_Mutex         lock;
     int              refcnt;
     Ns_Driver        driver;
-
-    char            *module;       /* Module name */
-    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
-    char            *dir;          /* Module directory (on disk) */
 
     char            *location;     /* E.g. https://example.com:8443 */
     char            *address;      /* Advertised address */
@@ -125,14 +133,11 @@ struct NsClientSSLConnection;
 typedef struct NsClientSSLDriver {
     struct NsClientSSLDriver   *nextPtr;
     struct NsClientSSLConnection *firstFreePtr;
+    struct NsOpenSSLModuleData *module;
 
     Ns_Mutex         lock;
     int              refcnt;
     Ns_Driver        driver;
-
-    char            *module;       /* Module name */
-    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
-    char            *dir;          /* Module directory (on disk) */
 
     char            *location;     /* E.g. https://example.com:8443 */
     char            *address;      /* Advertised address */
@@ -165,18 +170,22 @@ typedef struct NsClientSSLConnection {
 
 /* common functions */
 extern int NsInitOpenSSL();
+extern NsOpenSSLModuleData *NsOpenSSLModuleDataInit(char *server, char *module);
+extern void NsOpenSSLModuleDataFree(NsOpenSSLModuleData *mPtr);
 
 /* server functions */
 #ifndef NS_MAJOR_VERSION
 extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module,
-    Ns_DrvProc *procs);
+    NsOpenSSLModuleData *mPtr, Ns_DrvProc *procs);
 #else
-extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module);
+extern NsServerSSLDriver *NsServerSSLCreateDriver(char *server, char *module,
+    NsOpenSSLModuleData *mPtr);
 #endif
 extern void NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr);
 
 /* client functions */
-extern NsClientSSLDriver *NsClientSSLCreateDriver(char *server, char *module);
+extern NsClientSSLDriver *NsClientSSLCreateDriver(char *server, char *module,
+    NsOpenSSLModuleData *mPtr);
 extern void NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr);
 
 /*

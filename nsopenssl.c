@@ -157,9 +157,15 @@ Ns_ModuleInit(char *server, char *module)
 {
     NsServerSSLDriver *sdPtr;
     NsClientSSLDriver *cdPtr;
+    NsOpenSSLModuleData *mPtr = NULL;
 
     if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
 	    != NS_OK) {
+	return NS_ERROR;
+    }
+
+    mPtr = NsOpenSSLModuleDataInit(server, module);
+    if (mPtr == NULL) {
 	return NS_ERROR;
     }
 
@@ -168,15 +174,15 @@ Ns_ModuleInit(char *server, char *module)
     }
 
 #ifndef NS_MAJOR_VERSION
-    sdPtr = NsServerSSLCreateDriver(server, module, sockProcs);
+    sdPtr = NsServerSSLCreateDriver(server, module, mPtr, sockProcs);
 #else
-    sdPtr = NsServerSSLCreateDriver(server, module);
+    sdPtr = NsServerSSLCreateDriver(server, module, mPtr);
 #endif
     if (sdPtr == NULL) {
 	return NS_ERROR;
     }
 
-    cdPtr = NsClientSSLCreateDriver(server, module);
+    cdPtr = NsClientSSLCreateDriver(server, module, mPtr);
     if (cdPtr == NULL) {
 	return NS_ERROR;
     }
@@ -220,7 +226,7 @@ SockStart(char *server, char *label, void **drvDataPtr)
     sdPtr->lsock = Ns_SockListen(sdPtr->bindaddr, sdPtr->port);
     if (sdPtr->lsock == INVALID_SOCKET) {
 	Ns_Fatal("%s: could not listen on %s:%d: %s",
-	    sdPtr->module, sdPtr->address ? sdPtr->address : "*",
+	    sdPtr->module->name, sdPtr->address ? sdPtr->address : "*",
 	    sdPtr->port, ns_sockstrerror(ns_sockerrno));
 	return NS_ERROR;
     }
@@ -315,7 +321,7 @@ SockThread(void *ignored)
 	nextPtr = sdPtr->nextPtr;
 	if (sdPtr->lsock != INVALID_SOCKET) {
 	    Ns_Log(Notice, "%s: listening on %s (%s:%d)",
-		sdPtr->module, sdPtr->location,
+		sdPtr->module->name, sdPtr->location,
 		sdPtr->address ? sdPtr->address : "*", sdPtr->port);
 	    if (max < sdPtr->lsock) {
 		max = sdPtr->lsock;
@@ -377,7 +383,7 @@ SockThread(void *ignored)
 
 		    if (Ns_QueueConn(sdPtr->driver, scPtr) != NS_OK) {
 			Ns_Log(Warning, "%s: connection dropped",
-			    sdPtr->module);
+			    sdPtr->module->name);
 			(void) SockClose(scPtr);
 		    }
 		}
@@ -388,7 +394,7 @@ SockThread(void *ignored)
 
     while ((sdPtr = firstSSLDriverPtr) != NULL) {
 	firstSSLDriverPtr = sdPtr->nextPtr;
-	Ns_Log(Notice, "%s: closing %s", sdPtr->module, sdPtr->location);
+	Ns_Log(Notice, "%s: closing %s", sdPtr->module->name, sdPtr->location);
 	ns_sockclose(sdPtr->lsock);
 	SockFreeConn(sdPtr, NULL);
     }
@@ -454,7 +460,7 @@ SockClose(void *arg)
     NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
     NsServerSSLDriver *sdPtr = scPtr->sdPtr;
 
-    Ns_Log(Debug, "%s: SockClose", sdPtr->module);
+    Ns_Log(Debug, "%s: SockClose", sdPtr->module->name);
     if (scPtr->sock != INVALID_SOCKET) {
 	if (scPtr->ssl != NULL) {
 	    NsServerSSLFlushConn(scPtr);

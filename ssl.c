@@ -104,7 +104,7 @@ NsServerSSLFlushConn(NsServerSSLConnection *scPtr)
 
 	if (BIO_flush(SSL_get_wbio(scPtr->ssl)) < 1) {
             Ns_Log(Error, "%s: BIO returned error on flushing buffer",
-                sdPtr->module);
+                sdPtr->module->name);
         }
 	return NS_OK;
 
@@ -171,7 +171,7 @@ void
 NsServerSSLDestroyConn(NsServerSSLConnection *scPtr)
 {
     Ns_Log(Debug, "%s: destroying conn (%p)",
-	scPtr == NULL ? DRIVER_NAME : scPtr->sdPtr->module, scPtr);
+	scPtr == NULL ? DRIVER_NAME : scPtr->sdPtr->module->name, scPtr);
 
     if (scPtr != NULL) {
 	if (scPtr->clientcert != NULL) {
@@ -195,7 +195,7 @@ NsServerSSLDestroyConn(NsServerSSLConnection *scPtr)
 	}
 #endif
 
-	Ns_Log(Debug, "%s: done destroying conn", scPtr->sdPtr->module);
+	Ns_Log(Debug, "%s: done destroying conn", scPtr->sdPtr->module->name);
     }
 }
 
@@ -332,7 +332,7 @@ NsServerSSLTrace(SSL *ssl, int where, int rc)
 	alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log(Notice, "%s: trace: %s%s%s%s%s", sdPtr->module,
+    Ns_Log(Notice, "%s: trace: %s%s%s%s%s", sdPtr->module->name,
 	SSL_state_string_long(ssl),
 	alertTypePrefix, alertType, alertDescPrefix, alertDesc);
 
@@ -359,7 +359,7 @@ ServerCreateStruct(NsServerSSLConnection *scPtr)
 {
     scPtr->ssl = SSL_new(scPtr->sdPtr->context);
     if (scPtr->ssl == NULL) {
-	Ns_Log(Error, "%s: error creating new SSL", scPtr->sdPtr->module);
+	Ns_Log(Error, "%s: error creating new SSL", scPtr->sdPtr->module->name);
 	return NS_ERROR;
     }
 
@@ -480,7 +480,7 @@ ServerRunHandshake(NsServerSSLConnection *scPtr)
 	Ns_Log(Warning,
 	    "%s: could not put socket in non-blocking mode; "
 	    "timeout may not be enforced: %s",
-	    scPtr->sdPtr->module, ns_sockstrerror(errno));
+	    scPtr->sdPtr->module->name, ns_sockstrerror(errno));
     }
 
     endtime = time(NULL) + scPtr->sdPtr->timeout + 1;
@@ -499,10 +499,10 @@ ServerRunHandshake(NsServerSSLConnection *scPtr)
 	if (error == SSL_ERROR_SYSCALL) {
 	    if (rc == 0) {
 		Ns_Log(Error, "%s: EOF during SSL handshake",
-		    scPtr->sdPtr->module);
+		    scPtr->sdPtr->module->name);
 	    } else {
 		Ns_Log(Error, "%s: error during SSL handshake: %s",
-		    scPtr->sdPtr->module, ns_sockstrerror(errno));
+		    scPtr->sdPtr->module->name, ns_sockstrerror(errno));
 	    }
 	    return NS_ERROR;
 
@@ -516,7 +516,7 @@ ServerRunHandshake(NsServerSSLConnection *scPtr)
 
 	} else {
 	    Ns_Log(Error, "%s: error %d/%d during SSL handshake",
-		scPtr->sdPtr->module, rc, error);
+		scPtr->sdPtr->module->name, rc, error);
 	    return NS_ERROR;
 	}
 
@@ -530,13 +530,13 @@ ServerRunHandshake(NsServerSSLConnection *scPtr)
 
 	if (n < 0) {
 	    Ns_Log(Error, "%s: select failed: %s",
-		scPtr->sdPtr->module, ns_sockstrerror(errno));
+		scPtr->sdPtr->module->name, ns_sockstrerror(errno));
 	    return NS_ERROR;
 	}
 
 	if (n == 0) {
 	    Ns_Log(Notice, "%s: SSL handshake timeout",
-		scPtr->sdPtr->module);
+		scPtr->sdPtr->module->name);
 	    return NS_ERROR;
 	}
     }
@@ -548,7 +548,7 @@ ServerRunHandshake(NsServerSSLConnection *scPtr)
 	Ns_Log(Warning,
 	    "%s: could not put socket in blocking mode; "
 	    "results unpredictable: %s",
-	    scPtr->sdPtr->module, ns_sockstrerror(errno));
+	    scPtr->sdPtr->module->name, ns_sockstrerror(errno));
     }
 #endif
 

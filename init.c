@@ -117,17 +117,81 @@ NsInitOpenSSL()
     if (
 	   NsOpenSSLInitThreads()                      == NS_ERROR
 	|| InitializeSSL()                             == NS_ERROR
-#if 0
-	/* Haven't moved this here yet... */
-	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
-#endif
     ) {
 	return NS_ERROR;
     }
-
-
     return NS_OK;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsOpenSSLModuleDataInit --
+ *
+ *       Fill the structure that maintains data common between the
+ *       server and the client nsopenssl functions.
+ *
+ * Results:
+ *       An NsOpenSSLModuleData* or NULL.
+ *
+ * Side effects:
+ *       None.
+ *
+ *---------------------------------------------------------------------- */
+
+NsOpenSSLModuleData *
+NsOpenSSLModuleDataInit(char *server, char *module)
+{
+    NsOpenSSLModuleData *mPtr = NULL;
+
+    mPtr = (NsOpenSSLModuleData *) ns_calloc(1, sizeof *mPtr);
+
+    if (
+	MakeModuleDir(server, module, &mPtr->dir)  == NS_ERROR
+	) {
+	if (mPtr->dir      != NULL)      ns_free(mPtr->dir);
+	ns_free(mPtr);
+	return NULL;
+    }
+
+    mPtr->name = module;
+    mPtr->configPath = Ns_ConfigGetPath(server, module, NULL);
+
+    return mPtr;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsOpenSSLModuleDataFree --
+ *
+ *      Destroy an NsOpenSSLModuleDataFree.
+ *
+ * Results:
+ *      None.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+NsOpenSSLModuleDataFree(NsOpenSSLModuleData *mPtr)
+{
+    NsServerSSLConnection *scPtr;
+
+    Ns_Log(Debug, "%s: freeing(%p)",
+	mPtr == NULL ? DRIVER_NAME : mPtr->name, mPtr);
+
+    if (mPtr != NULL) {
+	if (mPtr->name  != NULL)          ns_free(mPtr->name);
+	if (mPtr->configPath  != NULL)    ns_free(mPtr->configPath);
+	if (mPtr->dir != NULL)            ns_free(mPtr->dir);
+	ns_free(mPtr);
+    }
+}
+
 
 /*
  *----------------------------------------------------------------------
@@ -147,9 +211,11 @@ NsInitOpenSSL()
 
 NsServerSSLDriver *
 #ifndef NS_MAJOR_VERSION
-NsServerSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
+NsServerSSLCreateDriver(char *server, char *module,
+    NsOpenSSLModuleData *mPtr, Ns_DrvProc *procs)
 #else
-NsServerSSLCreateDriver(char *server, char *module)
+NsServerSSLCreateDriver(char *server, char *module,
+    NsOpenSSLModuleData *mPtr)
 #endif
 {
     NsServerSSLDriver *sdPtr = NULL;
@@ -157,16 +223,12 @@ NsServerSSLCreateDriver(char *server, char *module)
     sdPtr = (NsServerSSLDriver *) ns_calloc(1, sizeof *sdPtr);
 
     Ns_MutexSetName(&sdPtr->lock, module);
-    sdPtr->module = module;
+    sdPtr->module = mPtr;
     sdPtr->refcnt = 1;
     sdPtr->lsock = INVALID_SOCKET;
-    sdPtr->configPath = Ns_ConfigGetPath(server, module, NULL);
-
+  
     if (
-	/* XXX MakeModuleDir needs to be moved to NsOpenSSLInit, but resides in both
-           XXX client and server structs...so we'll leave it here for now */
-	   MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
-	|| ServerMakeContext(sdPtr)                    == NS_ERROR
+	   ServerMakeContext(sdPtr)                    == NS_ERROR
 	|| ServerSetProtocols(sdPtr)                   == NS_ERROR
 	|| ServerSetCipherSuite(sdPtr)                 == NS_ERROR
 	|| ServerLoadCertificate(sdPtr)                == NS_ERROR
@@ -180,20 +242,20 @@ NsServerSSLCreateDriver(char *server, char *module)
 	return NULL;
     }
 
-    sdPtr->timeout = ConfigIntDefault(module, sdPtr->configPath,
+    sdPtr->timeout = ConfigIntDefault(module, sdPtr->module->configPath,
 	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
     if (sdPtr->timeout < 1) {
 	sdPtr->timeout = DEFAULT_SOCKTIMEOUT;
     }
 
-    sdPtr->bufsize = ConfigIntDefault(module, sdPtr->configPath,
+    sdPtr->bufsize = ConfigIntDefault(module, sdPtr->module->configPath,
 	CONFIG_BUFFERSIZE, DEFAULT_BUFFERSIZE);
     if (sdPtr->bufsize < 1) {
 	sdPtr->bufsize = DEFAULT_BUFFERSIZE;
     }
 
-    sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-                                          CONFIG_RANDOMFILE, sdPtr->dir, NULL);
+    sdPtr->randomFile = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
+                                          CONFIG_RANDOMFILE, sdPtr->module->dir, NULL);
 
 #ifndef NS_MAJOR_VERSION
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
@@ -223,17 +285,17 @@ NsServerSSLCreateDriver(char *server, char *module)
  */
 
 NsClientSSLDriver *
-NsClientSSLCreateDriver(char *server, char *module)
+NsClientSSLCreateDriver(char *server, char *module,
+			NsOpenSSLModuleData *mPtr)
 {
     NsClientSSLDriver *cdPtr = NULL;
 
     cdPtr = (NsClientSSLDriver *) ns_calloc(1, sizeof *cdPtr);
 
     Ns_MutexSetName(&cdPtr->lock, module);
-    cdPtr->module = module;
+    cdPtr->module = mPtr;
     cdPtr->refcnt = 1;
     cdPtr->lsock = INVALID_SOCKET;
-    cdPtr->configPath = Ns_ConfigGetPath(server, module, NULL);
 
     if (
 	   ClientMakeContext(cdPtr)                    == NS_ERROR
@@ -252,21 +314,22 @@ NsClientSSLCreateDriver(char *server, char *module)
 	return NULL;
     }
 
-    cdPtr->timeout = ConfigIntDefault(module, cdPtr->configPath,
+    cdPtr->timeout = ConfigIntDefault(module, cdPtr->module->configPath,
 	CONFIG_SOCKTIMEOUT, DEFAULT_SOCKTIMEOUT);
     if (cdPtr->timeout < 1) {
 	cdPtr->timeout = DEFAULT_SOCKTIMEOUT;
     }
 
-    cdPtr->bufsize = ConfigIntDefault(module, cdPtr->configPath,
+    cdPtr->bufsize = ConfigIntDefault(module, cdPtr->module->configPath,
 	CONFIG_BUFFERSIZE, DEFAULT_BUFFERSIZE);
     if (cdPtr->bufsize < 1) {
 	cdPtr->bufsize = DEFAULT_BUFFERSIZE;
     }
 
     /* XXX this should probably be moved to a common init function */
-    cdPtr->randomFile = ConfigPathDefault(cdPtr->module, cdPtr->configPath,
-                                          CONFIG_RANDOMFILE, cdPtr->dir, NULL);
+    cdPtr->randomFile = ConfigPathDefault(cdPtr->module->name, 
+			    cdPtr->module->configPath, CONFIG_RANDOMFILE,
+			    cdPtr->module->dir, NULL);
 
     return cdPtr;
 }
@@ -293,7 +356,7 @@ NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr)
     NsServerSSLConnection *scPtr;
 
     Ns_Log(Debug, "%s: freeing(%p)",
-	sdPtr == NULL ? DRIVER_NAME : sdPtr->module, sdPtr);
+	sdPtr == NULL ? DRIVER_NAME : sdPtr->module->name, sdPtr);
 
     if (sdPtr != NULL) {
 	while ((scPtr = sdPtr->firstFreePtr) != NULL) {
@@ -301,8 +364,8 @@ NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr)
 	    ns_free(scPtr);
 	}
 	Ns_MutexDestroy(&sdPtr->lock);
+	if (sdPtr->module   != NULL)      ns_free(sdPtr->module);
 	if (sdPtr->context  != NULL) SSL_CTX_free(sdPtr->context);
-	if (sdPtr->dir      != NULL)      ns_free(sdPtr->dir);
 	if (sdPtr->address  != NULL)      ns_free(sdPtr->address);
 	if (sdPtr->location != NULL)      ns_free(sdPtr->location);
 	ns_free(sdPtr);
@@ -331,7 +394,7 @@ NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr)
     NsClientSSLConnection *ccPtr;
 
     Ns_Log(Debug, "%s: freeing(%p)",
-	cdPtr == NULL ? DRIVER_NAME : cdPtr->module, cdPtr);
+	cdPtr == NULL ? DRIVER_NAME : cdPtr->module->name, cdPtr);
 
     if (cdPtr != NULL) {
 	while ((ccPtr = cdPtr->firstFreePtr) != NULL) {
@@ -339,8 +402,8 @@ NsClientSSLFreeDriver(NsClientSSLDriver *cdPtr)
 	    ns_free(ccPtr);
 	}
 	Ns_MutexDestroy(&cdPtr->lock);
+	if (cdPtr->module   != NULL)      ns_free(cdPtr->module);
 	if (cdPtr->context  != NULL) SSL_CTX_free(cdPtr->context);
-	if (cdPtr->dir      != NULL)      ns_free(cdPtr->dir);
 	if (cdPtr->address  != NULL)      ns_free(cdPtr->address);
 	if (cdPtr->location != NULL)      ns_free(cdPtr->location);
 	ns_free(cdPtr);
@@ -381,7 +444,9 @@ InitializeSSL(void)
  *
  * MakeModuleDir --
  *
- *       Set *dirp to the absolute path of the module's directory.
+ *       Set *dirp to the absolute path of the module's
+ *       directory. This is actually called twice if both server and
+ *       client are enabled.
  *
  * Results:
  *       NS_OK or NS_ERROR.
@@ -389,8 +454,7 @@ InitializeSSL(void)
  * Side effects:
  *       May create the directory on disk.
  *
- *----------------------------------------------------------------------
- */
+ *---------------------------------------------------------------------- */
 
 static int
 MakeModuleDir(char *server, char *module, char **dirp)
@@ -432,7 +496,7 @@ ServerMakeContext(NsServerSSLDriver *sdPtr)
 {
     sdPtr->context = SSL_CTX_new(SSLv23_server_method());
     if (sdPtr->context == NULL) {
-	Ns_Log(Error, "%s: error creating SSL context", sdPtr->module);
+	Ns_Log(Error, "%s: error creating SSL context", sdPtr->module->name);
 	return NS_ERROR;
     }
 
@@ -447,13 +511,13 @@ ServerMakeContext(NsServerSSLDriver *sdPtr)
     /* Temporary key callback required for 40-bit export browsers */
     SSL_CTX_set_tmp_rsa_callback(sdPtr->context, IssueTmpRSAKey);
 
-    if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
+    if (ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
 	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
 	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_PEER,
 	    ServerVerifyClientCallback);
     }
 
-    if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
+    if (ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
 	    CONFIG_TRACE, DEFAULT_TRACE)) {
 	SSL_CTX_set_info_callback(sdPtr->context, NsServerSSLTrace);
     }
@@ -483,7 +547,7 @@ ClientMakeContext(NsClientSSLDriver *cdPtr)
 #if 0
     cdPtr->context = SSL_CTX_new(SSLv23_server_method());
     if (cdPtr->context == NULL) {
-	Ns_Log(Error, "%s: error creating client SSL context", cdPtr->module);
+	Ns_Log(Error, "%s: error creating client SSL context", cdPtr->module->name);
 	return NS_ERROR;
     }
 
@@ -498,13 +562,13 @@ ClientMakeContext(NsClientSSLDriver *cdPtr)
     /* Temporary key callback required for 40-bit export browsers */
     SSL_CTX_set_tmp_rsa_callback(cdPtr->context, IssueTmpRSAKey);
 
-    if (ConfigBoolDefault(cdPtr->module, cdPtr->configPath,
+    if (ConfigBoolDefault(cdPtr->module->name, cdPtr->module->configPath,
 	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
 	SSL_CTX_set_verify(cdPtr->context, SSL_VERIFY_PEER,
 	    ServerVerifyClientCallback);
     }
 
-    if (ConfigBoolDefault(cdPtr->module, cdPtr->configPath,
+    if (ConfigBoolDefault(cdPtr->module->name, cdPtr->module->configPath,
 	    CONFIG_TRACE, DEFAULT_TRACE)) {
 	SSL_CTX_set_info_callback(cdPtr->context, NsClientSSLTrace);
     }
@@ -533,14 +597,14 @@ static int
 ServerSetCipherSuite(NsServerSSLDriver *sdPtr)
 {
     int rc;
-    char *value = ConfigStringDefault(sdPtr->module, sdPtr->configPath,
+    char *value = ConfigStringDefault(sdPtr->module->name, sdPtr->module->configPath,
 	CONFIG_CIPHERSUITE, DEFAULT_CIPHERSUITE);
 
     rc = SSL_CTX_set_cipher_list(sdPtr->context, value);
 
     if (rc == 0) {
 	Ns_Log(Error, "%s: error configuring cipher suite to \"%s\"",
-	    sdPtr->module, value);
+	    sdPtr->module->name, value);
 	return NS_ERROR;
     }
 
@@ -587,7 +651,7 @@ ServerSetProtocols(NsServerSSLDriver *sdPtr)
     foundConfig = 0;
     bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
 
-    config = Ns_ConfigGetSection(sdPtr->configPath);
+    config = Ns_ConfigGetSection(sdPtr->module->configPath);
     if (config != NULL) {
 	for (i = 0, l = Ns_SetSize(config); i < l; i++) {
 	    if (!STRIEQ(Ns_SetKey(config, i), "Protocol")) {
@@ -606,7 +670,7 @@ ServerSetProtocols(NsServerSSLDriver *sdPtr)
 
 	    if (protocolMap[j].name == NULL) {
 		Ns_Log(Error, "%s: unknown protocol \"%s\"",
-		    sdPtr->module, value);
+		    sdPtr->module->name, value);
 		return NS_ERROR;
 	    }
 	}
@@ -640,7 +704,7 @@ ServerSetProtocols(NsServerSSLDriver *sdPtr)
 int
 ServerInitSessionCache(NsServerSSLDriver *sdPtr)
 {
-    int cacheEnabled = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
+    int cacheEnabled = ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
         CONFIG_SESSIONCACHE, DEFAULT_SESSIONCACHE);
     int cacheSize;
     long timeout;
@@ -654,11 +718,11 @@ ServerInitSessionCache(NsServerSSLDriver *sdPtr)
             (void *) &s_server_session_id_context,
             sizeof(s_server_session_id_context));
 
-	timeout = (long) ConfigIntDefault(sdPtr->module, sdPtr->configPath,
+	timeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
 	    CONFIG_SESSIONTIMEOUT, DEFAULT_SESSIONTIMEOUT);
 	SSL_CTX_set_timeout(sdPtr->context, timeout);
 
-	cacheSize = ConfigIntDefault(sdPtr->module, sdPtr->configPath,
+	cacheSize = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
 	    CONFIG_SESSIONCACHESIZE, DEFAULT_SESSIONCACHESIZE);
 	SSL_CTX_sess_set_cache_size(sdPtr->context, cacheSize);
 
@@ -696,8 +760,8 @@ static int
 ServerLoadCertificate(NsServerSSLDriver *sdPtr)
 {
     int rc;
-    char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-	CONFIG_CERTFILE, sdPtr->dir, DEFAULT_CERTFILE);
+    char *file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
+	CONFIG_CERTFILE, sdPtr->module->dir, DEFAULT_CERTFILE);
 
     rc = SSL_CTX_use_certificate_chain_file(sdPtr->context, file);
 #if 0
@@ -706,7 +770,7 @@ ServerLoadCertificate(NsServerSSLDriver *sdPtr)
 
     if (rc == 0) {
 	Ns_Log(Error, "%s: error loading certificate file \"%s\"",
-	    sdPtr->module, file);
+	    sdPtr->module->name, file);
     }
 
     ns_free(file);
@@ -734,14 +798,14 @@ static int
 ServerLoadKey(NsServerSSLDriver *sdPtr)
 {
     int rc;
-    char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-	CONFIG_KEYFILE, sdPtr->dir, DEFAULT_KEYFILE);
+    char *file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
+	CONFIG_KEYFILE, sdPtr->module->dir, DEFAULT_KEYFILE);
 
     rc = SSL_CTX_use_PrivateKey_file(sdPtr->context, file, SSL_FILETYPE_PEM);
 
     if (rc == 0) {
 	Ns_Log(Error, "%s: error loading private key file \"%s\"",
-	    sdPtr->module, file);
+	    sdPtr->module->name, file);
     }
 
     ns_free(file);
@@ -770,7 +834,7 @@ ServerCheckKey(NsServerSSLDriver *sdPtr)
 {
     if (SSL_CTX_check_private_key(sdPtr->context) == 0) {
 	Ns_Log(Error, "%s: private key does not match certificate",
-	    sdPtr->module);
+	    sdPtr->module->name);
 	return NS_ERROR;
     }
     return NS_OK;
@@ -806,17 +870,17 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
 
     status = NS_OK;
 
-    file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-	CONFIG_CAFILE, sdPtr->dir, DEFAULT_CAFILE);
+    file = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
+	CONFIG_CAFILE, sdPtr->module->dir, DEFAULT_CAFILE);
 
     fd = open(file, O_RDONLY);
     if (fd < 0) {
 	if (errno == ENOENT) {
 	    Ns_Log(Notice, "%s: CA certificate file does not exist",
-		sdPtr->module);
+		sdPtr->module->name);
 	} else {
 	    Ns_Log(Error, "%s: error opening CA certificate file",
-		sdPtr->module);
+		sdPtr->module->name);
 	    status = NS_ERROR;
 	}
 	ns_free(file);
@@ -827,17 +891,17 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
 	close(fd);
     }
 
-    dir = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-	CONFIG_CADIR, sdPtr->dir, DEFAULT_CADIR);
+    dir = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
+	CONFIG_CADIR, sdPtr->module->dir, DEFAULT_CADIR);
 
     dd = opendir(dir);
     if (dd == NULL) {
 	if (errno == ENOENT) {
 	    Ns_Log(Notice, "%s: CA certificate directory does not exist",
-		sdPtr->module);
+		sdPtr->module->name);
 	} else {
 	    Ns_Log(Error, "%s: error opening CA certificate directory",
-		sdPtr->module);
+		sdPtr->module->name);
 	    status = NS_ERROR;
 	}
 
@@ -854,7 +918,7 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
 
 	if (rc == 0) {
 	    Ns_Log(Error, "%s: error loading CA certificates",
-		sdPtr->module);
+		sdPtr->module->name);
 	    status = NS_ERROR;
 	}
     }
@@ -885,8 +949,10 @@ ServerLoadCACerts(NsServerSSLDriver *sdPtr)
 static int
 ServerInitLocation(NsServerSSLDriver *sdPtr)
 {
-    char       *module = sdPtr->module;
-    char       *path = sdPtr->configPath;
+    /* XXX check these decls -- are these not set yet? They should already be in sdPtr
+     * XXX If so, clean up this routine */
+    char       *module = sdPtr->module->name;
+    char       *path = sdPtr->module->configPath;
     char       *hostname;
     char       *lookupHostname;
     Ns_DString  ds;
@@ -997,19 +1063,19 @@ SeedPRNG(NsServerSSLDriver *sdPtr)
     int seedbytes;
 
     if (PRNGIsSeeded(sdPtr)) {
-        Ns_Log(Debug, "%s: PRNG already has enough entropy", sdPtr->module); 
+        Ns_Log(Debug, "%s: PRNG already has enough entropy", sdPtr->module->name); 
         return NS_TRUE;
     }
 
-    Ns_Log(Notice, "%s: Seeding the PRNG", sdPtr->module); 
+    Ns_Log(Notice, "%s: Seeding the PRNG", sdPtr->module->name); 
 
-    seedbytes = ConfigIntDefault(sdPtr->module, sdPtr->configPath,
+    seedbytes = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
 	CONFIG_SEEDBYTES, DEFAULT_SEEDBYTES);
 
     /* The user configured a file to use; try that first */
     if (AddEntropyFromRandomFile(sdPtr, seedbytes) != NS_OK) {
         Ns_Log(Warning, "%s: %s parameter set, but can't access file %s",
-                        sdPtr->module, CONFIG_RANDOMFILE, file);
+                        sdPtr->module->name, CONFIG_RANDOMFILE, file);
     }
 
     if (PRNGIsSeeded(sdPtr)) {
@@ -1029,14 +1095,14 @@ SeedPRNG(NsServerSSLDriver *sdPtr)
     RAND_add(buf_ptr, seedbytes, (long) seedbytes);
     Ns_Free(buf_ptr);
     Ns_Log(Notice, "%s: Seeded PRNG with %d bytes from Ns_DRand",
-                    sdPtr->module, seedbytes); 
+                    sdPtr->module->name, seedbytes); 
 
     if (PRNGIsSeeded(sdPtr)) {
         return NS_TRUE;
     }
 
     Ns_Log(Warning, "%s: Failed to seed PRNG with enough entropy",
-                     sdPtr->module); 
+                     sdPtr->module->name); 
     return NS_FALSE;
 }
 
@@ -1061,7 +1127,7 @@ PRNGIsSeeded (NsServerSSLDriver *sdPtr)
 {
     if (RAND_status()) {              
         Ns_Log(Debug, "%s: RAND_status reports sufficient entropy for the PRNG",
-                       sdPtr->module);
+                       sdPtr->module->name);
         return NS_TRUE;                                                           
     }             
     
@@ -1101,12 +1167,12 @@ IssueTmpRSAKey(SSL *ssl, int export, int keylen)
     if (SeedPRNG(sdPtr)) {
         rsa_tmp = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
         Ns_Log(Notice, "%s: Generated %d-bit temporary RSA key",
-                        sdPtr->module, keylen);
+                        sdPtr->module->name, keylen);
         return rsa_tmp;
     } else {
         Ns_Log(Warning, 
                "%s: Cannot generate temporary RSA key due to insufficient entropy in PRNG",
-               sdPtr->module);
+               sdPtr->module->name);
         return NULL; 
     }
 }
@@ -1135,11 +1201,11 @@ AddEntropyFromRandomFile(NsServerSSLDriver *sdPtr, long maxbytes) {
     if (access(sdPtr->randomFile, F_OK) == 0) {
         if ((readbytes = RAND_load_file(sdPtr->randomFile, maxbytes))) {
             Ns_Log(Debug, "%s: Obtained %d random bytes from %s", 
-                           sdPtr->module, readbytes, sdPtr->randomFile);
+                           sdPtr->module->name, readbytes, sdPtr->randomFile);
             return NS_OK;
         } else {
             Ns_Log(Warning, "%s: Unable to retrieve any random data from %s",
-                             sdPtr->module, sdPtr->randomFile);
+                             sdPtr->module->name, sdPtr->randomFile);
             return NS_FALSE;
         }
     }

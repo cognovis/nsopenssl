@@ -1,5 +1,12 @@
 2001-06-15  Scott S. Goodwin  <scott@scottg.net>
 
+	* init.c, nsopenssl.c, nsopenssl.h, ssl.c: created
+	NsOpenSSLModuleData structure to hold the data about the module
+	that is common between client and server functions. Pulled this
+	data out of the NsServerSSLDriver and NsClientSSLDriver
+	struct. Changed all references like sdPtr->module to be
+	sdPtr->module->name.
+
 	* init.c: changed ServerLoadCertificate to look for a certificate
 	chain after the server's certificate. Simply append all of the
 	certs in the chain to the end of the server cert file. Having a
