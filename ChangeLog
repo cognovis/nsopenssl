@@ -1,7 +1,9 @@
 2001-06-12  Scott S. Goodwin  <scott@scottg.net>
 
-	* init.c: prefixed functions that are server-specific with "Server"
-	to make room for the upcoming client functions.
+	* init.c, nsopenssl.c, nsopenssl.h: prefixed static functions that
+	are server-specific with "Server", and replaced "NsOpenSSL" with
+	"NsServerSSL" to make room for the upcoming client functions,
+	which will be called "NsClientSSL".
 
 	* nsopenssl-client-test.htm: added this file to test connectivity
 	for the nsopenssl client code.

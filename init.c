@@ -47,7 +47,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 static int InitializeSSL(void);
 static int MakeModuleDir(char *server, char *module, char **dirp);
-static int ServerMakeSSLContext(NsOpenSSLDriver *sdPtr);
+static int ServerMakeContext(NsOpenSSLDriver *sdPtr);
 static int ServerSetCipherSuite(NsOpenSSLDriver *sdPtr);
 static int ServerSetProtocols(NsOpenSSLDriver *sdPtr);
 static int ServerLoadCertificate(NsOpenSSLDriver *sdPtr);
@@ -55,7 +55,7 @@ static int ServerLoadKey(NsOpenSSLDriver *sdPtr);
 static int ServerCheckKey(NsOpenSSLDriver *sdPtr);
 static int ServerLoadCACerts(NsOpenSSLDriver *sdPtr);
 static int ServerInitLocation(NsOpenSSLDriver *sdPtr);
-static int ServerClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static int ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int ServerInitSessionCache(NsOpenSSLDriver *sdPtr);
 
 /* What happens if we run multiple copies of nsopenssl in the same server? */
@@ -108,7 +108,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
 	   NsOpenSSLInitThreads()                      == NS_ERROR
 	|| InitializeSSL()                             == NS_ERROR
 	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
-	|| ServerMakeSSLContext(sdPtr)                 == NS_ERROR
+	|| ServerMakeContext(sdPtr)                    == NS_ERROR
 	|| ServerSetProtocols(sdPtr)                   == NS_ERROR
 	|| ServerSetCipherSuite(sdPtr)                 == NS_ERROR
 	|| ServerLoadCertificate(sdPtr)                == NS_ERROR
@@ -253,7 +253,7 @@ MakeModuleDir(char *server, char *module, char **dirp)
 /*
  *----------------------------------------------------------------------
  *
- * ServerMakeSSLContext --
+ * ServerMakeContext --
  *
  *       Create a new SSL context for the specified SSLDriver.
  *
@@ -267,7 +267,7 @@ MakeModuleDir(char *server, char *module, char **dirp)
  */
 
 static int
-ServerMakeSSLContext(NsOpenSSLDriver *sdPtr)
+ServerMakeContext(NsOpenSSLDriver *sdPtr)
 {
     sdPtr->context = SSL_CTX_new(SSLv23_server_method());
     if (sdPtr->context == NULL) {
@@ -289,12 +289,12 @@ ServerMakeSSLContext(NsOpenSSLDriver *sdPtr)
     if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_CLIENTVERIFY, DEFAULT_CLIENTVERIFY)) {
 	SSL_CTX_set_verify(sdPtr->context, SSL_VERIFY_PEER,
-	    ServerClientVerifyCallback);
+	    ServerVerifyClientCallback);
     }
 
     if (ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_TRACE, DEFAULT_TRACE)) {
-	SSL_CTX_set_info_callback(sdPtr->context, NsOpenSSLTrace);
+	SSL_CTX_set_info_callback(sdPtr->context, NsServerSSLTrace);
     }
 
     return NS_OK;
@@ -739,7 +739,7 @@ ServerInitLocation(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
+ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 {
     return 1;
 }

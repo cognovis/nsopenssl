@@ -130,14 +130,19 @@ extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
  * ssl.c
  */
 
-extern int NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr);
-extern void NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr);
-extern void NsOpenSSLTrace(SSL *ssl, int where, int rc);
-extern int NsOpenSSLShutdown(SSL *ssl);
-extern int NsOpenSSLFlush(NsOpenSSLConnection *scPtr);
-extern void NsDestroyOpenSSLConn(NsOpenSSLConnection *scPtr);
-extern int NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
+extern int NsServerSSLCreateConn(NsOpenSSLConnection *scPtr);
+extern void NsServerSSLDestroyConn(NsOpenSSLConnection *scPtr);
+extern void NsServerSSLTrace(SSL *ssl, int where, int rc);
+extern int NsServerSSLShutdownConn(SSL *ssl);
+
+/*
+ * nsopenssl.c
+ */
+
+extern int NsServerSSLFlushConn(NsOpenSSLConnection *scPtr);
+extern void NsDestroySSLConn(NsOpenSSLConnection *scPtr);
+extern int NsServerSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
     int toread);
-extern int NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
+extern int NsServerSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
     int towrite);
 

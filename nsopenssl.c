@@ -448,9 +448,9 @@ SockClose(void *arg)
     Ns_Log(Debug, "%s: SockClose", sdPtr->module);
     if (scPtr->sock != INVALID_SOCKET) {
 	if (scPtr->ssl != NULL) {
-	    NsOpenSSLFlush(scPtr);
+	    NsServerSSLFlushConn(scPtr);
 	}
-	NsOpenSSLDestroyConn(scPtr);
+	NsServerSSLDestroyConn(scPtr);
     }
     SockFreeConn(sdPtr, scPtr);
     return NS_OK;
@@ -479,7 +479,7 @@ SockRead(void *arg, void *vbuf, int toread)
 {
     NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    return NsOpenSSLRecv(scPtr, vbuf, toread);
+    return NsServerSSLRecv(scPtr, vbuf, toread);
 }
 
 
@@ -505,7 +505,7 @@ SockWrite(void *arg, void *buf, int towrite)
 {
     NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    return NsOpenSSLSend(scPtr, buf, towrite);
+    return NsServerSSLSend(scPtr, buf, towrite);
 }
 
 
@@ -630,7 +630,7 @@ SockConnectionFd(void *arg)
 {
     NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
-    if (NsOpenSSLFlush(scPtr) == NS_ERROR) {
+    if (NsServerSSLFlushConn(scPtr) == NS_ERROR) {
 	return -1;
     }
 
@@ -733,7 +733,7 @@ SockInit(void *arg)
     NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
 
     if (scPtr->ssl == NULL) {
-	return NsOpenSSLCreateConn(scPtr);
+	return NsServerSSLCreateConn(scPtr);
     } else {
 	return NS_OK;
     }
@@ -781,7 +781,7 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
             scPtr->sdPtr = driver->arg;
             scPtr->sock = sock->sock;
             sock->arg = scPtr;
-            if (NsOpenSSLCreateConn(scPtr) != NS_OK) {
+            if (NsServerSSLCreateConn(scPtr) != NS_OK) {
                 return -1;
             }
         }    
@@ -793,9 +793,9 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
         total = 0;
         do {      
             if (cmd == DriverSend) {
-                n = NsOpenSSLSend(sock->arg, bufs->ns_buf, bufs->ns_len);
+                n = NsServerSSLSend(sock->arg, bufs->ns_buf, bufs->ns_len);
             } else {
-                n = NsOpenSSLRecv(sock->arg, bufs->ns_buf, bufs->ns_len);
+                n = NsServerSSLRecv(sock->arg, bufs->ns_buf, bufs->ns_len);
             }
             if (n < 0 && total > 0) {
                 /* NB: Mask error if some bytes were read. */
@@ -808,7 +808,7 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
         break;
               
     case DriverKeep:
-        if (sock->arg != NULL && NsOpenSSLFlush(sock->arg) == NS_OK) {
+        if (sock->arg != NULL && NsServerSSLFlushConn(sock->arg) == NS_OK) {
             n = 0;
         } else {
             n = -1;
@@ -817,8 +817,8 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, Ns_Buf *bufs, int nbufs)
               
     case DriverClose:
         if (sock->arg != NULL) {
-            (void) NsOpenSSLFlush(sock->arg);
-            NsOpenSSLDestroyConn(sock->arg);
+            (void) NsServerSSLFlushConn(sock->arg);
+            NsServerSSLDestroyConn(sock->arg);
             ns_free(sock->arg);
             sock->arg = NULL;
         }

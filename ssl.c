@@ -39,15 +39,15 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
 
-static int SetNonBlocking(NsOpenSSLConnection *scPtr, int flag);
-static int CreateSSL(NsOpenSSLConnection *scPtr);
-static int CreateBIOStack(NsOpenSSLConnection *scPtr);
-static int RunSSLHandshake(NsOpenSSLConnection *scPtr);
+static int ServerSetNonBlocking(NsOpenSSLConnection *scPtr, int flag);
+static int ServerCreateStruct(NsOpenSSLConnection *scPtr);
+static int ServerCreateBIOStack(NsOpenSSLConnection *scPtr);
+static int ServerRunHandshake(NsOpenSSLConnection *scPtr);
 
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLShutdown --
+ * NsServerSSLShutdownConn --
  *
  *      Shut down an SSL connection.
  *
@@ -63,7 +63,7 @@ static int RunSSLHandshake(NsOpenSSLConnection *scPtr);
  */
 
 int
-NsOpenSSLShutdown(SSL *ssl)
+NsServerSSLShutdownConn(SSL *ssl)
 {
     int i;
     int rc;
@@ -79,9 +79,8 @@ NsOpenSSLShutdown(SSL *ssl)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLFlushConn --
+ * NsServerSSLFlushConn --
  *
- 
  *
  * Results:
  *      Always NS_OK.
@@ -93,7 +92,7 @@ NsOpenSSLShutdown(SSL *ssl)
  */
 
 int
-NsOpenSSLFlush(NsOpenSSLConnection *scPtr)
+NsServerSSLFlushConn(NsOpenSSLConnection *scPtr)
 {
     NsOpenSSLDriver     *sdPtr = scPtr->sdPtr;
 
@@ -115,7 +114,7 @@ NsOpenSSLFlush(NsOpenSSLConnection *scPtr)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLCreateConn --
+ * NsServerSSLCreateConn --
  *
  *	Create an SSL connection. The socket has already been accept()ed
  *      and is ready for reading/writing.
@@ -134,16 +133,16 @@ NsOpenSSLFlush(NsOpenSSLConnection *scPtr)
  */
 
 int
-NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr)
+NsServerSSLCreateConn(NsOpenSSLConnection *scPtr)
 {
     if (
-	   CreateSSL(scPtr)                            == NS_ERROR
-	|| CreateBIOStack(scPtr)                       == NS_ERROR
-	|| RunSSLHandshake(scPtr)                      == NS_ERROR
+	   ServerCreateStruct(scPtr)                  == NS_ERROR
+	|| ServerCreateBIOStack(scPtr)                == NS_ERROR
+	|| ServerRunHandshake(scPtr)                  == NS_ERROR
     ) {
 	SSL_set_shutdown(scPtr->ssl,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
-	NsOpenSSLShutdown(scPtr->ssl);
-	NsOpenSSLDestroyConn(scPtr);
+	NsServerSSLShutdownConn(scPtr->ssl);
+	NsServerSSLDestroyConn(scPtr);
 
 	return NS_ERROR;
     }
@@ -154,7 +153,7 @@ NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLDestroyConn --
+ * NsServerSSLDestroyConn --
  *
  *  Destroy an SSL connection.
  *
@@ -169,7 +168,7 @@ NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr)
  */
 
 void
-NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr)
+NsServerSSLDestroyConn(NsOpenSSLConnection *scPtr)
 {
     Ns_Log(Debug, "%s: destroying conn (%p)",
 	scPtr == NULL ? DRIVER_NAME : scPtr->sdPtr->module, scPtr);
@@ -203,7 +202,7 @@ NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLRecv --
+ * NsServerSSLRecv --
  *
  *  Read data from an SSL connection
  *
@@ -218,7 +217,7 @@ NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr)
  */
 
 int
-NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer, int toread)
+NsServerSSLRecv(NsOpenSSLConnection *scPtr, void *buffer, int toread)
 {
   int rc;
 
@@ -274,7 +273,7 @@ again:
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLSend --
+ * NsServerSSLSend --
  *
  *  Send data through an SSL connection
  *
@@ -289,7 +288,7 @@ again:
  */
 
 int
-NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer, int towrite)
+NsServerSSLSend(NsOpenSSLConnection *scPtr, void *buffer, int towrite)
 {
     return SSL_write(scPtr->ssl, buffer, towrite);
 }
@@ -297,7 +296,7 @@ NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer, int towrite)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLTrace --
+ * NsServerSSLTrace --
  *
  *	Log the progress of an SSL connection.
  *
@@ -311,7 +310,7 @@ NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer, int towrite)
  */
 
 void
-NsOpenSSLTrace(SSL *ssl, int where, int rc)
+NsServerSSLTrace(SSL *ssl, int where, int rc)
 {
     NsOpenSSLConnection *scPtr;
     NsOpenSSLDriver     *sdPtr;
@@ -342,7 +341,7 @@ NsOpenSSLTrace(SSL *ssl, int where, int rc)
 /*
  *----------------------------------------------------------------------
  *
- * CreateSSL --
+ * ServerCreateStruct--
  *
  *	Create the SSL struct for a connection.
  *
@@ -356,7 +355,7 @@ NsOpenSSLTrace(SSL *ssl, int where, int rc)
  */
 
 static int
-CreateSSL(NsOpenSSLConnection *scPtr)
+ServerCreateStruct(NsOpenSSLConnection *scPtr)
 {
     scPtr->ssl = SSL_new(scPtr->sdPtr->context);
     if (scPtr->ssl == NULL) {
@@ -374,7 +373,7 @@ CreateSSL(NsOpenSSLConnection *scPtr)
 /*
  *----------------------------------------------------------------------
  *
- * CreateBIOStack --
+ * ServerCreateBIOStack --
  *
  *	Create the BIO stack that the module uses to talk to the
  *      client via SSL.
@@ -389,7 +388,7 @@ CreateSSL(NsOpenSSLConnection *scPtr)
  */
 
 static int
-CreateBIOStack(NsOpenSSLConnection *scPtr)
+ServerCreateBIOStack(NsOpenSSLConnection *scPtr)
 {
     BIO    *sock_bio;
     BIO    *ssl_bio;
@@ -429,7 +428,7 @@ CreateBIOStack(NsOpenSSLConnection *scPtr)
 /*
  *----------------------------------------------------------------------
  *
- * SetNonBlocking --
+ * ServerSetNonBlocking --
  *
  *	Put the socket in blocking/nonblocking mode.
  *
@@ -443,7 +442,7 @@ CreateBIOStack(NsOpenSSLConnection *scPtr)
  */
 
 static int
-SetNonBlocking(NsOpenSSLConnection *scPtr, int flag)
+ServerSetNonBlocking(NsOpenSSLConnection *scPtr, int flag)
 {
     return BIO_socket_nbio(scPtr->sock, flag) ? NS_OK : NS_ERROR;
 }
@@ -451,7 +450,7 @@ SetNonBlocking(NsOpenSSLConnection *scPtr, int flag)
 /*
  *----------------------------------------------------------------------
  *
- * RunSSLHandshake --
+ * ServerRunHandshake --
  *
  *	Run the SSL handshake sequence.
  *
@@ -465,7 +464,7 @@ SetNonBlocking(NsOpenSSLConnection *scPtr, int flag)
  */
 
 static int
-RunSSLHandshake(NsOpenSSLConnection *scPtr)
+ServerRunHandshake(NsOpenSSLConnection *scPtr)
 {
     int             rc;
     int             error;
@@ -477,7 +476,7 @@ RunSSLHandshake(NsOpenSSLConnection *scPtr)
     fd_set          fds;
 
     /* XXX take a close look at the nonblocking stuff here w/respect to new comm model */
-    if (SetNonBlocking(scPtr, 1) == NS_ERROR) {
+    if (ServerSetNonBlocking(scPtr, 1) == NS_ERROR) {
 	Ns_Log(Warning,
 	    "%s: could not put socket in non-blocking mode; "
 	    "timeout may not be enforced: %s",
@@ -545,7 +544,7 @@ RunSSLHandshake(NsOpenSSLConnection *scPtr)
     scPtr->clientcert = SSL_get_peer_certificate(scPtr->ssl);
 
 #ifndef NS_MAJOR_VERSION
-    if (SetNonBlocking(scPtr, 0) == NS_ERROR) {
+    if (ServerSetNonBlocking(scPtr, 0) == NS_ERROR) {
 	Ns_Log(Warning,
 	    "%s: could not put socket in blocking mode; "
 	    "results unpredictable: %s",
