@@ -1,3 +1,13 @@
+2004-11-02  tag v3_0beta25
+
+2004-11-02  Dossy Shiobara <dossy@panoptic.com>
+
+	* ssl.c (1.68, v3_0beta25): SSL_ERROR_ZERO_RETURN should not be
+	  treated as an error as it signifies a proper close notification
+	  from the peer in SSLv3/TLSv1 connections (and doing so causes
+	  outbound SSL client connections to misbehave).  Closes SF Bug
+	  #1059171.
+
 2004-10-27  Dossy Shiobara <dossy@panoptic.com>
 
 	* nsopenssl.c (1.76), nsd.tcl (1.13): Fix crashing bug in SeedPRNG
