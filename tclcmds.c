@@ -122,11 +122,9 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc,
 
     } else if (STREQ(argv[1], "protocol")) {
 
-#if 0
         if (scPtr == NULL) {
             Ns_Log(Debug, "scPtr is NULL");
         }
-#endif
 
         Ns_DStringInit(&ds);
         switch(scPtr->ssl->session->ssl_version) {
@@ -360,16 +358,12 @@ static NsOpenSSLConnection *
 NsOpenSSLGetConn(Tcl_Interp *interp)
 {
     Ns_Conn             *conn;
-    NsOpenSSLConnection *scPtr;
     char                *name;
 
     conn = Ns_TclGetConn(interp);
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
 	if (name != NULL && STREQ (name, DRIVER_NAME)) {
-#if 0
-	    return (NsOpenSSLConnection *) SSL_get_app_data(ssl);
-#endif
 	    return (NsOpenSSLConnection *) Ns_ConnDriverContext(conn);
 	}
     }
