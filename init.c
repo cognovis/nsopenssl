@@ -54,10 +54,12 @@ static int LoadCertificate(NsOpenSSLDriver *sdPtr);
 static int LoadKey(NsOpenSSLDriver *sdPtr);
 static int CheckKey(NsOpenSSLDriver *sdPtr);
 static int LoadCACerts(NsOpenSSLDriver *sdPtr);
-static int InitSessionCache(NsOpenSSLDriver *sdPtr);
 static int InitLocation(NsOpenSSLDriver *sdPtr);
 static int ClientVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr);
+
+/* What happens if we run multiple copies of nsopenssl in the same server? */
+static int s_server_session_id_context = 1;
 
 /*
  * For generating temporary RSA keys. Temp RSA keys are REQUIRED if
@@ -433,12 +435,16 @@ NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
 
     if (cacheEnabled) {
 
+	SSL_CTX_set_session_cache_mode(sdPtr->context,
+	    SSL_SESS_CACHE_SERVER);
+
+        SSL_CTX_set_session_id_context(sdPtr->context,
+            (void *) &s_server_session_id_context,
+            sizeof(s_server_session_id_context));
+
 	timeout = (long) ConfigIntDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_SESSIONTIMEOUT, DEFAULT_SESSIONTIMEOUT);
 	SSL_CTX_set_timeout(sdPtr->context, timeout);
-
-	SSL_CTX_set_session_cache_mode(sdPtr->context,
-	    SSL_SESS_CACHE_SERVER);
 
 	cacheSize = ConfigIntDefault(sdPtr->module, sdPtr->configPath,
 	    CONFIG_SESSIONCACHESIZE, DEFAULT_SESSIONCACHESIZE);

@@ -1,3 +1,18 @@
+2001-06-08  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: added SSL_CTX_set_session_id_context call and
+	s_server_session_id_context integer. If session caching is on
+	(which it is by default) and clientverify is also on (which it is
+	not by default) all connections after the first for a particular
+	session fail as OpenSSL gets confused. Setting the
+	session_id_context fixes this problem. NOTE: if you run more than
+	one nsopenssl module on the same server, both of those modules
+	will be calling the exact same OpenSSL functions (from the module
+	that was loaded first). In such a case, the session_id_context
+	integer may have to be different for each of the loaded modules.
+
+	* init.c: removed unused InitSession prototype.
+
 2001-05-22  Scott S. Goodwin  <scott@scottg.net>
 
 	* tclcmds.c: cleaned up NsOpenSSLGetConn (had to change the
