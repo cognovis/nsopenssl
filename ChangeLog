@@ -1,3 +1,5 @@
+2004-09-21  tag v3_0beta23
+
 2004-09-21  Dossy Shiobara <dossy@panoptic.com>
 
 	* sslcontext.c (1.9): Fix IssueTmpRSAKey crash when nsopenssl
