@@ -1,3 +1,9 @@
+2004-09-21  Dossy Shiobara <dossy@panoptic.com>
+
+	* sslcontext.c (1.9): Fix IssueTmpRSAKey crash when nsopenssl
+	  serves Netscape Navigator 4.06 Export Edition with weaker RSA
+	  keys.  Closes SF Bug #999089.
+
 2004-08-25  tag v3_0beta22
 
 2004-08-25  Dossy Shiobara <dossy@panoptic.com>
