@@ -58,7 +58,7 @@
 #	May throw an error on failure.
 #
 
-proc ns_httpsopen {method url {timeout 30} {pdata ""} {rqset ""} {module ""}} {
+proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
     #
     # Determine if url is local; prepend site address if so
     #             
@@ -210,7 +210,7 @@ proc ns_httpsopen {method url {timeout 30} {pdata ""} {rqset ""} {module ""}} {
 #	Will only follow redirections 10 levels deep.
 #
 
-proc ns_httpsget {url {rqset ""} {timeout 30} {depth 0} {module ""}} {
+proc ns_httpsget {url {timeout 30} {depth 0} {rqset ""} {module ""}} {
     if {[incr depth] > 10} {
 	return -code error "ns_httpsget: Recursive redirection: $url"
     }
@@ -219,7 +219,7 @@ proc ns_httpsget {url {rqset ""} {timeout 30} {depth 0} {module ""}} {
     # Perform the actual request.
     #
     
-    set https [ns_httpsopen GET $url $rqset $timeout $module]
+    set https [ns_httpsopen GET $url "" $timeout $module]
     set rfd [lindex $https 0]
     close [lindex $https 1]
     set headers [lindex $https 2]

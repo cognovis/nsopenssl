@@ -1200,11 +1200,12 @@ RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
 
     ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
-#if 0  /* Test cert validity in log file */
+#if 0
+    /* Test cert validity in log file */
     if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
-	Ns_Log(Notice, "%s: PEER CERT is VALID", ccPtr->module);
+        Ns_Log(Notice, "%s: PEER CERT is VALID", ccPtr->module);
     } else {
-	Ns_Log(Notice, "%s: PEER CERT is NOT VALID", ccPtr->module);
+        Ns_Log(Notice, "%s: PEER CERT is NOT VALID", ccPtr->module);
     }
 #endif
 

@@ -1861,7 +1861,7 @@ SSLSockListenCallback(SOCKET sock, void *arg, int why)
     ccPtr = Ns_OpenSSLSockAccept(sock);
     if (ccPtr == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
-        return TCL_ERROR;
+        return NS_FALSE;
     }
 
     result = CreateTclChannel(ccPtr, interp);

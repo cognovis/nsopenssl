@@ -122,7 +122,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
     }
 
     sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
-                            CONFIG_RANDOMFILE, sdPtr->dir, NULL);
+        CONFIG_RANDOMFILE, sdPtr->dir, NULL);
 
     /*
      * If the OpenSSL's PRNG is not seeded,
@@ -150,6 +150,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
     if (sdPtr->bufsize < 1) {
 	sdPtr->bufsize = DEFAULT_SERVER_BUFFERSIZE;
     }
+
 
 #ifndef NS_MAJOR_VERSION
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
@@ -199,7 +200,6 @@ NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr)
 	if (sdPtr->dir      != NULL)           ns_free(sdPtr->dir);
 	if (sdPtr->address  != NULL)           ns_free(sdPtr->address);
 	if (sdPtr->location != NULL)           ns_free(sdPtr->location);
-	if (sdPtr->randomFile != NULL)         ns_free(sdPtr->randomFile);
 	ns_free(sdPtr);
     }
 }
@@ -520,6 +520,7 @@ MakeSockServerSSLContext(NsOpenSSLDriver *sdPtr)
 	SSL_CTX_set_verify(sdPtr->sockServerContext, SSL_VERIFY_NONE,
 	    PeerVerifyCallback);
     }
+
 
     /*
      * Set SSL handshake and connection tracing
