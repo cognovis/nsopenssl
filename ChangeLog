@@ -1,5 +1,8 @@
 2001-08-21  Scott S. Goodwin  <scott@scottg.net>
 
+	* https.tcl: removed some debugging statements; commented out the
+	debug notice that the url was local.
+
 	* https.tcl: fixed a bug that was fixed once before but apparently
 	I got my files mixed up. rqset wasn't being passed from
 	ns_httpsget to ns_httpsopen.

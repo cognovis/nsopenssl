@@ -83,7 +83,7 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
             append host ":$port"
         }
         set url "$host$url"
-        ns_log notice "ADJUSTED URL: $url"                    
+#        ns_log notice "ADJUSTED URL: $url"                    
     }   
 
     #
@@ -129,12 +129,10 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 
 	    # XXX should check to see if req'd Accept and User-Agent headers are there */
 
-            ns_log notice "*** RQSET is being sent..."
 	    for {set i 0} {$i < [ns_set size $rqset]} {incr i} {
 		set key [ns_set key $rqset $i]
 		set val [ns_set value $rqset $i]
 		_ns_https_puts $timeout $wfd "$key: $val\r"
-                ns_log notice "*** RQSET: $key: $value"
 	    }
 	} else {
 	    #
@@ -142,7 +140,6 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 	    # required headers.
 	    #
 
-            ns_log notice "*** RQSET is NOT being sent..."
 	    _ns_https_puts $timeout $wfd "Accept: */*\r"
 	    _ns_https_puts $timeout $wfd \
 		    "User-Agent: [ns_info name]-Tcl/[ns_info version]\r"
