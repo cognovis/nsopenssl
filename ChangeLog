@@ -1,3 +1,22 @@
+2002-02-15  Scott S. Goodwin  <scott@scottg.net>
+
+	* dumb: The previous two changes were made once before. The
+	tclcmd.c fix reverted when I received a fix for some other problem
+	in tclcmd.c; I neglected to do a diff between my copy and the
+	fixed one that was sent to me. In the case of init.c, I'm
+	uncertain how that creeped back in. Thanks to Adam Zell for
+	pointing these out. Lessons learned: Always commit your changes
+	right after your tests work. Always diff a file sent to you
+	against your current working copy from the repository. There may
+	be changes you made to your file that aren't in the contributed
+	file.
+
+	* init.c: Fixed NsOpenSSLCreateDriver; sdPtr->randomFile wasn't
+	set before being possibly used.
+
+	* tclcmds.c: Fixed SSLSockListenCallback so that the interp was
+	initialized before it was possibly used.
+
 2002-02-14  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsopenssl 2.1 released.
