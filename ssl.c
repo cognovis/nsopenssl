@@ -94,7 +94,7 @@ NsServerSSLShutdownConn(SSL *ssl)
 int
 NsServerSSLFlushConn(NsServerSSLConnection *scPtr)
 {
-    NsOpenSSLDriver     *sdPtr = scPtr->sdPtr;
+    NsServerSSLDriver     *sdPtr = scPtr->sdPtr;
 
     if (scPtr->ssl == NULL) {
 
@@ -313,7 +313,7 @@ void
 NsServerSSLTrace(SSL *ssl, int where, int rc)
 {
     NsServerSSLConnection *scPtr;
-    NsOpenSSLDriver     *sdPtr;
+    NsServerSSLDriver     *sdPtr;
     char                *alertTypePrefix;
     char                *alertType;
     char                *alertDescPrefix;

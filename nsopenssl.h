@@ -16,9 +16,9 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 1999 Stefan Arentz
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -70,10 +70,15 @@
 #define SSL_CRYPTO_LIBRARY_NAME   "OpenSSL"
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
+/* Forward reference */
 struct NsServerSSLConnection;
 
-typedef struct NsOpenSSLDriver {
-    struct NsOpenSSLDriver   *nextPtr;
+/*
+ * NsServerSSLDriver works with the core server to maintain connection states.
+ */
+
+typedef struct NsServerSSLDriver {
+    struct NsServerSSLDriver   *nextPtr;
     struct NsServerSSLConnection *firstFreePtr;
 
     Ns_Mutex         lock;
@@ -96,11 +101,11 @@ typedef struct NsOpenSSLDriver {
     SSL_CTX         *context;
 
     char            *randomFile;   /* Used to seed PRNG */
-} NsOpenSSLDriver;
+} NsServerSSLDriver;
 
 typedef struct NsServerSSLConnection {
     struct NsServerSSLConnection *nextPtr;
-    struct NsOpenSSLDriver   *sdPtr;
+    struct NsServerSSLDriver   *sdPtr;
 
     SOCKET  sock;
 #ifndef NS_MAJOR_VERSION
@@ -114,17 +119,55 @@ typedef struct NsServerSSLConnection {
     X509   *clientcert;
 } NsServerSSLConnection;
 
+/* Forward reference */
+struct NsClientSSLConnection;
+
+typedef struct NsClientSSLDriver {
+    struct NsClientSSLDriver   *nextPtr;
+    struct NsClientSSLConnection *firstFreePtr;
+
+    Ns_Mutex         lock;
+    int              refcnt;
+    Ns_Driver        driver;
+
+    char            *module;       /* Module name */
+    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
+    char            *dir;          /* Module directory (on disk) */
+
+    int              bufsize;
+    int              timeout;
+    SOCKET           lsock;
+
+    SSL_CTX         *context;
+
+    char            *randomFile;   /* Used to seed PRNG */
+} NsClientSSLDriver;
+
+typedef struct NsClientSSLConnection {
+    struct NsClientSSLConnection *nextPtr;
+
+    SOCKET  sock;
+
+    char    peer[16];
+    int     port;
+
+    SSL    *ssl;
+    BIO    *io;
+
+    X509   *clientcert;
+} NsClientSSLConnection;
+
 /*
  * init.c
  */
 
 #ifndef NS_MAJOR_VERSION
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
+extern NsServerSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
     Ns_DrvProc *procs);
 #else
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
+extern NsServerSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
 #endif
-extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
+extern void NsOpenSSLFreeDriver(NsServerSSLDriver *sdPtr);
 
 /*
  * ssl.c

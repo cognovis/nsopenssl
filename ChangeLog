@@ -1,7 +1,12 @@
 2001-06-13  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
 
+	* nsopenssl.c: added NsClientSSLConnection and NsClientSSLDriver
+	structs (I know, the client stuff doesn't need a driver; I'll work
+	that issue later.)
+
 	* all: changed NsOpenSSLConnection struct name to
-	NsServerSSLConnection in preparation for adding client structures.
+	NsServerSSLConnection and NsOpenSSLDriver to NsServerSSLDriver in
+	preparation for adding client structures.
 
 2001-06-12  Scott S. Goodwin  <scott@scottg.net>
 

@@ -47,16 +47,27 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 static int InitializeSSL(void);
 static int MakeModuleDir(char *server, char *module, char **dirp);
-static int ServerMakeContext(NsOpenSSLDriver *sdPtr);
-static int ServerSetCipherSuite(NsOpenSSLDriver *sdPtr);
-static int ServerSetProtocols(NsOpenSSLDriver *sdPtr);
-static int ServerLoadCertificate(NsOpenSSLDriver *sdPtr);
-static int ServerLoadKey(NsOpenSSLDriver *sdPtr);
-static int ServerCheckKey(NsOpenSSLDriver *sdPtr);
-static int ServerLoadCACerts(NsOpenSSLDriver *sdPtr);
-static int ServerInitLocation(NsOpenSSLDriver *sdPtr);
+
+/*
+ * SSL Server Functions
+ */
+
+static int ServerMakeContext(NsServerSSLDriver *sdPtr);
+static int ServerSetCipherSuite(NsServerSSLDriver *sdPtr);
+static int ServerSetProtocols(NsServerSSLDriver *sdPtr);
+static int ServerLoadCertificate(NsServerSSLDriver *sdPtr);
+static int ServerLoadKey(NsServerSSLDriver *sdPtr);
+static int ServerCheckKey(NsServerSSLDriver *sdPtr);
+static int ServerLoadCACerts(NsServerSSLDriver *sdPtr);
+static int ServerInitLocation(NsServerSSLDriver *sdPtr);
 static int ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
-static int ServerInitSessionCache(NsOpenSSLDriver *sdPtr);
+static int ServerInitSessionCache(NsServerSSLDriver *sdPtr);
+
+/*
+ * SSL Client Functions
+ */
+
+static int ClientMakeContext(NsServerSSLDriver *sdPtr);
 
 /* What happens if we run multiple copies of nsopenssl in the same server? */
 static int s_server_session_id_context = 1;
@@ -66,9 +77,9 @@ static int s_server_session_id_context = 1;
  * you want 40-bit encryption to work in old export browsers. This is
  * only used by the server-side.
  */
-static int AddEntropyFromRandomFile(NsOpenSSLDriver *sdPtr, long maxbytes);
-static int PRNGIsSeeded(NsOpenSSLDriver *sdPtr);
-static int SeedPRNG(NsOpenSSLDriver *sdPtr);
+static int AddEntropyFromRandomFile(NsServerSSLDriver *sdPtr, long maxbytes);
+static int PRNGIsSeeded(NsServerSSLDriver *sdPtr);
+static int SeedPRNG(NsServerSSLDriver *sdPtr);
 static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
 
 /*
@@ -79,7 +90,7 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
  *       Create the SSL driver.
  *
  * Results:
- *       An NsOpenSSLDriver* or NULL.
+ *       An NsServerSSLDriver* or NULL.
  *
  * Side effects:
  *       None.
@@ -87,16 +98,16 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
  *----------------------------------------------------------------------
  */
 
-NsOpenSSLDriver *
+NsServerSSLDriver *
 #ifndef NS_MAJOR_VERSION
 NsOpenSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
 #else
 NsOpenSSLCreateDriver(char *server, char *module)
 #endif
 {
-    NsOpenSSLDriver *sdPtr = NULL;
+    NsServerSSLDriver *sdPtr = NULL;
 
-    sdPtr = (NsOpenSSLDriver *) ns_calloc(1, sizeof *sdPtr);
+    sdPtr = (NsServerSSLDriver *) ns_calloc(1, sizeof *sdPtr);
 
     Ns_MutexSetName(&sdPtr->lock, module);
     sdPtr->module = module;
@@ -153,7 +164,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
  *
  * NsOpenSSLFreeDriver --
  *
- *      Destroy an NsOpenSSLDriver.
+ *      Destroy an NsServerSSLDriver.
  *
  * Results:
  *      None.
@@ -165,7 +176,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
  */
 
 void
-NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr)
+NsOpenSSLFreeDriver(NsServerSSLDriver *sdPtr)
 {
     NsServerSSLConnection *scPtr;
 
@@ -267,7 +278,7 @@ MakeModuleDir(char *server, char *module, char **dirp)
  */
 
 static int
-ServerMakeContext(NsOpenSSLDriver *sdPtr)
+ServerMakeContext(NsServerSSLDriver *sdPtr)
 {
     sdPtr->context = SSL_CTX_new(SSLv23_server_method());
     if (sdPtr->context == NULL) {
@@ -318,7 +329,7 @@ ServerMakeContext(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerSetCipherSuite(NsOpenSSLDriver *sdPtr)
+ServerSetCipherSuite(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *value = ConfigStringDefault(sdPtr->module, sdPtr->configPath,
@@ -364,7 +375,7 @@ static struct {
 };
 
 static int
-ServerSetProtocols(NsOpenSSLDriver *sdPtr)
+ServerSetProtocols(NsServerSSLDriver *sdPtr)
 {
     Ns_Set *config;
     int     i, j, l;
@@ -426,7 +437,7 @@ ServerSetProtocols(NsOpenSSLDriver *sdPtr)
  */
 
 int
-ServerInitSessionCache(NsOpenSSLDriver *sdPtr)
+ServerInitSessionCache(NsServerSSLDriver *sdPtr)
 {
     int cacheEnabled = ConfigBoolDefault(sdPtr->module, sdPtr->configPath,
         CONFIG_SESSIONCACHE, DEFAULT_SESSIONCACHE);
@@ -476,7 +487,7 @@ ServerInitSessionCache(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerLoadCertificate(NsOpenSSLDriver *sdPtr)
+ServerLoadCertificate(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
@@ -511,7 +522,7 @@ ServerLoadCertificate(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerLoadKey(NsOpenSSLDriver *sdPtr)
+ServerLoadKey(NsServerSSLDriver *sdPtr)
 {
     int rc;
     char *file = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
@@ -546,7 +557,7 @@ ServerLoadKey(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerCheckKey(NsOpenSSLDriver *sdPtr)
+ServerCheckKey(NsServerSSLDriver *sdPtr)
 {
     if (SSL_CTX_check_private_key(sdPtr->context) == 0) {
 	Ns_Log(Error, "%s: private key does not match certificate",
@@ -575,7 +586,7 @@ ServerCheckKey(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerLoadCACerts(NsOpenSSLDriver *sdPtr)
+ServerLoadCACerts(NsServerSSLDriver *sdPtr)
 {
     int status;
     int rc;
@@ -663,7 +674,7 @@ ServerLoadCACerts(NsOpenSSLDriver *sdPtr)
  */
 
 static int
-ServerInitLocation(NsOpenSSLDriver *sdPtr)
+ServerInitLocation(NsServerSSLDriver *sdPtr)
 {
     char       *module = sdPtr->module;
     char       *path = sdPtr->configPath;
@@ -767,7 +778,7 @@ ServerVerifyClientCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
  */
 
 int
-SeedPRNG(NsOpenSSLDriver *sdPtr)
+SeedPRNG(NsServerSSLDriver *sdPtr)
 {
     int i;
     double *buf_ptr = NULL;
@@ -837,7 +848,7 @@ SeedPRNG(NsOpenSSLDriver *sdPtr)
  */
 
 int
-PRNGIsSeeded (NsOpenSSLDriver *sdPtr)
+PRNGIsSeeded (NsServerSSLDriver *sdPtr)
 {
     if (RAND_status()) {              
         Ns_Log(Debug, "%s: RAND_status reports sufficient entropy for the PRNG",
@@ -872,7 +883,7 @@ static RSA *
 IssueTmpRSAKey(SSL *ssl, int export, int keylen)
 {
     NsServerSSLConnection *scPtr;
-    NsOpenSSLDriver     *sdPtr;
+    NsServerSSLDriver     *sdPtr;
     static RSA *rsa_tmp = NULL;
 
     scPtr = (NsServerSSLConnection*) SSL_get_app_data(ssl);
@@ -909,7 +920,7 @@ IssueTmpRSAKey(SSL *ssl, int export, int keylen)
  */
 
 static int
-AddEntropyFromRandomFile(NsOpenSSLDriver *sdPtr, long maxbytes) {
+AddEntropyFromRandomFile(NsServerSSLDriver *sdPtr, long maxbytes) {
     int readbytes;
 
     if (access(sdPtr->randomFile, F_OK) == 0) {

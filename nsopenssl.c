@@ -88,7 +88,7 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
 #ifndef NS_MAJOR_VERSION
 
 static Ns_ThreadProc SockThread;
-static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsServerSSLConnection *scPtr);
+static void SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr);
 static Ns_Thread sockThread;
 static SOCKET trigPipe[2];
 
@@ -108,7 +108,7 @@ static Ns_ConnDriverNameProc   SockName;
 static Ns_ConnInitProc         SockInit;
 
 /* Linked list of all configured nsopenssl instances */
-static NsOpenSSLDriver *firstSSLDriverPtr;
+static NsServerSSLDriver *firstSSLDriverPtr;
 
 static Ns_DrvProc sockProcs[] = {
     {Ns_DrvIdStart,        (void *) SockStart},
@@ -155,7 +155,7 @@ static Ns_DriverProc OpenSSLProc;
 NS_EXPORT int
 Ns_ModuleInit(char *server, char *module)
 {
-    NsOpenSSLDriver *sdPtr;
+    NsServerSSLDriver *sdPtr;
 
     if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
 	    != NS_OK) {
@@ -206,7 +206,7 @@ Ns_ModuleInit(char *server, char *module)
 static int
 SockStart(char *server, char *label, void **drvDataPtr)
 {
-    NsOpenSSLDriver *sdPtr = *((NsOpenSSLDriver **) drvDataPtr);
+    NsServerSSLDriver *sdPtr = *((NsServerSSLDriver **) drvDataPtr);
 
     sdPtr->lsock = Ns_SockListen(sdPtr->bindaddr, sdPtr->port);
     if (sdPtr->lsock == INVALID_SOCKET) {
@@ -244,7 +244,7 @@ SockStart(char *server, char *label, void **drvDataPtr)
  */
 
 static void
-SockFreeConn(NsOpenSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
+SockFreeConn(NsServerSSLDriver *sdPtr, NsServerSSLConnection *scPtr)
 {
     int refcnt;
 
@@ -285,7 +285,7 @@ SockThread(void *ignored)
     fd_set set, watch;
     char c;
     int slen, n, stop;
-    NsOpenSSLDriver *sdPtr, *nextPtr;
+    NsServerSSLDriver *sdPtr, *nextPtr;
     NsServerSSLConnection *scPtr;
     struct sockaddr_in sa;
     SOCKET max, sock;
@@ -408,7 +408,7 @@ SockThread(void *ignored)
 static void
 SockStop(void *arg)
 {
-    NsOpenSSLDriver *sdPtr = (NsOpenSSLDriver *) arg;
+    NsServerSSLDriver *sdPtr = (NsServerSSLDriver *) arg;
 
     if (sockThread != NULL) {
         Ns_Log(Notice, DEFAULT_NAME ":  exiting: triggering shutdown");
@@ -443,7 +443,7 @@ static int
 SockClose(void *arg)
 {
     NsServerSSLConnection *scPtr = (NsServerSSLConnection *) arg;
-    NsOpenSSLDriver *sdPtr = scPtr->sdPtr;
+    NsServerSSLDriver *sdPtr = scPtr->sdPtr;
 
     Ns_Log(Debug, "%s: SockClose", sdPtr->module);
     if (scPtr->sock != INVALID_SOCKET) {
