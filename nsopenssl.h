@@ -33,6 +33,9 @@
  * $Header$
  */
 
+//#if OPENSSL_VERSION_NUMBER <= 0x00905000L
+//#error "This version of nsopenssl requires OpenSSL 0.9.6 or higher"
+//#endif
 
 /* Required for Tcl channels to work */
 #ifndef USE_TCL8X
@@ -77,37 +80,37 @@ error "OpenSSL was not compiled with thread support!"
 endif
 #endif
 
-#define MODULE                   "nsopenssl"
-
+
 /*
- * It is possible to have the encryption library be different
- * from the SSL library. A good example would be if you are
- * using RSA's BSAFE encryption library within OpenSSL.
+ * Defaults
  */
 
-#define SSL_LIBRARY_NAME  "OpenSSL"
-
-#if OPENSSL_VERSION_NUMBER   == 0x0090603fL
-#  define SSL_LIBRARY_VERSION  "0.9.6c"
-#elif OPENSSL_VERSION_NUMBER   == 0x0090602fL
-#  define SSL_LIBRARY_VERSION  "0.9.6b"
-#elif OPENSSL_VERSION_NUMBER   == 0x0090601fL
-#  define SSL_LIBRARY_VERSION  "0.9.6a"
-#elif OPENSSL_VERSION_NUMBER == 0x0090600fL
-#  define SSL_LIBRARY_VERSION  "0.9.6"
-#elif OPENSSL_VERSION_NUMBER == 0x0090581fL
-#  define SSL_LIBRARY_VERSION  "0.9.5a"
-#elif OPENSSL_VERSION_NUMBER == 0x00905100L
-#  define SSL_LIBRARY_VERSION  "0.9.5"
-#else
-#  define SSL_LIBRARY_VERSION  "Unknown"
-#endif
-
-#define SSL_CRYPTO_LIBRARY_NAME     SSL_LIBRARY_NAME
-#define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION
+#define MODULE                   "nsopenssl"
+#define DEFAULT_PORT                   443
+#define DEFAULT_PROTOCOL               "https"
+#define ROLE_SERVER                    "server"
+#define ROLE_CLIENT                    "client"
+#define DEFAULT_PROTOCOLS              "All"
+#define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
+#define DEFAULT_CERT_FILE              "certificate.pem"
+#define DEFAULT_KEY_FILE               "key.pem"
+#define DEFAULT_CA_FILE                "ca.pem"
+#define DEFAULT_CA_DIR                 "ca"
+#define DEFAULT_PEER_VERIFY            NS_FALSE
+#define DEFAULT_PEER_VERIFY_DEPTH      3
+#define DEFAULT_SESSION_CACHE          NS_TRUE
+#define DEFAULT_SESSION_CACHE_SIZE     128
+#define DEFAULT_SESSION_CACHE_TIMEOUT  300
+#define DEFAULT_TRACE                  NS_FALSE
+#define DEFAULT_TIMEOUT                30
+#define DEFAULT_BUFFER_SIZE            16384
+#define CONFIG_MODULE_DIR              "ModuleDir"
+#define CONFIG_RANDOM_FILE             "RandomFile"
+#define CONFIG_SEEDBYTES               "SeedBytes"
+#define DEFAULT_SEEDBYTES              1024
+#define DEFAULT_MAXBYTES               1024000
 
 
-
 /*
  * Hold SSL Context information. If refcnt is 0, then struct can be disposed
  * of or initialized.  If refcnt is 1 and NsOpenSSLContextFree is called, the
@@ -156,10 +159,11 @@ typedef struct Ns_OpenSSLContext {
 typedef struct NsOpenSSLDriver {
     char                     *server;      
     char                     *module;      
-    char                     *name;      
+    char                     *name;          /* Name of this SSL driver */      
     char                     *path;
     char                     *dir;
     SOCKET                    lsock;
+    int                       port;          /* Port the core driver is listening on */
     int                       refcnt;        /* Number of conns tied to this driver */
     Ns_Mutex                  lock;
     struct Ns_Driver         *driver;        /* Driver that this SSL driver is tied to */
@@ -214,55 +218,27 @@ typedef struct NsOpenSSLSessionCacheId {
     int id;
 } NsOpenSSLSessionCacheId;
 
-
-/*
- * Defaults
- */
-
-#define DEFAULT_PORT                   443
-#define DEFAULT_PROTOCOL               "https"
-#define ROLE_SERVER                    "server"
-#define ROLE_CLIENT                    "client"
-#define DEFAULT_PROTOCOLS              "All"
-#define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
-#define DEFAULT_CERT_FILE              "certificate.pem"
-#define DEFAULT_KEY_FILE               "key.pem"
-#define DEFAULT_CA_FILE                "ca.pem"
-#define DEFAULT_CA_DIR                 "ca"
-#define DEFAULT_PEER_VERIFY            NS_FALSE
-#define DEFAULT_PEER_VERIFY_DEPTH      3
-#define DEFAULT_SESSION_CACHE          NS_TRUE
-#define DEFAULT_SESSION_CACHE_SIZE     128
-#define DEFAULT_SESSION_CACHE_TIMEOUT  300
-#define DEFAULT_TRACE                  NS_FALSE
-#define DEFAULT_TIMEOUT                30
-#define DEFAULT_BUFFER_SIZE            16384
-#define CONFIG_MODULE_DIR              "ModuleDir"
-#define CONFIG_RANDOM_FILE             "RandomFile"
-#define CONFIG_SEEDBYTES               "SeedBytes"
-#define DEFAULT_SEEDBYTES              1024
-#define DEFAULT_MAXBYTES               1024000
-
-
 /*
  * ssl.c
  */
 
-extern Ns_OpenSSLConn *NsOpenSSLConnCreate (SOCKET sock, 
+extern Ns_OpenSSLConn *NsOpenSSLConnCreate(SOCKET sock, 
         NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *sslcontext);
-extern int NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn);
-extern int NsOpenSSLFlush (Ns_OpenSSLConn *sslconn);
-extern int NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread);
-extern int NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite);
-extern int NsOpenSSLShutdown (SSL *ssl);
+extern int NsOpenSSLConnDestroy(Ns_OpenSSLConn *sslconn);
+extern int NsOpenSSLFlush(Ns_OpenSSLConn *sslconn);
+extern int NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread);
+extern int NsOpenSSLSend(Ns_OpenSSLConn *sslconn, void *buffer, int towrite);
+extern int NsOpenSSLShutdown(SSL *ssl);
 
 /*
  * tclcmds.c
  */
 
-extern int NsOpenSSLCreateCmds (Tcl_Interp *interp, void *arg);
+extern void NsOpenSSLTclInit(char *server);
+//extern void NsOpenSSLAddCmds(Tcl_Interp *interp, void *ignored);
+//extern Ns_TclInterpInitProc NsOpenSSLAddCmds;
+extern Tcl_CmdProc NsTclOpenSSLConnCmd;
 
-extern Ns_TclInterpInitProc NsOpenSSLCreateCmds;
 extern Tcl_CmdProc NsTclOpenSSLCmd;
 extern Tcl_CmdProc NsTclSSLGetUrlCmd;
 extern Tcl_CmdProc NsTclSSLSockOpenCmd;
@@ -367,8 +343,6 @@ extern int Ns_OpenSSLContextTraceSet(char *server, char *module,
         Ns_OpenSSLContext *sslcontext, int trace);
 extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
         Ns_OpenSSLContext *sslcontext);
-
-
 
 extern int NsOpenSSLModuleInit(char *server, char *module);
 //extern Tcl_HashTable NsOpenSSLVirtualServerTable;

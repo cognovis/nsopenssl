@@ -114,8 +114,7 @@ NsOpenSSLModuleInit(char *server, char *module)
      * Create the nsopenssl Tcl commands for this virtual server's interps.
      */
 
-    if (Ns_TclInitInterps(server, NsOpenSSLCreateCmds, NULL) != NS_OK)
-        return NS_ERROR;
+    NsOpenSSLTclInit(server);
 
     /* 
      * Load this virtual server's SSL contexts from the configuration file.
@@ -339,7 +338,10 @@ LoadSSLContexts(char *server, char *module)
     path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
     sslcontexts = Ns_ConfigGetSection(path);
 
-    /* It's ok if no SSL contexts are defined, but no drivers will be started */
+    /* 
+     * If no SSL contexts are defined for this virtual server, we won't start
+     * any drivers for it. This is an "ok" thing to do.
+     */
 
     if (sslcontexts == NULL) {
         Ns_Log(Notice, "%s: %s: no SSL contexts defined for this server", 
@@ -384,7 +386,7 @@ LoadSSLDrivers(char *server, char *module)
     NsOpenSSLDriver *ssldriver;
     Ns_Set *ssldrivers;
     char *path, *name, *sslcontextname;
-    int i;
+    int i, n;
 
     path = Ns_ConfigGetPath(server, module, "ssldrivers", NULL);
     ssldrivers = Ns_ConfigGetSection(path);
@@ -404,6 +406,7 @@ LoadSSLDrivers(char *server, char *module)
                     server, MODULE, name);
             continue;
         }
+
         sslcontextname = Ns_ConfigGetValue(path, "sslcontext");
         if (sslcontextname == NULL) {
             Ns_Log(Error, "%s: %s: 'sslcontext' parameter not defined for driver '%s'",
@@ -419,7 +422,7 @@ LoadSSLDrivers(char *server, char *module)
         }
 
         /*
-         * Create the driver and add to virtual server's state.
+         * Create the driver.
          */
 
         ssldriver = ns_calloc(1, sizeof(NsOpenSSLDriver));
@@ -430,6 +433,13 @@ LoadSSLDrivers(char *server, char *module)
         ssldriver->name = name;
         ssldriver->path = path;
         ssldriver->refcnt = 0;
+        if (Ns_ConfigGetInt(path, "port", &ssldriver->port) == NS_FALSE) {
+            ssldriver->port = DEFAULT_PORT;
+        }
+
+        /*
+         * Add the driver to the virtual server's state info.
+         */
 
         if (ServerStateSSLDriverAdd(server, module, ssldriver) == NS_ERROR) {
             Ns_Log(Error, "%s: %s: SSL driver not added to server state",
