@@ -1,3 +1,5 @@
+2004-08-25  tag v3_0beta22
+
 2004-08-25  Dossy Shiobara <dossy@panoptic.com>
 
 	* ssl.c (1.67), nsopenssl.c (1.75): Cleanup of code and fix a bug
