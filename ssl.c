@@ -58,7 +58,6 @@ typedef struct Stream {
  * Local functions defined in this file
  */
 
-static int CreateSSL (Ns_OpenSSLConn *sslconn);
 static int CreateBIOStack (Ns_OpenSSLConn *sslconn);
 static int RunSSLHandshake (Ns_OpenSSLConn *sslconn);
 static int RunServerSSLHandshake (Ns_OpenSSLConn *sslconn);
@@ -90,48 +89,62 @@ static int SetNonBlocking (Ns_OpenSSLConn *sslconn, int flag);
  */
 
 Ns_OpenSSLConn *
-NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver, int role)
+NsOpenSSLConnCreate(SOCKET sock, SSLDriver *ssldriver, int role)
 {
     Ns_OpenSSLConn *sslconn;
-
-    sslconn = (Ns_OpenSSLConn *) ns_calloc (1, sizeof(Ns_OpenSSLConn));
-    if (sslconn == NULL) {
-        /* XXX try to get the server's name in here too */
-        Ns_Log(Error, "%s: Failed to create sslconn structure", MODULE);
-	    return NULL;
-    }
-#if 0
-    /* XXX unnecessary ??? */
-    memset (sslconn, 0, sizeof(*sslconn));
-#endif
 
     /*
      * driver will be only be non-NULL when the conn is driven by the core server.
      */
 
+    Ns_Log(Debug, "NsOpenSSLConnCreate: enter");
+
+    sslconn = (Ns_OpenSSLConn *) ns_calloc(1, sizeof(Ns_OpenSSLConn));
+    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 1");
     sslconn->role       = role;
     sslconn->ssldriver  = ssldriver;
-    sslconn->context    = NULL;
+    sslconn->context    = sslconn->ssldriver->context;
+    sslconn->next       = NULL;
+    sslconn->ssl        = NULL;
+    sslconn->io         = NULL;
+    sslconn->peercert   = NULL;
+    sslconn->refcnt     = 0;
+    sslconn->peerport   = -1;
+    sslconn->sock       = sock;
+    sslconn->wsock      = INVALID_SOCKET;
 
-    sslconn->next      = NULL;
-    sslconn->ssl       = NULL;
-    sslconn->io        = NULL;
-    sslconn->peercert  = NULL;
-    sslconn->refcnt    = 0;
-    sslconn->peerport  = -1;
-    sslconn->sock      = sock;
-    sslconn->wsock     = INVALID_SOCKET;
+    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 2");
 
-    if (CreateSSL (sslconn) == NS_ERROR
-	    || CreateBIOStack (sslconn) == NS_ERROR
-	    || RunSSLHandshake (sslconn) == NS_ERROR) {
-	    SSL_set_shutdown (sslconn->ssl,
-			    SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
-	    NsOpenSSLShutdown (sslconn->ssl);
-	    NsOpenSSLConnDestroy (sslconn);
-	    return NULL;
+    /*
+     * Create the SSL struct for a connection.
+     */
+
+    sslconn->ssl = SSL_new (sslconn->context);
+
+    if (sslconn->ssl == NULL) {
+        Ns_Log (Error, ": %s: error creating sslconn->ssl structure",
+            MODULE, sslconn->server);
+        return NS_ERROR;
     }
 
+    SSL_clear (sslconn->ssl);
+    SSL_set_app_data (sslconn->ssl, sslconn);
+
+    if (sslconn->role == ROLE_SERVER) {
+    	SSL_set_accept_state (sslconn->ssl);
+    } else {
+    	SSL_set_connect_state (sslconn->ssl);
+    }
+
+
+    if (CreateBIOStack (sslconn) == NS_ERROR || RunSSLHandshake (sslconn) == NS_ERROR) {
+        SSL_set_shutdown (sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
+        NsOpenSSLShutdown (sslconn->ssl);
+        NsOpenSSLConnDestroy (sslconn);
+        return NULL;
+    }
+
+    Ns_Log(Debug, "NsOpenSSLConnCreate: leave");
     return sslconn;
 }
 
@@ -746,46 +759,6 @@ GetLine (Stream *stream, Ns_DString *ds)
     } while (FillBuf (stream));
 
     return NS_FALSE;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * CreateSSL --
- *
- *	Create the SSL struct for a connection.
- *
- * Results:
- *      NS_OK or NS_ERROR.
- *
- * Side effects:
- *	Memory is allocated by SSL_new.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-CreateSSL (Ns_OpenSSLConn *sslconn)
-{
-    sslconn->ssl = SSL_new (sslconn->context);
-    if (sslconn->ssl == NULL) {
-        Ns_Log (Error, ": %s: error creating sslconn->ssl structure",
-            MODULE, sslconn->server);
-        return NS_ERROR;
-    }
-
-    SSL_clear (sslconn->ssl);
-
-    if (sslconn->role == ROLE_SERVER) {
-    	SSL_set_accept_state (sslconn->ssl);
-    } else {
-    	SSL_set_connect_state (sslconn->ssl);
-    }
-
-    SSL_set_app_data (sslconn->ssl, sslconn);
-
-    return NS_OK;
 }
 
 

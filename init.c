@@ -73,6 +73,8 @@ static void ThreadDynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
  
 static void ConfigSSLContextLoad (char *server, char *module, char *name);
 
+static Tcl_HashTable serversTable;
+
 
 /*
  *----------------------------------------------------------------------
@@ -92,13 +94,16 @@ static void ConfigSSLContextLoad (char *server, char *module, char *name);
  */
 
 extern int
-NsOpenSSLModuleInit (char *server, char *module)
+NsOpenSSLModuleInit(char *server, char *module)
 {
-    NsOpenSSLDriver *ssldriver;
+    SSLDriver *ssldriver;
     static int globalInit = 0;
+    Server *servPtr;
+    Tcl_HashEntry *hPtr;
     Ns_Set *drivers;
     Ns_Set *contexts;
     int i = 0;
+    int new;
 
     /*
      * Things to initialize first time this module is loaded
@@ -117,6 +122,17 @@ NsOpenSSLModuleInit (char *server, char *module)
     * context defines the characteristics for connections that use the
     * context.
     */
+
+    /* Allocate and initialize the per-server structure */
+    
+    Tcl_InitHashTable(&sslcontexts, TCL_STRING_KEYS);
+    servPtr = ns_malloc(sizeof(Server));
+    servPtr=>server = server;
+    Ns_RWLockInit(&servPtr->lock);
+    hPtr = Tcl_CreateHashEntry(&serversTable, server, &new);
+    Tcl_SetHashValue(hPtr, servPtr);
+
+    /* Load SSL contexts from the configuration file */
 
     contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
     if (contexts != NULL) {
@@ -194,6 +210,17 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     int   sessionCacheSize;
     int   sessionCacheTimeout;
     int   trace;
+    int   new;
+    Tcl_HashEntry *hPtr;
+
+    Ns_Log(Debug, "ConfigSSLContextLoad: enter: %s", name);
+
+    /*
+     * Check to see if an SSL context with the same name already exists in the
+     * hash table.
+     */
+
+
 
     path = Ns_ConfigGetPath(server, module, "context", name, NULL);
     if (path == NULL) {
@@ -201,6 +228,8 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
                 MODULE, server, name);
         return;
     }
+
+    Ns_Log(Debug, "ConfigSSLContextLoad: mid 2");
 
     role = Ns_ConfigGetValue(path, "role");
     if (role == NULL) {
@@ -210,10 +239,31 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     }
 
     context = Ns_OpenSSLContextCreate(server, module);
+    /* XXX is this check needed? */
     if (context == NULL) {
         Ns_Log(Error, "%s: %s: SSL context came back NULL in ConfigSSLContextLoad",
                 MODULE, server);
-	    return;
+        return;
+    }
+    context->name = ns_strdup(name);
+
+    /*
+     * Store pointer to SSL context in hash. If name already exists in hash,
+     * free this SSL context and return.
+     */
+
+    Ns_MutexLock(&sslcontextlock);
+    hPtr = Tcl_CreateHashEntry(&sslcontexts, context->name, &new);
+    Ns_Log(Debug, "ConfigSSLContextLoad: mid 1");
+    if (!new) {
+        Ns_Log(Error, "%s: %s: duplicate SSL context name: %s", 
+                MODULE, server, name);
+        Ns_MutexUnlock(&sslcontextlock);
+        ns_free(context);
+        return;
+    } else {
+        Tcl_SetHashValue(hPtr, context);
+        Ns_MutexUnlock(&sslcontextlock);
     }
 
     if (STREQ(role, "server")) {
@@ -227,8 +277,6 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
         return;
     }
    
-    context->name = name;
-
     /*
      * A default module directory is automatically set when the SSL context was
      * created, but you can override in the config file.
@@ -311,6 +359,8 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
 
     if (Ns_ConfigGetBool(path, "trace", &trace) == NS_TRUE)
         Ns_OpenSSLContextTraceSet(server, module, context, trace);
+
+    Ns_Log(Debug, "ConfigSSLContextLoad: leave");
 
     return;
 }
@@ -569,11 +619,9 @@ ThreadDynlockCreateCallback (char *file, int line)
     Ns_DString ds;
 
     lock = ns_calloc (1, sizeof(*lock));
-
     Ns_DStringInit (&ds);
     Ns_DStringVarAppend (&ds, "openssl: ", file, ": ");
     Ns_DStringPrintf (&ds, "%d", line);
-
     Ns_MutexSetName2 (lock, MODULE, Ns_DStringValue (&ds));
 
     return (struct CRYPTO_dynlock_value *) lock;

@@ -1065,6 +1065,7 @@ NsTclSSLSockCallbackCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 	Tcl_AppendResult (interp, "dup failed: ", SockError (interp), NULL);
 	return TCL_ERROR;
     }
+    /* XXX create this in the caller's stack frame */
     cbPtr = ns_malloc (sizeof (Callback) + strlen (argv[2]));
     cbPtr->when = when;
     strcpy (cbPtr->script, argv[2]);
