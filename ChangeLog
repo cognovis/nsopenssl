@@ -1,3 +1,10 @@
+2002-02-13  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: The nonblocking socket fix in RunServerSSLHandshake fixed
+	the Solaris problem. #if'd out debug code in NsOpenSSLSend
+	function. Maybe I can go back and retry the BIO_handshake by
+	unblocking the socket before I run it.
+
 2002-02-12  Scott S. Goodwin  <scott@scottg.net>
 
 	* ssl.c: made the socket non-blocking at the beginning of

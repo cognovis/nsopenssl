@@ -16,7 +16,7 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000-2001 Scott S. Goodwin
+ * Copyright (C) 2000-2002 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 1999 Stefan Arentz.
  *
@@ -262,6 +262,18 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 
     do {
 	rc = SSL_write(ccPtr->ssl, buffer, towrite);
+	towrite -= rc;
+
+
+#if 0
+	/*
+         * XXX On my Debian Linux box, the ns_openssl_socklisten (1) | connect test
+         * always generates a SSL_ERROR_SYSCALL. I think that's because I close
+         * the FD's on the server-side test too soon. The thing works anyway, but I need to
+         * debug this and make whatever changes necessary to get a clean closure
+         * for both ends.
+         */
+
 	if (rc <= 0) {
 	    switch (SSL_get_error(ccPtr->ssl, rc))
 		{
@@ -326,6 +338,14 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 		     * fatal.  Use SSL_get_error for further
 		     * information.
 		     */
+
+		    if (errno == EINTR)
+			continue;
+		    if (errno > 0)
+			Ns_Log(Error, "SSL handshake interrupted by system (Stop button pressed in browser?)");
+		    else
+			Ns_Log(Error, "Spurious SSL handshake interrupt (Usually just one of those OpenSSL confusions)");
+
 		    break;
 		case SSL_ERROR_ZERO_RETURN:
 		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_ZERO_RETURN", rc);
@@ -338,8 +358,8 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 		    break;
 		}
 	} else {
-	    Ns_Log(Notice, "NsOpenSSLSend: bytes written to client on this pass: %d of %d", rc, total);
 	    towrite -= rc;
+	    Ns_Log(Notice, "NsOpenSSLSend: bytes written to client on this pass: %d of %d", rc, total);
 	    if (towrite == 0) {
 		return rc;
 	    } else if (towrite < 0) {
@@ -347,6 +367,8 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 		return rc;
 	    }
 	}
+#endif
+
     } while (BIO_should_retry(ccPtr->ssl->wbio) &&
 	     BIO_should_write(ccPtr->ssl->wbio));
 
