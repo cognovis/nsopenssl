@@ -1,3 +1,12 @@
+2004-11-20  tag v3_0beta26
+
+2004-11-20  Dossy Shiobara <dossy@panoptic.com>
+
+	* Makefile (1.44), nsopenssl.c (1.77), sslcontext.c (1.10): Fix
+	  memory leak in IssueTmpRSAKey, introducing new NsMakeTmpRSAKey
+	  and pre-generating 512-bit and 1024-bit temporary RSA keys at
+	  nsopenssl module initialization time.  Closes SF Bug #1069595.
+
 2004-11-02  tag v3_0beta25
 
 2004-11-02  Dossy Shiobara <dossy@panoptic.com>
