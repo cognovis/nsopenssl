@@ -66,16 +66,24 @@ TCLMOD   =  https.tcl
 include  $(NSHOME)/include/Makefile.module
 
 #
-# Create a tagged release. This moves the 'stable' tag to coincide with the v$(VER_) tag.
+# Tag the CVS snapshot with a beta tag
 #
-tag-release:
+tag-beta:
+	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
+	cvs rtag v$(VER_) nsopenssl
+
+#
+# Create a tagged release. This moves the 'stable' tag to coincide with the v$(VER_) tag.
+# This way you can checkout the latest stable CVS copy when the head copy is unstable.
+#
+tag-stable:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	cvs rtag -r stable v$(VER_) nsopenssl
 
 #
 # Create a tagged release (force it)
 #
-tag-release-force:
+tag-stable-force:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	cvs rtag -F -r stable v$(VER_) nsopenssl
 
