@@ -77,6 +77,13 @@ HDRS     =  nsopenssl.h
 CFLAGS += -g
 
 #
+# If in TEST
+#
+ifdef TEST
+    OBJS  +=  test.o
+endif
+
+#
 # Extra libraries required by your module (-L and -l go here)
 #
 ifdef BSAFE

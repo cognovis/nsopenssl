@@ -34,8 +34,6 @@
 
 #include "nsopenssl.h"
 
-extern Tcl_HashTable NsOpenSSLServers;
-extern NsOpenSSLSessionCacheId *nextSessionCacheId;
 
 static int InitOpenSSL (void);
 static int SeedPRNG (void);
@@ -58,6 +56,11 @@ static NsOpenSSLDriver    *firstNsOpenSSLDriver;
 
 static Ns_DriverProc OpenSSLProc;
 
+/* XXX These are global definitions here */
+
+Tcl_HashTable NsOpenSSLServers;
+NsOpenSSLSessionCacheId *nextSessionCacheId;
+
 
 /*
  *----------------------------------------------------------------------
@@ -74,7 +77,7 @@ static Ns_DriverProc OpenSSLProc;
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsOpenSSLModuleInit (char *server, char *module)
 {
     Ns_OpenSSLContext *sslcontext = NULL;
@@ -112,7 +115,9 @@ NsOpenSSLModuleInit (char *server, char *module)
     if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL) != NS_OK)
 	    return NS_ERROR;
 
-    /* Load this virtual server's SSL contexts from the configuration file */
+    /* 
+     * Load the virtual server's SSL contexts from the configuration file 
+     */
 
     path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
     sslcontexts = Ns_ConfigGetSection(path);
@@ -121,27 +126,31 @@ NsOpenSSLModuleInit (char *server, char *module)
 
     if (sslcontexts == NULL) {
         Ns_Log (Notice, "%s: %s: no SSL contexts defined for this server", 
-                MODULE, server);
+                server, MODULE);
         return NS_OK;
     } 
 
-    /* Load the SSL contexts from the config file */
-
     for (i = 0; i < Ns_SetSize(sslcontexts); ++i) {
         name = Ns_SetKey(sslcontexts, i);
-        Ns_Log(Notice, "%s: %s: loading SSL context '%s'", MODULE, server, 
+        Ns_Log(Notice, "%s: %s: loading SSL context '%s'", server, MODULE,
                 name);
         sslcontext = LoadSSLContext(server, module, name);
         if (sslcontext == NULL) {
             continue;
         }
+
         hPtr = Tcl_CreateHashEntry(&thisServer->sslcontexts, name, &new);
         if (!new) {
             Ns_Log(Error, "%s: %s: duplicate SSL context name: %s",
-                    MODULE, server, name);
-            Ns_OpenSSLContextDestroy(sslcontext);
+                    server, MODULE, name);
+            Ns_OpenSSLContextDestroy(server, module, sslcontext);
         } else {
             Tcl_SetHashValue(hPtr, sslcontext);
+        }
+
+        if (Ns_OpenSSLContextInit(server, module, sslcontext) == NS_ERROR) {
+            Ns_Log(Error, "%s: %s: SSL context '%s' left uninitialized",
+                    server, MODULE, sslcontext->name);
         }
     }
 
@@ -157,24 +166,23 @@ NsOpenSSLModuleInit (char *server, char *module)
 
     if (ssldrivers == NULL) {
         Ns_Log (Notice, "%s: %s: no SSL drivers defined for this server", 
-                MODULE, server);
+                server, MODULE);
         return NS_OK;
     }
 
     for (i = 0; i < Ns_SetSize(ssldrivers); ++i) {
         name = Ns_SetKey(ssldrivers, i);
-        Ns_Log(Notice, "%s: %s: loading '%s' SSL driver", 
-                MODULE, server, name);
+        Ns_Log(Notice, "%s: %s: loading '%s' SSL driver", server, MODULE, name);
         path = Ns_ConfigGetPath(server, module, "ssldriver", name, NULL);
         if (path == NULL) {
             Ns_Log(Error, "%s: %s: SSL driver '%s' not defined in configuration file",
-                    MODULE, server, name);
+                    server, MODULE, name);
             continue;
         }
         sslcontextname = Ns_ConfigGetValue(path, "sslcontext");
         if (sslcontextname == NULL) {
             Ns_Log(Error, "%s: %s: 'sslcontext' parameter not defined for driver '%s'",
-                    MODULE, server, name);
+                    server, MODULE, name);
             continue;
         }
 
@@ -187,13 +195,13 @@ NsOpenSSLModuleInit (char *server, char *module)
 
         if (hPtr == NULL) {
             Ns_Log(Error, "%s: %s: SSL context '%s' needed by driver '%s' not found",
-                    MODULE, server, sslcontextname, name);
+                    server, MODULE, sslcontextname, name);
             continue;
         }
 
         hPtr = Tcl_CreateHashEntry(&thisServer->ssldrivers, name, &new);
         if (!new) {
-            Ns_Log(Error, "%s: %s: duplicate SSL driver: %s", MODULE, server, name);
+            Ns_Log(Error, "%s: %s: duplicate SSL driver: %s", server, MODULE, name);
             continue;
         } else {
             ssldriver = ns_calloc(1, sizeof(NsOpenSSLDriver));
@@ -208,7 +216,7 @@ NsOpenSSLModuleInit (char *server, char *module)
 
         if (OpenSSLDriverInit(server, module, ssldriver) != NS_OK) {
             Ns_Log(Error, "%s: %s: initialization of '%s' driver failed",
-                    MODULE, server, name);
+                    server, MODULE, name);
         }
     }
 
@@ -236,9 +244,10 @@ static int
 OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver)
 {
     Ns_DriverInitData init;
-    
+
+    /* Set up for call to AOLserver API that will initialize driver */
+
     init.version = NS_DRIVER_VERSION_1;
-    /* XXX Make name equivalent of "%s: %s: " or "MODULE: drivername: " */
     init.name = MODULE;
     init.proc = OpenSSLProc;
     init.opts = NS_DRIVER_SSL;
@@ -247,7 +256,7 @@ OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver)
 
     if (Ns_DriverInit(server, module, &init) == NS_ERROR) {
         Ns_Log(Error, "%s: %s: driver '%s' failed to initialize",
-                MODULE, server, ssldriver->name);
+                server, MODULE, ssldriver->name);
         return NS_ERROR;
     }
 
@@ -378,6 +387,7 @@ LoadSSLContext(char *server, char *module, char *name)
 {
     Ns_OpenSSLContext *sslcontext;
     char *path;
+    char *tmp;
     char *role;
     char *moduleDir;
     char *certFile;
@@ -396,35 +406,26 @@ LoadSSLContext(char *server, char *module, char *name)
     path = Ns_ConfigGetPath(server, module, "sslcontext", name, NULL);
     if (path == NULL) {
         Ns_Log(Error, "%s: %s: failed to find SSL context '%s' in nsd.tcl",
-                MODULE, server, name);
+                server, MODULE, name);
         return NULL;
     }
 
     role = Ns_ConfigGetValue(path, "role");
     if (role == NULL) {
         Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
-                MODULE, server, name);
+                server, MODULE, name);
         return NULL;
     }
 
     sslcontext = Ns_OpenSSLContextCreate(server, module);
     if (sslcontext == NULL) {
         Ns_Log(Error, "%s: %s: SSL context came back NULL in ConfigSSLContextLoad",
-                MODULE, server);
+                server, MODULE);
         return NULL;
     }
     sslcontext->name = ns_strdup(name);
 
-    if (STREQ(role, "server")) {
-        sslcontext->role = ROLE_SERVER;
-    } else if (STREQ(role, "client")) {
-        sslcontext->role = ROLE_CLIENT;
-    } else {
-        Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context '%s'",
-                MODULE, server, name);
-        Ns_OpenSSLContextDestroy(sslcontext);
-        return NULL;
-    }
+    sslcontext->role = role;
    
     /*
      * A default module directory is automatically set when the SSL context was
@@ -442,17 +443,20 @@ LoadSSLContext(char *server, char *module, char *name)
      */
 
     certFile = Ns_ConfigGetValue(path, "certfile");
-    Ns_OpenSSLContextCertFileSet(server, module, sslcontext, certFile);
+    if (certFile != NULL) 
+        Ns_OpenSSLContextCertFileSet(server, module, sslcontext, certFile);
+    Ns_Log(Debug, "*** CERTFILE: %s", certFile);
 
-    keyFile  = Ns_ConfigGetValue(path, "keyfile");
-    Ns_OpenSSLContextKeyFileSet(server, module, sslcontext, keyFile);
+    keyFile = Ns_ConfigGetValue(path, "keyfile");
+    if (keyFile != NULL) 
+        Ns_OpenSSLContextKeyFileSet(server, module, sslcontext, keyFile);
 
     /*
      * The default protocols and ciphersuites are good for general use.
      */
 
     protocols = Ns_ConfigGetValue(path, "protocols");
-    //if (protocols != NULL)
+    if (protocols != NULL)
         Ns_OpenSSLContextProtocolsSet(server, module, sslcontext, protocols);
 
     cipherSuite = Ns_ConfigGetValue(path, "ciphersuite");
@@ -866,6 +870,7 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 	/* On first I/O, initialize the connection context */
 
 	if (sock->arg == NULL) {
+            Ns_Log(Debug, "%s: NEW CONN", MODULE);
 	    n = driver->recvwait;
 	    if (n > driver->sendwait) 
     		n = driver->sendwait;
@@ -876,8 +881,7 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 #if 0
 	    sock->arg = NsOpenSSLCreateConn(sock->sock, n, driver->arg);
 #endif
-	    sock->arg = NsOpenSSLConnCreate(sock->sock, ssldriver, sslcontext, 
-                    ROLE_SERVER);
+	    sock->arg = NsOpenSSLConnCreate(sock->sock, ssldriver, sslcontext);
 	    if (sock->arg == NULL) {
                 Ns_Log(Notice, "*** sock->arg is null");
     		return -1;

@@ -110,6 +110,12 @@ static Tcl_ChannelType opensslChannelType = {
     NULL,			/* Handler proc */
 };
 
+typedef struct SSLTclCmd {
+    char *name;
+    Tcl_CmdProc *proc;
+    ClientData clientData;
+} SSLTclCmd;
+
 static SSLTclCmd nsopensslCmds[] = {
     {"ns_openssl", NsTclOpenSSLCmd, NULL},
     {"ns_openssl_sockopen", NsTclSSLSockOpenCmd, NULL},
@@ -149,7 +155,7 @@ static SSLTclCmd nsopensslCmds[] = {
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsOpenSSLCreateCmds (Tcl_Interp* interp, void *arg)
 {
     SSLTclCmd *cmds = (SSLTclCmd *) & nsopensslCmds;
@@ -184,7 +190,7 @@ NsOpenSSLCreateCmds (Tcl_Interp* interp, void *arg)
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp *interp, int argc, char **argv)
 {
     Ns_OpenSSLConn *sslconn;
@@ -479,7 +485,7 @@ NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp *interp, int argc, char **argv)
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockOpenCmd (ClientData dummy, Tcl_Interp* interp, int argc,
 		     char **argv)
 {
@@ -585,7 +591,7 @@ NsTclSSLSockOpenCmd (ClientData dummy, Tcl_Interp* interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockListenCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		       char **argv)
 {
@@ -631,7 +637,7 @@ NsTclSSLSockListenCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockAcceptCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		       char **argv)
 {
@@ -700,7 +706,7 @@ NsTclSSLSockAcceptCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLGetUrlCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		   char **argv)
 {
@@ -769,7 +775,7 @@ NsTclSSLGetUrlCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockNReadCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		      char **argv)
 {
@@ -814,7 +820,7 @@ NsTclSSLSockNReadCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockCheckCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		      char **argv)
 {
@@ -855,7 +861,7 @@ NsTclSSLSockCheckCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockSelectCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 		       char **argv)
 {
@@ -1017,7 +1023,7 @@ NsTclSSLSockArgProc (Tcl_DString *ds, void *arg)
     Tcl_DStringAppendElement (ds, cbPtr->script);
 }
 
-extern int
+int
 NsTclSSLSockCallbackCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 			 char **argv)
 {
@@ -1097,7 +1103,7 @@ NsTclSSLSockCallbackCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockListenCallbackCmd (ClientData dummy, Tcl_Interp *interp,
 			       int argc, char **argv)
 {
@@ -1143,7 +1149,7 @@ NsTclSSLSockListenCallbackCmd (ClientData dummy, Tcl_Interp *interp,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockSetBlockingCmd (ClientData dummy, Tcl_Interp *interp, int argc,
 			    char **argv)
 {
@@ -1167,7 +1173,7 @@ NsTclSSLSockSetBlockingCmd (ClientData dummy, Tcl_Interp *interp, int argc,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockSetNonBlockingCmd (ClientData dummy, Tcl_Interp *interp,
 			       int argc, char **argv)
 {
@@ -1192,7 +1198,7 @@ NsTclSSLSockSetNonBlockingCmd (ClientData dummy, Tcl_Interp *interp,
  *----------------------------------------------------------------------
  */
 
-extern int
+int
 NsTclSSLSockProc (SOCKET sock, void *arg, int why)
 {
     Tcl_Interp *interp;

@@ -10,14 +10,17 @@ Goals:
 
 TODO:
 
+- use NsOpenSSLServers hash to manage drivers on a per-server basis in OpenSSLDriverInit
+- validate driver init, operation, shutdown and free'ing
+- validate SSL context load, init, locking, use of, shutdown and free'ing operations
 - fix SSL handshake tracing
 - test accessing named SSL contexts for a particular virtual server
-- review Ns_Log statements for accuracy
-- ignore any ciphers or protocols listed in config that weren't compiled into OpenSSL library
 - make sure struct locking is done where needed
-- fix OpenSSL version reporting
 - set up session cache contexts and/or use 'nsopenssl-' prefix in session cache ids
 - extract global C API calls into libnsopenssl.so.
+- review Ns_Log statements for accuracy
+- ignore any ciphers or protocols listed in config that weren't compiled into OpenSSL library
+- fix OpenSSL version reporting
 - convert to TclObj commands
 - add IP address for logged events
 - allow for Tcl API sock servers/clients to have C or Tcl callback set via nsd.tcl
