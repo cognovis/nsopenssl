@@ -341,10 +341,10 @@ LoadSSLContexts(char *server)
         sslcontext = Ns_OpenSSLServerSSLContextGet(server, value);
         if (sslcontext != NULL) {
             Ns_Log(Notice, "%s (%s): default SSL context for %s is %s", MODULE, server, name, value);
-            if (STREQ(name, "server")) {
+            if (STRIEQ(name, "server")) {
                 thisServer->defaultservercontext = value;
                 Ns_Log(Notice, "default server SSL context: %s", thisServer->defaultservercontext);
-            } else if (STREQ(name, "client")) {
+            } else if (STRIEQ(name, "client")) {
                 thisServer->defaultclientcontext = value;
                 Ns_Log(Notice, "default client SSL context: %s", thisServer->defaultclientcontext);
             } else {

@@ -834,6 +834,7 @@ extern int
 NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
 {
     int    rc     = 0;
+/* XXX defer to sslconn->socket ... */
     SOCKET socket = SSL_get_fd(sslconn->ssl);
 
     while (! SSL_is_init_finished(sslconn->ssl)) {
@@ -854,11 +855,17 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
 
             case SSL_ERROR_WANT_WRITE:
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_WANT_WRITE       (rc = %d)", socket, rc);
+/* XXX need write wait at this point */
                 break;
 
             case SSL_ERROR_WANT_READ:
-                /* We want to read but socket's nothing to read yet */
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_WANT_READ        (rc = %d)", socket, rc);
+                if (rc < 0
+                        && ns_sockerrno == EWOULDBLOCK
+                        && Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait) != NS_OK)
+                {
+                    return NS_ERROR;
+                }
                 break;
 
             case SSL_ERROR_WANT_X509_LOOKUP:
@@ -891,7 +898,8 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
         }
     }
 
-    Ns_Log(Error, "%s (%s): SSL handshake failed", MODULE, sslconn->server);
+    Ns_Log(Warning, "%s (%s): SSL handshake failed (might be normal if client does not have CA cert)", MODULE, sslconn->server);
+
     return NS_ERROR;
 }
 

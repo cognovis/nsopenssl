@@ -1,3 +1,14 @@
+2004-03-12  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.c: Changed couple of STREQ's for STRIEQ's so sslcontext
+      could be upper, lower or mixed case. Thanks to Noah Robin (sitz AT
+      aol.net).
+
+2004-03-02  Scott Goodwin  <scott@scottg.net>
+
+      * ssl.c: Changed SSL handshake failure to be a warning instead of an
+      error.
+
 2004-02-29  Scott Goodwin  <scott@scottg.net>
 
       * nsopenssl.h, nsopenssl.c, ssl.c: Added code to wait on sockets that
