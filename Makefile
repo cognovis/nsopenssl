@@ -104,26 +104,32 @@ TCLMOD   =  https.tcl
 include  $(NSHOME)/include/Makefile.module
 
 #
-# Tag the CVS snapshot with a beta tag
+# Help the poor developer
 #
-tag-beta:
+help:
+	@echo "**" 
+	@echo "** DEVELOPER HELP FOR THIS MODULE"
+	@echo "**"
+	@echo "** make tag VER=X.Y"
+	@echo "**     Tags the module CVS code with the given tag."
+	@echo "**     You can tag the CVS copy at any time, but follow the rules."
+	@echo "**     VER must be of the form:"
+	@echo "**         X.Y"
+	@echo "**         X.YbetaN"
+	@echo "**     You should browse CVS at SF to find the latest tag."
+	@echo "**"
+	@echo "** make file-release VER=X.Y"
+	@echo "**     Checks out the code for the given tag from CVS."
+	@echo "**     The result will be a releaseable tar.gz file of"
+	@echo "**     the form: module-X.Y.tar.gz."
+	@echo "**"
+
+#
+# Tag the code in CVS right now
+#
+tag:
 	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
 	cvs rtag v$(VER_) nsopenssl
-
-#
-# Create a tagged release. This moves the 'stable' tag to coincide with the v$(VER_) tag.
-# This way you can checkout the latest stable CVS copy when the head copy is unstable.
-#
-tag-stable:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag -r stable v$(VER_) nsopenssl
-
-#
-# Create a tagged release (force it)
-#
-tag-stable-force:
-	@if [ "$$VER" = "" ]; then echo 1>&2 "VER must be set to version number!"; exit 1; fi
-	cvs rtag -F -r stable v$(VER_) nsopenssl
 
 #
 # Create a distribution file release
@@ -134,7 +140,7 @@ file-release:
 	mkdir work
 	cd work && cvs -d :pserver:anonymous@cvs.aolserver.sourceforge.net:/cvsroot/aolserver co -r v$(VER_) nsopenssl
 	mv work/nsopenssl work/nsopenssl-$(VER)
-	( cd work && tar cvf - nsopenssl-$(VER) ) | gzip -9 > nsopenssl-$(VER).tar.gz
+	(cd work && tar cvf - nsopenssl-$(VER)) | gzip -9 > nsopenssl-$(VER).tar.gz
 	rm -rf work
 
 # XXX alter this to work with sed or tcl instead of perl
