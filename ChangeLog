@@ -1,5 +1,9 @@
 2000-08-20  Kriston J. Rehberg  <Kriston@AOL.NET>
 
+	* readme.txt: Updated build and installation instructions.  Added
+	notes about -fPIC and no-asm options when building the OpenSSL
+	library.
+	
 	* Added to $TOP/nsopenssl with new Makefile.
 	
 
