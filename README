@@ -134,7 +134,7 @@ ns_param KeyFile               server/server.key
 ns_param CADir                 ca-client/dir
 ns_param CAFile                ca-client/ca-client.crt
 ns_param Protocols             "SSLv3, TLSv1"
-ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:++EXP"
 ns_param PeerVerify            false
 ns_param PeerVerifyDepth       3
 ns_param Trace                 true
@@ -148,7 +148,7 @@ ns_param CADir                 ca-client/dir
 ns_param CAFile                ca-client/ca-client.crt
 #ns_param Protocols             "All"
 ns_param Protocols             "SSLv3, TLSv1"
-ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param CipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:++EXP"
 ns_param PeerVerify            false
 ns_param PeerVerifyDepth       3
 ns_param Trace                 true
