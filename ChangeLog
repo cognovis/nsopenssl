@@ -1,3 +1,26 @@
+2001-10-13  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: The NsOpenSSLSend function simply did an
+	SSL_write. Robert Spassky Cabacungan found that this wasn't
+	working for long file transfers. Specifically, in his own words:
+
+	The problem is the NsOpenSSLSend() function in ssl.c, in
+	nsopenssl-2.0. BIO_write is returning a "resource not available,
+	try again" error, but NsOpenSSLSend is not checking for that, and
+	so behaves as though it were a non-recoverable error, aborting the
+	write instead of trying again.
+
+        A simple loop over the SSL_write() fixes this.  Ironically, there
+	is commented out code at the bottom of the function which would
+	handle retries.  However, the comment reads "this BIO_write loop
+	doesn't work, but seems like it should".  So it looks like Scott
+	did consider this possibility, but it kind of slipped through the
+	cracks in the final release.  Indeed, NsOpenSSLRecv() does loop
+	and handle retries.
+
+	Rob change the SSL_write to be inside of a loop that checks
+	BIO_should_retry on the write BIO.
+
 2001-09-28  Scott S. Goodwin  <scott@scottg.net>
 
 	* Makefile: Added better make instructions when OPENSSL var isn't

@@ -248,17 +248,11 @@ NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 {
     int rc;
 
-    rc = SSL_write(ccPtr->ssl, buffer, towrite);
-
-#if 0 /* XXX this BIO_write loop doesn't work, but seems like it should */
-    Ns_Log(Debug, "TOWRITE=%d", towrite);
-
     do {
-	rc = BIO_write(ccPtr->io, buffer, towrite);
-    } while (rc < towrite && BIO_should_retry(ccPtr->io));
-
-    Ns_Log(Debug, "HERE: rc=%d", rc);
-#endif
+	rc = SSL_write(ccPtr->ssl, buffer, towrite);
+	towrite -= rc;
+    } while (BIO_should_retry(ccPtr->ssl->wbio) &&
+	     BIO_should_write(ccPtr->ssl->wbio));
 
     return rc;
 }
