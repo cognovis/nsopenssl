@@ -1371,17 +1371,22 @@ NsOpenSSLContextClientDefaultGet(char *server)
 static RSA *
 IssueTmpRSAKey(SSL *ssl, int export, int keylen)
 {
-    NsOpenSSLConn *sslconn = NULL;
-    static RSA    *rsa_tmp = NULL;
+    NsOpenSSLConn *sslconn;
+    RSA *rsa_tmp;
+    char *server = "none";
 
     sslconn = (NsOpenSSLConn *) SSL_get_app_data(ssl);
+    if (sslconn && sslconn->ssldriver) {
+        server = sslconn->ssldriver->server;
+    }
+
     rsa_tmp = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
     if (rsa_tmp == NULL) {
-        Ns_Log(Error, "%s (%s): Temporary RSA key generation failed",
-                MODULE, sslconn->ssldriver->server);
+        Ns_Log(Error, "%s (%s): Error generating %u-bit temporary RSA key",
+                MODULE, server, keylen);
     } else {
-        Ns_Log(Notice, "%s (%s): Generated %d-bit temporary RSA key",
-                MODULE, sslconn->ssldriver->server, keylen);
+        Ns_Log(Notice, "%s (%s): Generated %u-bit temporary RSA key",
+                MODULE, server, keylen);
     }
 
     return rsa_tmp;
