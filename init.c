@@ -52,9 +52,15 @@ static void LoadSSLContexts(char *server, char *module);
 static Ns_OpenSSLContext *LoadSSLContext(char *server, char *module, char *name);
 static void LoadSSLDrivers(char *server, char *module);
 
-static int OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver);
+static void OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver);
 static void OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver);
-static Server *GetServer(char *server, char *module);
+static void ServerStateInit(char *server, char *module);
+/* XXX chg to ServerStateGet */
+/* XXX add ServerStateDestroy */
+static Server *ServerStateGet(char *server, char *module);
+static void ServerStateSSLContextAdd(char *server, char *module, Ns_OpenSSLContext *sslcontext);
+static int ServerStateSSLDriverAdd(char *server, char *module, NsOpenSSLDriver *ssldriver);
+static Ns_OpenSSLContext *ServerStateSSLContextGet(char *server, char *module, char *name);
 
 
 /* Callback used by core NSD */
@@ -83,46 +89,33 @@ NsOpenSSLSessionCacheId *nextSessionCacheId;
 int
 NsOpenSSLModuleInit(char *server, char *module)
 {
-    Ns_OpenSSLContext *sslcontext = NULL;
-    NsOpenSSLDriver *ssldriver;
-    Ns_Set *ssldrivers, *sslcontexts;
-    Tcl_HashEntry *hPtr;
-    Server *thisServer;
-    char *name, *path, *sslcontextname;
-    int i, new;
     static int globalInit = 0;
 
-    /* Initialize one-time global stuff */
+    /* 
+     * Initialize one-time global stuff.
+     */
 
     if (!globalInit) {
-    if (InitOpenSSL() == NS_ERROR) {
-    Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
-    return NS_ERROR;
+        if (InitOpenSSL() == NS_ERROR) {
+            Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
+            return NS_ERROR;
+        }
+        Tcl_InitHashTable(&NsOpenSSLServers, TCL_STRING_KEYS);
+        globalInit = 1;
     }
 
-    /*
-     * This hash table contains pointers to each virtual server's state
-     * data structure.
+    /* 
+     * Initialize this virtual server's state information 
      */
-    Tcl_InitHashTable(&NsOpenSSLServers, TCL_STRING_KEYS);
-    globalInit = 1;
-    }
 
-    /* Initialize this virtual server's state information */
-   
-    thisServer = ns_malloc(sizeof(Server));
-    thisServer->server = server;
-    //Ns_RWLockInit(&thisServer->lock);
-    Ns_MutexInit(&thisServer->lock);
-    hPtr = Tcl_CreateHashEntry(&NsOpenSSLServers, server, &new);
-    Tcl_SetHashValue(hPtr, thisServer);
-    Tcl_InitHashTable(&thisServer->sslcontexts, TCL_STRING_KEYS);
-    Tcl_InitHashTable(&thisServer->ssldrivers, TCL_STRING_KEYS);
+    ServerStateInit(server, module);
 
-    /* Create the Tcl commands for this virtual server's interps */
+    /* 
+     * Create the nsopenssl Tcl commands for this virtual server's interps.
+     */
 
     if (Ns_TclInitInterps(server, NsOpenSSLCreateCmds, NULL) != NS_OK)
-	    return NS_ERROR;
+        return NS_ERROR;
 
     /* 
      * Load this virtual server's SSL contexts from the configuration file.
@@ -142,7 +135,6 @@ NsOpenSSLModuleInit(char *server, char *module)
 #ifdef TEST
     NSOPENSSLDumpState();
 #endif
-
     return NS_OK;
 }
 
@@ -150,12 +142,45 @@ NsOpenSSLModuleInit(char *server, char *module)
 /*
  *----------------------------------------------------------------------
  *
- * GetServer --
+ * ServerStateInit --
+ *
+ *       Initialize a virtual server's state storage.
+ *
+ * Results:
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ServerStateInit(char *server, char *module)
+{
+    Server *thisServer;
+    Tcl_HashEntry *hPtr;
+    int new;
+
+    thisServer = ns_malloc(sizeof(Server));
+    thisServer->server = server;
+    //Ns_RWLockInit(&thisServer->lock);
+    Ns_MutexInit(&thisServer->lock);
+    hPtr = Tcl_CreateHashEntry(&NsOpenSSLServers, server, &new);
+    Tcl_SetHashValue(hPtr, thisServer);
+    Tcl_InitHashTable(&thisServer->sslcontexts, TCL_STRING_KEYS);
+    Tcl_InitHashTable(&thisServer->ssldrivers, TCL_STRING_KEYS);
+    return;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ServerStateGet --
  *
  *       Return the named virtual server's state structure.
  *
  * Results:
- *       A pointer to XXX Server struct.
+ *       A pointer to Server struct.
  *
  * Side effects:
  *
@@ -163,17 +188,127 @@ NsOpenSSLModuleInit(char *server, char *module)
  */
 
 static Server *
-GetServer(char *server, char *module)
+ServerStateGet(char *server, char *module)
 {
     Server *thisServer;
     Tcl_HashEntry *hPtr;
 
+    /* XXX no locking yet */
     hPtr = Tcl_FindHashEntry(&NsOpenSSLServers, server);
-
     thisServer = Tcl_GetHashValue(hPtr);
-
     return thisServer;
-    
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ServerStateSSLDriverAdd --
+ *
+ *       Add an SSL driver to a server state info
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+ServerStateSSLDriverAdd(char *server, char *module, NsOpenSSLDriver *ssldriver)
+{
+    Server *thisServer;
+    Tcl_HashEntry *hPtr;
+    int new;
+
+    /* XXX no locking yet */
+    if (ssldriver == NULL) {
+        Ns_Log(Warning, "%s: %s: attempt to add SSL driver to server failed",
+                server, MODULE);
+        return NS_ERROR;
+    } else {
+        thisServer = ServerStateGet(server, module);
+        hPtr = Tcl_CreateHashEntry(&thisServer->ssldrivers, ssldriver->name, &new);
+        if (!new) {
+            Ns_Log(Error, "%s: %s: duplicate SSL driver name: %s",
+                    server, MODULE, ssldriver->name);
+            /* XXX Ns_OpenSSLDriverDestroy(server, module, sslcontext); */
+            return NS_ERROR;
+        } else {
+            Tcl_SetHashValue(hPtr, ssldriver);
+        }
+    }
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ServerStateSSLContextAdd --
+ *
+ *       Add an SSL context to a server state info
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       Registers driver with AOLserver core.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ServerStateSSLContextAdd(char *server, char *module, Ns_OpenSSLContext *sslcontext)
+{
+    Server *thisServer;
+    Tcl_HashEntry *hPtr;
+    int new;
+
+    /* XXX no locking yet */
+    if (sslcontext == NULL) {
+        Ns_Log(Warning, "%s: %s: attempt to add SSL context to server failed",
+                server, MODULE);
+    } else {
+        thisServer = ServerStateGet(server, module);
+        hPtr = Tcl_CreateHashEntry(&thisServer->sslcontexts, sslcontext->name, &new);
+        if (!new) {
+            Ns_Log(Error, "%s: %s: duplicate SSL context name: %s",
+                    server, MODULE, sslcontext->name);
+            Ns_OpenSSLContextDestroy(server, module, sslcontext);
+        } else {
+            Tcl_SetHashValue(hPtr, sslcontext);
+        }
+    }
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ServerStateSSLContextGet --
+ *
+ *       Get an SSL context from server state info
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
+static Ns_OpenSSLContext *
+ServerStateSSLContextGet(char *server, char *module, char *name)
+{
+    Server *thisServer;
+    Tcl_HashEntry *hPtr;
+
+    /* XXX no locking yet */
+    thisServer = ServerStateGet(server, module);
+    hPtr = Tcl_FindHashEntry(&thisServer->sslcontexts, name);
+    return Tcl_GetHashValue(hPtr);
 }
 
 
@@ -193,16 +328,13 @@ GetServer(char *server, char *module)
  *----------------------------------------------------------------------
  */
 
-/* XXX take out thisServer -- make call to Ns_* func to get server struct */
 static void
 LoadSSLContexts(char *server, char *module)
 {
     Ns_OpenSSLContext *sslcontext;
-    Server *thisServer;
     Ns_Set *sslcontexts;
-    Tcl_HashEntry *hPtr;
-    char *path, *name, *sslcontextname;
-    int i, new;
+    char *path, *name;
+    int i;
 
     path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
     sslcontexts = Ns_ConfigGetSection(path);
@@ -213,31 +345,17 @@ LoadSSLContexts(char *server, char *module)
         Ns_Log(Notice, "%s: %s: no SSL contexts defined for this server", 
                 server, MODULE);
         return;
-    } 
-
-    thisServer = GetServer(server, module);
-
-    for (i = 0; i < Ns_SetSize(sslcontexts); ++i) {
-        name = Ns_SetKey(sslcontexts, i);
-        Ns_Log(Notice, "%s: %s: loading SSL context '%s'", server, MODULE,
-                name);
-        sslcontext = LoadSSLContext(server, module, name);
-        if (sslcontext == NULL) {
-            continue;
-        }
-
-        hPtr = Tcl_CreateHashEntry(&thisServer->sslcontexts, name, &new);
-        if (!new) {
-            Ns_Log(Error, "%s: %s: duplicate SSL context name: %s",
-                    server, MODULE, name);
-            Ns_OpenSSLContextDestroy(server, module, sslcontext);
-        } else {
-            Tcl_SetHashValue(hPtr, sslcontext);
-        }
-
-        if (Ns_OpenSSLContextInit(server, module, sslcontext) == NS_ERROR) {
-            Ns_Log(Error, "%s: %s: SSL context '%s' left uninitialized",
-                    server, MODULE, sslcontext->name);
+    } else {
+        for (i = 0; i < Ns_SetSize(sslcontexts); ++i) {
+            name = Ns_SetKey(sslcontexts, i);
+            Ns_Log(Notice, "%s: %s: loading SSL context '%s'", server, MODULE,
+                    name);
+            sslcontext = LoadSSLContext(server, module, name);
+            ServerStateSSLContextAdd(server, module, sslcontext);
+            if (Ns_OpenSSLContextInit(server, module, sslcontext) == NS_ERROR) {
+                Ns_Log(Error, "%s: %s: SSL context '%s' left uninitialized",
+                        server, MODULE, sslcontext->name);
+            }
         }
     }
 }
@@ -259,17 +377,14 @@ LoadSSLContexts(char *server, char *module)
  *----------------------------------------------------------------------
  */
 
-/* XXX take out thisServer -- make call to Ns_* func to get server struct */
 static void
 LoadSSLDrivers(char *server, char *module)
 {
     Ns_OpenSSLContext *sslcontext;
     NsOpenSSLDriver *ssldriver;
-    Server *thisServer;
     Ns_Set *ssldrivers;
-    Tcl_HashEntry *hPtr;
     char *path, *name, *sslcontextname;
-    int i, new;
+    int i;
 
     path = Ns_ConfigGetPath(server, module, "ssldrivers", NULL);
     ssldrivers = Ns_ConfigGetSection(path);
@@ -279,8 +394,6 @@ LoadSSLDrivers(char *server, char *module)
                 server, MODULE);
         return;
     }
-
-    thisServer = GetServer(server, module);
 
     for (i = 0; i < Ns_SetSize(ssldrivers); ++i) {
         name = Ns_SetKey(ssldrivers, i);
@@ -298,46 +411,38 @@ LoadSSLDrivers(char *server, char *module)
             continue;
         }
 
-        Ns_MutexLock(&thisServer->lock);
-        hPtr = Tcl_FindHashEntry(&thisServer->sslcontexts, sslcontextname);
-        if (hPtr != NULL) {
-            sslcontext = (Ns_OpenSSLContext *) Tcl_GetHashValue(hPtr);
-        }
-        Ns_MutexUnlock(&thisServer->lock);
-
-        if (hPtr == NULL) {
+        sslcontext = ServerStateSSLContextGet(server, module, sslcontextname);
+        if (sslcontext == NULL) {
             Ns_Log(Error, "%s: %s: SSL context '%s' needed by driver '%s' not found",
                     server, MODULE, sslcontextname, name);
             continue;
         }
 
         /*
-         * Add to virtual server's state hash and allocate the driver.
+         * Create the driver and add to virtual server's state.
          */
 
-        hPtr = Tcl_CreateHashEntry(&thisServer->ssldrivers, name, &new);
-        if (!new) {
-            Ns_Log(Error, "%s: %s: duplicate SSL driver: %s", server, MODULE, name);
-            continue;
-        } else {
-            ssldriver = ns_calloc(1, sizeof(NsOpenSSLDriver));
-            ssldriver->server = server;
-            ssldriver->module = module;
-            ssldriver->sslcontext = sslcontext;
-            ssldriver->name = name;
-            ssldriver->path = path;
-            ssldriver->refcnt = 0;
-            Tcl_SetHashValue(hPtr, ssldriver);
+        ssldriver = ns_calloc(1, sizeof(NsOpenSSLDriver));
+        ssldriver->server = server;
+        ssldriver->module = module;
+        /* XXX make sure ssl context has been initialized before here */
+        ssldriver->sslcontext = sslcontext;
+        ssldriver->name = name;
+        ssldriver->path = path;
+        ssldriver->refcnt = 0;
+
+        if (ServerStateSSLDriverAdd(server, module, ssldriver) == NS_ERROR) {
+            Ns_Log(Error, "%s: %s: SSL driver not added to server state",
+                server, MODULE);
+            ns_free(ssldriver);
+            return;
         }
 
         /*
-         * Crank the driver up.
+         * Crank up the driver
          */
 
-        if (OpenSSLDriverInit(server, module, ssldriver) != NS_OK) {
-            Ns_Log(Error, "%s: %s: initialization of '%s' driver failed",
-                    server, MODULE, name);
-        }
+        OpenSSLDriverInit(server, module, ssldriver); 
     }
  }
 
@@ -358,12 +463,10 @@ LoadSSLDrivers(char *server, char *module)
  *----------------------------------------------------------------------
  */
 
-static int
+static void
 OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver)
 {
     Ns_DriverInitData init;
-
-    /* Set up for call to AOLserver API that will initialize driver */
 
     init.version = NS_DRIVER_VERSION_1;
     init.name = MODULE;
@@ -375,10 +478,7 @@ OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver)
     if (Ns_DriverInit(server, module, &init) == NS_ERROR) {
         Ns_Log(Error, "%s: %s: driver '%s' failed to initialize",
                 server, MODULE, ssldriver->name);
-        return NS_ERROR;
     }
-
-    return NS_OK;
 }
 
 
@@ -403,15 +503,10 @@ OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver)
 {
     Ns_OpenSSLConn *sslconn;
 
-    Ns_Log(Notice, "%s: %s: shutting down driver '%s'", MODULE, 
-            ssldriver->server, ssldriver->name);
-
     if (ssldriver == NULL)
         return;
-
-    /*
-     * Remove driver from driver linked list.
-     */
+    Ns_Log(Notice, "%s: %s: shutting down driver '%s'", MODULE, 
+            ssldriver->server, ssldriver->name);
 
 
 
@@ -425,7 +520,7 @@ OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver)
         while ((sslconn = ssldriver->firstFreeConn) != NULL) {
             ssldriver->firstFreeConn = sslconn->next;
             /* XXX doesn't this need to have it's contents free'd? */
-            Ns_Free(sslconn);
+            ns_free(sslconn);
         }
     }
 
@@ -435,7 +530,11 @@ OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver)
     if (ssldriver->sslcontext != NULL) 
         ssldriver->sslcontext->refcnt--;
   
-    Ns_Free(ssldriver);
+    ns_free(ssldriver);
+
+    /*
+     * Remove driver from server state linked list.
+     */
 
     return;
 }
@@ -494,20 +593,12 @@ static Ns_OpenSSLContext *
 LoadSSLContext(char *server, char *module, char *name)
 {
     Ns_OpenSSLContext *sslcontext;
-    char *path;
+    char *path, *moduleDir;
     char *role;
-    char *moduleDir;
-    char *certFile;
-    char *keyFile;
-    char *protocols;
-    char *cipherSuite;
-    char *caFile;
-    char *caDir;
-    int   peerVerify;
-    int   peerVerifyDepth;
-    int   sessionCache;
-    int   sessionCacheSize;
-    int   sessionCacheTimeout;
+    char *certFile, *keyFile, *caFile, *caDir;
+    char *protocols, *cipherSuite;
+    int   peerVerify, peerVerifyDepth;
+    int   sessionCache, sessionCacheSize, sessionCacheTimeout;
     int   trace;
 
     path = Ns_ConfigGetPath(server, module, "sslcontext", name, NULL);
@@ -531,7 +622,6 @@ LoadSSLContext(char *server, char *module, char *name)
         return NULL;
     }
     sslcontext->name = ns_strdup(name);
-
     sslcontext->role = role;
    
     /*
@@ -620,7 +710,6 @@ LoadSSLContext(char *server, char *module, char *name)
     } else {
         Ns_OpenSSLContextTraceSet(server, module, sslcontext, 0);
     }
-
     return sslcontext;
 }
 
@@ -653,12 +742,12 @@ InitOpenSSL(void)
      * Initialize OpenSSL callbacks
      */
 
-    if (CRYPTO_set_mem_functions(Ns_Malloc, Ns_Realloc, Ns_Free) == 0)
+    if (CRYPTO_set_mem_functions(ns_malloc, ns_realloc, ns_free) == 0)
         Ns_Log(Warning, "%s: OpenSSL memory callbacks failed in InitOpenSSL",
                 MODULE);
 
     num_locks = CRYPTO_num_locks();
-    locks = Ns_Calloc(num_locks, sizeof(*locks));
+    locks = ns_calloc(num_locks, sizeof(*locks));
     for (i = 0; i < num_locks; i++) {
         sprintf(buf, "openssl-%d", i);
         Ns_MutexSetName2(locks + i, MODULE, buf);
@@ -700,7 +789,6 @@ InitOpenSSL(void)
     Ns_MutexSetName2(&nextSessionCacheId->lock, MODULE, "nsopensslsessioncacheid");
     nextSessionCacheId->id = 1;
     Ns_MutexUnlock(&nextSessionCacheId->lock);
-
     return NS_OK;
 }
 
@@ -790,7 +878,7 @@ SeedPRNG(void)
     }
 
     RAND_add(buf_ptr, seedBytes, (double) seedBytes);
-    Ns_Free(buf_ptr);
+    ns_free(buf_ptr);
 
     if (RAND_status()) {
         Ns_Log(Notice, "%s: PRNG successfully seeded with %d bytes from Ns_DRand",
@@ -799,7 +887,6 @@ SeedPRNG(void)
         Ns_Log(Warning, "%s: PRNG failed to be seeded with Ns_DRand", MODULE);
         return NS_FALSE;
     }
-
     return NS_TRUE;
 }
 
@@ -881,7 +968,6 @@ ThreadDynlockCreateCallback(char *file, int line)
     Ns_DStringVarAppend(&ds, "openssl: ", file, ": ");
     Ns_DStringPrintf(&ds, "%d", line);
     Ns_MutexSetName2(lock, MODULE, Ns_DStringValue(&ds));
-
     return (struct CRYPTO_dynlock_value *) lock;
 }
 
@@ -969,86 +1055,74 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
     sslcontext = (Ns_OpenSSLContext *) ssldriver->sslcontext;
 
     switch (cmd) {
-    case DriverRecv:
-    case DriverSend:
+        case DriverRecv:
+        case DriverSend:
 
-	/* On first I/O, initialize the connection context */
+            /* 
+             * Initialize the connection context on first I/O
+             */
 
-	if (sock->arg == NULL) {
-            Ns_Log(Debug, "%s: NEW CONN", MODULE);
-	    n = driver->recvwait;
-	    if (n > driver->sendwait) 
-    		n = driver->sendwait;
+            if (sock->arg == NULL) {
+                Ns_Log(Debug, "%s: NEW CONN", MODULE);
+                n = driver->recvwait;
+                if (n > driver->sendwait) 
+                    n = driver->sendwait;
 
-            /* XXX WARNING: ssldriver->driver is NULL until the first connection */
-            ssldriver->driver = driver;
+                /* XXX WARNING: ssldriver->driver is NULL until the first connection */
+                ssldriver->driver = driver;
 
 #if 0
-	    sock->arg = NsOpenSSLCreateConn(sock->sock, n, driver->arg);
+                sock->arg = NsOpenSSLCreateConn(sock->sock, n, driver->arg);
 #endif
-	    sock->arg = NsOpenSSLConnCreate(sock->sock, ssldriver, sslcontext);
-	    if (sock->arg == NULL) {
-                Ns_Log(Notice, "*** sock->arg is null");
-    		return -1;
-	    }
-    }
+                sock->arg = NsOpenSSLConnCreate(sock->sock, ssldriver, sslcontext);
+                if (sock->arg == NULL) {
+                    Ns_Log(Notice, "*** sock->arg is null");
+                    return -1;
+                }
+            }
 
-#if 0 /* XXX */
-	sslconn = sock->arg;
-	if (sslconn == NULL) {
-	    sslconn = ns_calloc(1, sizeof(*sslconn));
-	    sslconn->driver   = driver->arg;
-	    sslconn->conntype = CONNTYPE_SERVER;
-	    sslconn->refcnt   = 0;	/* always 0 for nsdserver conns */
-	    sslconn->sock     = sock->sock;
-	    sock->arg      = sslconn;
+            /* 
+             * Process each buffer one at a time 
+             */
 
-	    if (NsOpenSSLCreateConn((Ns_OpenSSLConn *) sslconn) != NS_OK) {
-		return NS_ERROR;
-	    }
-	}
-#endif
+            total = 0;
+            do {
+                if (cmd == DriverSend) {
+                    n = NsOpenSSLSend(sock->arg, bufs->iov_base, (int) bufs->iov_len);
+                } else {
+                    n = NsOpenSSLRecv(sock->arg, bufs->iov_base, (int) bufs->iov_len);
+                }
+                if (n < 0 && total > 0) {
+                    /* NB: Mask error if some bytes were read. */
+                    n = 0;
+                }
+                ++bufs;
+                total += n;
+            } while (n > 0 && --nbufs > 0);
+            n = total;
+            break;
 
-	/* Process each buffer one at a time */
+        case DriverKeep:
+            if (sock->arg != NULL && NsOpenSSLFlush(sock->arg) == NS_OK) {
+                n = 0;
+            } else {
+                n = -1;
+            }
+            break;
 
-	total = 0;
-	do {
-	    if (cmd == DriverSend) {
-		n = NsOpenSSLSend(sock->arg, bufs->iov_base, (int) bufs->iov_len);
-	    } else {
-		n = NsOpenSSLRecv(sock->arg, bufs->iov_base, (int) bufs->iov_len);
-	    }
-	    if (n < 0 && total > 0) {
-		/* NB: Mask error if some bytes were read. */
-		n = 0;
-	    }
-	    ++bufs;
-	    total += n;
-	} while (n > 0 && --nbufs > 0);
-	n = total;
-	break;
+        case DriverClose:
+            if (sock->arg != NULL) {
+                (void) NsOpenSSLFlush(sock->arg);
+                NsOpenSSLConnDestroy(sock->arg);
+                sock->arg = NULL;
+            }
+            n = 0;
+            break;
 
-    case DriverKeep:
-	    if (sock->arg != NULL && NsOpenSSLFlush(sock->arg) == NS_OK) {
-	        n = 0;
-	    } else {
-	        n = -1;
-	    }
-	    break;
-
-    case DriverClose:
-	    if (sock->arg != NULL) {
-	        (void) NsOpenSSLFlush(sock->arg);
-	        NsOpenSSLConnDestroy(sock->arg);
-	        sock->arg = NULL;
-	    }
-	    n = 0;
-	    break;
-
-    default:
-    	Ns_Log(Error, "%s: Unsupported driver command encountered", MODULE);
-	    n = -1;
-	    break;
+        default:
+            Ns_Log(Error, "%s: Unsupported driver command encountered", MODULE);
+            n = -1;
+            break;
     }
     return n;
 }

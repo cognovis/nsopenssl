@@ -171,7 +171,6 @@ NsOpenSSLCreateCmds(Tcl_Interp* interp, void *arg)
 	}
 	++cmds;
     }
-
     return NS_OK;
 }
 
@@ -466,7 +465,6 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp *interp, int argc, char **argv)
 			  "\": should be one of: info clientcert", NULL);
 	status = TCL_ERROR;
     }
-
     return status;
 }
 
@@ -572,7 +570,6 @@ NsTclSSLSockOpenCmd(ClientData dummy, Tcl_Interp* interp, int argc,
     } else {
 	Tcl_AppendElement(interp, "0");
     }
-
     return TCL_OK;
 }
 
@@ -687,7 +684,6 @@ NsTclSSLSockAcceptCmd(ClientData dummy, Tcl_Interp *interp, int argc,
     } else {
 	Tcl_AppendElement(interp, "0");
     }
-
     return TCL_OK;
 }
 
@@ -755,7 +751,6 @@ NsTclSSLGetUrlCmd(ClientData dummy, Tcl_Interp *interp, int argc,
 
   done:
     Ns_DStringFree(&ds);
-
     return status;
 }
 
@@ -995,7 +990,6 @@ NsTclSSLSockSelectCmd(ClientData dummy, Tcl_Interp *interp, int argc,
     Tcl_DStringFree(&dsRfd);
     Tcl_DStringFree(&dsNbuf);
     ckfree((char *) fargv);
-
     return status;
 }
 
@@ -1275,7 +1269,6 @@ NsOpenSSLGetConn(Tcl_Interp *interp)
 	    return (Ns_OpenSSLConn *) Ns_ConnDriverContext(conn);
 	}
     }
-
     return NULL;
 }
 
@@ -1390,7 +1383,6 @@ CreateTclChannel(Ns_OpenSSLConn *sslconn, Tcl_Interp *interp)
     Tcl_RegisterChannel(interp, chan);
     Tcl_DStringAppendElement(&ds, Tcl_GetChannelName(chan));
     Tcl_DStringResult(interp, &ds);
-
     return TCL_OK;
 }
 
@@ -1444,7 +1436,6 @@ ChanInputProc(ClientData instanceData, char *buf, int bufSize,
 	       int *errorCodePtr)
 {
     Ns_OpenSSLConn *sslconn = (Ns_OpenSSLConn *) instanceData;
-
     return NsOpenSSLRecv(sslconn, (void *) buf, bufSize);
 }
 
@@ -1477,11 +1468,8 @@ ChanCloseProc(ClientData instanceData, Tcl_Interp *interp)
     Ns_OpenSSLConn *sslconn = (Ns_OpenSSLConn *) instanceData;
 
     sslconn->refcnt--;
-
     NsOpenSSLConnDestroy(sslconn);
-
     /* XXX if errors occur, I should store the error in the interp's result. */
-
     return TCL_OK;
 }
 
@@ -1508,7 +1496,6 @@ ChanFlushProc(ClientData instanceData)
     Ns_OpenSSLConn *sslconn = (Ns_OpenSSLConn *) instanceData;
 
     NsOpenSSLFlush(sslconn);
-
     return TCL_OK;
 }
 
@@ -1540,7 +1527,6 @@ ChanGetHandleProc (ClientData instanceData, int direction,
     } else {
 	*handlePtr = (ClientData) sslconn->wsock;
     }
-
     return TCL_OK;
 }
 
@@ -1570,7 +1556,6 @@ ChanWatchProc(ClientData instanceData, int mask)
 #if 0				/* XXX ChanWatchProc: instanceData isn't used here yet */
     Ns_OpenSSLConn *sslconn = (Ns_OpenSSLConn *) instanceData;
 #endif
-
     return;
 }
 
@@ -1672,7 +1657,6 @@ ValidTime(ASN1_UTCTIME *tm)
     n = BIO_read(bio, result, n);
     result[n] = '\0';
     BIO_free(bio);
-
     return result;
 }
 
@@ -1710,7 +1694,6 @@ PEMCertificate(X509 *peercert)
     n = BIO_read(bio, result, n);
     result[n] = '\0';
     BIO_free(bio);
-
     return result;
 }
 
@@ -1825,7 +1808,6 @@ GetSet(Tcl_Interp *interp, char *flist, int write, fd_set **setPtrPtr,
 	FD_SET(sock, setPtr);
     }
     ckfree((char *) fargv);
-
     return status;
 }
 
@@ -1932,7 +1914,6 @@ SSLSockListenCallback(SOCKET sock, void *arg, int why)
 	Ns_TclLogError(interp);
     }
     Ns_TclDeAllocateInterp(interp);
-
     return NS_TRUE;
 }
 
@@ -1966,6 +1947,5 @@ NsTclEval(Tcl_Interp *interp, char *script)
     status = Tcl_EvalEx(interp, script, strlen(script), TCL_EVAL_DIRECT);
     Tcl_SetResult(interp, Tcl_GetString(Tcl_GetObjResult(interp)),
 		   TCL_VOLATILE);
-
     return status;
 }

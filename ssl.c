@@ -150,7 +150,6 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
         NsOpenSSLConnDestroy(sslconn);
         return NULL;
     }
-
     return sslconn;
 }
 
@@ -230,7 +229,6 @@ NsOpenSSLConnDestroy(Ns_OpenSSLConn *sslconn)
 	    sslconn = NULL;
 	}
     }
-
     return NS_OK;
 }
 
@@ -278,7 +276,6 @@ NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread)
 	rc = BIO_read(sslconn->io, buffer, toread);
         Ns_Log(Debug, "NsOpenSSLRecv: read(2): %d %d", toread, rc);
     }
-
     return rc;
 }
 
@@ -319,7 +316,6 @@ NsOpenSSLSend(Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
 	    towrite -= rc;
     } while (BIO_should_retry(sslconn->ssl->wbio) &&
 	     BIO_should_write(sslconn->ssl->wbio));
-
     return rc;
 }
 
@@ -351,8 +347,7 @@ NsOpenSSLFlush(Ns_OpenSSLConn *sslconn)
                     MODULE);
 	}
     }
-
-	return NS_OK;
+    return NS_OK;
 }
 
 
@@ -388,7 +383,6 @@ NsOpenSSLShutdown(SSL *ssl)
     for (i = rc = 0; rc == 0 && i < 4; i++) {
 	rc = SSL_shutdown(ssl);
     }
-
     return rc;
 }
 
@@ -467,7 +461,6 @@ RunSSLHandshake(Ns_OpenSSLConn *sslconn)
 	    Ns_Log(Notice, "%s: %s: SERVER's CERT is NOT VALID",
 		    MODULE, sslconn->type);
     }
-
     return NS_OK;
 }
 
@@ -585,6 +578,5 @@ RunServerSSLHandshake(Ns_OpenSSLConn *sslconn)
 		sslconn->type);
     }
 #endif
-
     return NS_OK;
 }

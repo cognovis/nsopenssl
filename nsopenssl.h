@@ -379,7 +379,7 @@ extern int NsOpenSSLModuleInit(char *server, char *module);
 
 
 #ifdef TEST
-extern void NSOPENSSLDumpSSLState(void);
+extern void NSOPENSSLDumpState(void);
 extern void NSOPENSSLDumpSSLServers(void);
 extern void NSOPENSSLDumpSSLDrivers(void);
 extern void NSOPENSSLDumpSSLContexts(void);
