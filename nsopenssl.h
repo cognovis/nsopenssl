@@ -50,10 +50,17 @@
 #include <sys/filio.h>
 #endif
 
-/* openssl and nsd both define closesocket */
+/*
+ * OpenSSL and AOLserver both define closesocket.
+ */
+
 #ifdef closesocket
 #undef closesocket
 #endif
+
+/*
+ * OpenSSL Library
+ */
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -61,41 +68,11 @@
 #include <openssl/x509v3.h>
 #include <openssl/opensslconf.h>
 
-
 /*
- * Defaults
+ * nsopenssl Default Settings.
  */
 
-/* Turn this on to show debug info */
-#define NSOPENSSL_DEBUG                1
-
-#define MODULE                         "nsopenssl"
-#define MODULE_SHORT                   "ssl"
-
-#define SERVER_ROLE                    1
-#define CLIENT_ROLE                    0
-
-#define DEFAULT_PROTOCOLS              "All"
-#define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
-#define DEFAULT_CERT_FILE              "certificate.pem"
-#define DEFAULT_KEY_FILE               "key.pem"
-#define DEFAULT_CA_FILE                "ca.pem"
-#define DEFAULT_CA_DIR                 "ca"
-#define DEFAULT_PEER_VERIFY            NS_FALSE
-#define DEFAULT_PEER_VERIFY_DEPTH      3
-#define DEFAULT_SESSION_CACHE          NS_TRUE
-#define DEFAULT_SESSION_CACHE_SIZE     128
-#define DEFAULT_SESSION_CACHE_TIMEOUT  300
-#define DEFAULT_TRACE                  NS_FALSE
-#define DEFAULT_TIMEOUT                30
-#define DEFAULT_BUFFER_SIZE            16384
-#define DEFAULT_SEEDBYTES              1024
-#define DEFAULT_MAXBYTES               1024000
-#define DEFAULT_SENDWAIT               60
-#define DEFAULT_RECVWAIT               60
-#define CONFIG_MODULE_DIR              "ModuleDir"
-#define CONFIG_RANDOM_FILE             "RandomFile"
-#define CONFIG_SEEDBYTES               "SeedBytes"
+#include "defaults.h"
 
 
 /*
@@ -193,11 +170,6 @@ typedef struct Server {
  * sslconn.c
  */
 
-#if 0
-extern void
-NsOpenSSLErrorDump(NsOpenSSLConn *sslconn, int code);
-#endif
-
 extern NsOpenSSLConn *
 NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext);
 
@@ -210,7 +182,6 @@ NsOpenSSLConnFlush(NsOpenSSLConn *sslconn);
 extern int 
 NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread);
 
-// XXX const or CONST???
 extern int 
 NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite);
 
@@ -276,7 +247,6 @@ NsOpenSSLContextRelease (char *server, NsOpenSSLContext *sslcontext);
 extern int 
 NsOpenSSLContextDestroy(char *server, NsOpenSSLContext *sslcontext);
 
-/* XXX ugly. find a cleaner way to do this */
 extern NsOpenSSLContext *
 NsOpenSSLContextServerDefaultGet(char *server);
 
@@ -369,11 +339,4 @@ NsOpenSSLContextTraceGet(char *server, NsOpenSSLContext *sslcontext);
 
 extern int 
 NsOpenSSLModuleInit(char *server);
-
-
-#if 0
-/* XXX debug log */
-extern void
-NsOpenSSLDebug(char *fmt, ...);
-#endif
 

@@ -63,22 +63,11 @@ FillBuf(Stream *sPtr);
  *
  * NsOpenSSLConnCreate --
  *
- * Create an SSL connection. The socket has already been accept()ed and is
- * ready for reading/writing. Used to use OpenSSL's BIO abstraction to build a
- * BIO stack that looked like this:
- *
- *     nsopenssl module
- *     buffering BIO
- *     SSL BIO
- *     socket BIO
- *     TCP socket to client
- *
- * I switched back to straight SSL to simplify the code and to improve
- * performance. Though I don't have any evidence, I suspect BIOs add some
- * performance overhead and I'm not sure they work well on every platform.
+ *     Create an SSL connection. The socket has already been accept()ed and is
+ *     ready for reading/writing.
  * 
  * Results:
- *     sslconn, which might be NULL
+ *     Pointer to sslconn, which might be NULL
  *
  * Side effects:
  *     If the SSL connection was open then it will be forced to close first.
@@ -96,9 +85,8 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 	Ns_Log(Notice,
 		"%s (%s): connection refused due to server shutdown pending",
 		MODULE, sslcontext->server);
-	return NULL;
+	
     }
-
     sslconn = ns_calloc(1, sizeof(NsOpenSSLConn));
     if (sslconn == NULL) {
 	Ns_Log(Error, "%s (%s): failed to create SSL connection structure",
@@ -106,12 +94,15 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 	return NULL;
     }
 
+    /*
+     * Set connection structure initial values.
+     */
+
     sslconn->server          = sslcontext->server;
     sslconn->sslcontext      = sslcontext;
     sslconn->socket          = socket;
     sslconn->sendwait        = DEFAULT_SENDWAIT;
     sslconn->recvwait        = DEFAULT_RECVWAIT;
-    //sslconn->wsock           = INVALID_SOCKET;
     sslconn->ssl             = NULL;
     sslconn->sslctx          = NULL;
     sslconn->peerport        = -1;
@@ -127,7 +118,9 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
     /* It's GMT, but we use this to do time diffs */
     gettimeofday(&sslconn->timer, NULL);
 
-    /* Initialize the SSL structure */
+    /*
+     * Instantiate the SSL structure from the sslcontext.
+     */
 
     sslconn->ssl = SSL_new(sslcontext->sslctx);
     if (sslconn->ssl == NULL) {
@@ -138,11 +131,21 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
     }
     SSL_clear(sslconn->ssl);
 
-    /* Associate the socket with the SSL structure */
+    /*
+     * Associate the socket with the SSL instance. 
+     */
+
     SSL_set_fd(sslconn->ssl, socket);
 
-    // XXX is this necessary?
+    /*
+     * Associate the connection structure with the SSL instance.
+     */
+
     SSL_set_app_data(sslconn->ssl, sslconn);
+
+    /*
+     * Define the SSL instance's role.
+     */
 
     if (sslcontext->role == SERVER_ROLE) {
         SSL_set_accept_state(sslconn->ssl);
@@ -150,12 +153,13 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
         SSL_set_connect_state(sslconn->ssl);
     }
 
+    /*
+     * Run the SSL handshake.
+     */
+
     if (NsOpenSSLConnHandshake(sslconn) != NS_OK) {
 	NsOpenSSLConnDestroy(sslconn);
-	sslconn = NULL;
     }
-
-    //Ns_Log(Debug, "NsOpenSSLConnCreate: sslconn = (%p), sslcontext = (%p)", sslconn, sslcontext);
 
     return sslconn;
 }
@@ -184,39 +188,35 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     int i  = 0;
     int rc = 0;
 
-    sslconn->refcnt--;
-
-    if (sslconn->refcnt > 0) {
-	//Ns_Log(Debug, "NsOpenSSLConnDestroy: SSL conn still active: refcnt = (%d), sslconn = (%p)", sslconn->refcnt, sslconn);
+    if (sslconn == NULL) {
 	return;
     }
 
-    if (sslconn == NULL)
-	return;
+    /*
+     * Don't destroy the connection if it's still referenced somewhere.
+     */
 
-    //Ns_Log(Debug, "NsOpenSSLConnDestroy: sslconn = (%p)", sslconn);
+    sslconn->refcnt--;
+    if (sslconn->refcnt > 0) {
+	return;
+    }
+
+    /*
+     * Shutdown the SSL connection and free the SSL structure.
+     */
 
     if (sslconn->ssl != NULL) {
-	/* XXX review these shutdown procedures w/r to SSL_shutdown man page */
-	/* XXX seems we can clean this up a bit */
 	SSL_set_shutdown(sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
-
-	/* Call SSL_shutdown repeatedly until we're sure it's done. */
 	for (i = rc = 0; rc == 0 && i < 4; i++) {
 	    rc = SSL_shutdown(sslconn->ssl);
 	}
-    }
-
-    if (sslconn->ssl != NULL) {
 	SSL_free(sslconn->ssl);
     }
 
     /*
-     * We disallow sending through the socket, since BIO_free_all triggers
-     * SSL_shutdown, which is sending something (2 bytes).  It confuses Win32
-     * clients, since they automatically close socket on FIN packet only if
-     * there is no waiting received bytes (it gives "connection reset" message
-     * in MSIE when socket is freed by keepalive thread).
+     * Shutdown and close the socket itself, but only if it's not a socket
+     * managed by the core AOLserver driver. In that case we leave the socket
+     * to be shutdown there.
      */
 
     if (sslconn->socket != INVALID_SOCKET) {
@@ -224,7 +224,6 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
         ns_sockclose(sslconn->socket);
         sslconn->socket = INVALID_SOCKET;
     }
-
     ns_free(sslconn);
     sslconn = NULL;
 
@@ -262,19 +261,22 @@ Ns_OpenSSLSockConnect(char *server, char *host, int port, int async, int timeout
     NsOpenSSLConn *sslconn = NULL;
     SOCKET         socket  = INVALID_SOCKET;
 
-    //Ns_Log(Debug, "Ns_OpenSSLSockConnect %s %d", host, port);
-    //Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext = (%p)", sslcontext);
-    //Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext->initialized = (%d)", sslcontext->initialized);
+    /*
+     * Create the socket connection.
+     */
 
     if (timeout < 0) {
         socket = Ns_SockConnect(host, port);
     } else {
         socket = Ns_SockTimedConnect(host, port, timeout);
     }
-
     if (socket == INVALID_SOCKET) {
         return NULL;
     }
+
+    /*
+     * Wrap SSL around the socket.
+     */
 
     sslconn = NsOpenSSLConnCreate(socket, sslcontext);
     if (sslconn != NULL) {
@@ -315,13 +317,15 @@ Ns_OpenSSLSockAccept(SOCKET sock, NsOpenSSLContext *sslcontext)
 {
     NsOpenSSLConn *sslconn = NULL;
 
-    //Ns_Log(Debug, "Ns_OpenSSLSockAccept: sslcontext = (%p)", sslcontext);
-
     if (sock == INVALID_SOCKET) {
         Ns_Log(Error, "%s (%s): attempted accept on invalid socket",
                 MODULE, sslcontext->server);
         return NULL;
     }
+
+    /*
+     * Wrap SSL around socket.
+     */
 
     sslconn = NsOpenSSLConnCreate(sock, sslcontext);
     if (sslconn != NULL) {
@@ -378,8 +382,6 @@ Ns_OpenSSLSockListen(char *addr, int port)
  *----------------------------------------------------------------------
  */
 
-/* XXX move to x509.c; change args */
-/* XXX add *server arg */
 extern int
 Ns_OpenSSLIsPeerCertValid(NsOpenSSLConn *sslconn)
 {
@@ -443,7 +445,6 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
     NsOpenSSLConn *sslconn = NULL;
     Ns_Request    *request = NULL;
     Ns_DString     ds;
-    /* XXX uninitialized */
     Stream         stream;
     char          *p       = NULL;
     int            status  = NS_ERROR;
@@ -458,7 +459,6 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
 
     Ns_DStringVarAppend(&ds, "GET ", url, " HTTP/1.0", NULL);
     request = Ns_ParseRequest(ds.string);
-
     if (
             request == NULL || 
             request->protocol == NULL ||
@@ -469,10 +469,13 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
         goto done;
     }
 
+    /*
+     * Open an SSL connection.
+     */
+
     if (request->port == 0) {
         request->port = 443;
     }
-
     sslconn = Ns_OpenSSLSockConnect(server, request->host, request->port, 0, 300, sslcontext);
     if (sslconn == NULL) {
         Ns_Log(Error, "%s (%s): Ns_OpenSSLFetchURL: failed to connect to '%s'",
@@ -481,23 +484,18 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
     }
 
     /*
-     * Send a simple HTTP GET request.
+     * Send HTTP GET request.
      */
 
-    // SendHTTPGet(url, query, )
     Ns_DStringTrunc(&ds, 0);
     Ns_DStringVarAppend(&ds, "GET ", request->url, NULL);
-
     if (request->query != NULL) {
         Ns_DStringVarAppend(&ds, "?", request->query, NULL);
     }
-
     Ns_DStringAppend(&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
     p = ds.string;
     tosend = ds.length;
-
     while (tosend > 0) {
-        //n = NsOpenSSLConnSend(sslconn->bio, p, tosend);
         n = NsOpenSSLConnSend(sslconn->ssl, p, tosend);
         if (n <= 0) {
             Ns_Log(Error, "%s (%s): failed to send data to '%s'", 
@@ -517,18 +515,15 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
     stream.error   = 0;
     stream.ptr     = stream.buf;
     stream.sslconn = (NsOpenSSLConn *) sslconn;
-
     if (!GetLine (&stream, &ds)) {
         goto done;
     }
-
     if (headers != NULL && strncmp(ds.string, "HTTP", 4) == 0) {
         if (headers->name != NULL) {
             ns_free (headers->name);
         }
         headers->name = Ns_DStringExport(&ds);
     }
-
     do {
         if (!GetLine (&stream, &ds)) {
             goto done;
@@ -548,21 +543,17 @@ Ns_OpenSSLFetchUrl(char *server, Ns_DString *dsPtr, char *url,
     do {
         Ns_DStringNAppend(dsPtr, stream.ptr, stream.cnt);
     } while (FillBuf(&stream));
-
     if (!stream.error) {
         status = NS_OK;
     }
 
 done:
-
     if (request != NULL) {
         Ns_FreeRequest(request);
     }
-
     if (sslconn != NULL) {
         NsOpenSSLConnDestroy(sslconn);
     }
-
     Ns_DStringFree(&ds);
 
     return status;
@@ -594,8 +585,6 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
     NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
     SOCKET         socket  = SSL_get_fd(ssl);
 
-    //Ns_Log(Debug, "Send(%d): START: towrite = %d, wrote = %d", socket, towrite, total);
-
     /*
      * We loop until all bytes are written. We can call NsOpenSSLRecv() at any
      * time if SSL needs to read data before continuing. Not doing so could
@@ -603,25 +592,21 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
      */
 
     while (total < towrite) {
-
-        //rc = SSL_write(ssl, (char *) (buffer + total), (towrite - total));
         rc = SSL_write(ssl, (char *) buffer, towrite);
-
         if (rc > 0) {
             total += rc;
             continue;
         }
-
-        Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
-
         switch(SSL_get_error(ssl, rc)) {
-
             case SSL_ERROR_NONE:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_NONE             (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_NONE: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
                 break;
-
             case SSL_ERROR_WANT_WRITE:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_WRITE: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
                 if (rc < 0 
                     && ns_sockerrno == EWOULDBLOCK 
                     && Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait) != NS_OK) 
@@ -629,42 +614,41 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
                     return -1;
                 }
                 break;
-
             case SSL_ERROR_WANT_READ:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_READ: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
                 break;
-
             case SSL_ERROR_WANT_X509_LOOKUP:
-                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_X509_LOOKUP (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_X509_LOOKUP: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
                 SSL_renegotiate(ssl);
                 SSL_write(ssl, NULL, 0);
                 break;
-
             case SSL_ERROR_SYSCALL:
-                Ns_Log(Debug, "Send(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-                // XXX should check for invalid socket here ?
-                exit(1);
-                return -2;
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d) HERE: SSL_ERROR_SYSCALL: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
+                Ns_Log(Warning, "%s: SSL handshake interrupted, perhaps by client", MODULE);
+                return -1;
                 break;
-
             case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-                // XXX should check for invalid socket here ?
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
+                Ns_Log(Error, "%s: SSL error on writing data", MODULE);
                 break;
-
             case SSL_ERROR_ZERO_RETURN:
-                /* We'll never see this error: either some bytes were written or we get a real error */
-                Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+#ifdef DEBUG_NSOPENSSL
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN: towrite = %d; total = %d; rc = %d", socket, total, towrite, rc);
+#endif
                 break;
-
             default:
-                Ns_Log(Debug, "Send(%d): FALLTHROUGH (error)        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Error, "%s: Unknown SSL error code in ssl.c (%d)", MODULE, rc);
                 break;
         }
-
     }
-
-    //Ns_Log(Debug, "Send(%d): END:   towrite = %d, wrote = %d", socket, towrite, total);
 
     return total;
 }
@@ -712,36 +696,30 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
      * multiple calls to SSL_read().
      */
 
-    //Ns_Log(Debug, "Recv(%d): START: toread = %d, read = %d, pending = %d", socket, toread, total, SSL_pending(ssl));
-
     do {
-
         rc = SSL_read(ssl, (char *) buffer, toread);
-
         if (rc > 0) {
-
             total += rc;
-
         } else if (rc == 0) {
-
             if (SSL_pending(ssl) == 0) {
                 return total;
             }
-
         } else {
-
             switch(SSL_get_error(ssl, rc)) {
-
                 case SSL_ERROR_NONE:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_NONE              (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_NONE: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
                     break;
-
                 case SSL_ERROR_WANT_WRITE:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
                     break;
-
                 case SSL_ERROR_WANT_READ:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
                     if (rc < 0 
                         && ns_sockerrno == EWOULDBLOCK 
                         && Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait) != NS_OK) 
@@ -749,37 +727,39 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
                         return -1;
                     }
                     break;
-
                 case SSL_ERROR_WANT_X509_LOOKUP:
-                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
+                    Ns_Log(Warning, "%s: SSL wants X509 Lookup", MODULE);
                     break;
-
                 case SSL_ERROR_SYSCALL:
-                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
+                    Ns_Log(Warning, "%s: SSL handshake interrupted, perhaps by client", MODULE);
                     return -1;
                     break;
-
                 case SSL_ERROR_SSL:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
+                    Ns_Log(Error, "%s: SSL error on reading data", MODULE);
                     return -1;
                     break;
-
                 case SSL_ERROR_ZERO_RETURN:
-                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+#ifdef DEBUG_NSOPENSSL
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN: toread = %d; total = %d; rc = %d", socket, toread, total, rc);
+#endif
                     return -1;
                     break;
-
                 default:
-                    Ns_Log(Debug, "Recv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    Ns_Log(Error, "%s: Unknown SSL error code in ssl.c (%d)", MODULE, rc);
                     return -1;
                     break;
-
             }
         }
-
     } while (SSL_get_error(ssl, rc) != SSL_ERROR_NONE);
-
-    //Ns_Log(Debug, "Recv(%d): END:   toread = %d, read = %d", socket, toread, total);
 
     return total;
 }
@@ -840,30 +820,22 @@ extern int
 NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
 {
     int    rc     = 0;
-/* XXX defer to sslconn->socket ... */
     SOCKET socket = SSL_get_fd(sslconn->ssl);
 
     while (! SSL_is_init_finished(sslconn->ssl)) {
-
         if (sslconn->sslcontext->role == SERVER_ROLE) {
             rc = SSL_accept(sslconn->ssl);
         } else {
             rc = SSL_connect(sslconn->ssl);
         }
-
         switch(SSL_get_error(sslconn->ssl, rc)) {
-
             case SSL_ERROR_NONE:
-                /* Handshake completed successfully */
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_NONE             (rc = %d)", socket, rc);
                 return NS_OK;
                 break;
-
             case SSL_ERROR_WANT_WRITE:
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_WANT_WRITE       (rc = %d)", socket, rc);
-/* XXX need write wait at this point */
                 break;
-
             case SSL_ERROR_WANT_READ:
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_WANT_READ        (rc = %d)", socket, rc);
                 if (rc < 0
@@ -873,38 +845,31 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
                     return NS_ERROR;
                 }
                 break;
-
             case SSL_ERROR_WANT_X509_LOOKUP:
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_WANT_X509_LOOKUP (rc = %d)", socket, rc);
                 //SSL_renegotiate(ssl);
                 //SSL_write(ssl, NULL, 0);
                 break;
-
             case SSL_ERROR_SYSCALL:
                 Ns_Log(Debug, "Handshake(%d): SSL_ERROR_SYSCALL          (rc = %d)", socket, rc);
                 return NS_ERROR;
                 break;
-
             case SSL_ERROR_SSL:
                 //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_SSL              (rc = %d)", socket, rc);
                 return NS_ERROR;
                 break;
-
             case SSL_ERROR_ZERO_RETURN:
                 /* Connection was closed before any data was transferred */
                 Ns_Log(Debug, "Handshake(%d): SSL_ERROR_ZERO_RETURN      (rc = %d)", socket, rc);
                 return NS_ERROR;
                 break;
-
             default:
                 Ns_Log(Debug, "Handshake(%d): FALLTHROUGH (error)        (rc = %d)", socket, rc);
                 return NS_ERROR;
                 break;
-
         }
     }
-
-    Ns_Log(Warning, "%s (%s): SSL handshake failed (might be normal if client does not have CA cert)", MODULE, sslconn->server);
+    Ns_Log(Warning, "%s (%s): SSL handshake failed", MODULE, sslconn->server);
 
     return NS_ERROR;
 }
@@ -929,7 +894,6 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
 static int
 FillBuf(Stream *sPtr)
 {
-    // XXX int n      = NsOpenSSLConnRecv(sPtr->sslconn->bio, sPtr->buf, BUFSIZE);
     int n      = NsOpenSSLConnRecv(sPtr->sslconn->ssl, sPtr->buf, BUFSIZE);
     int status = NS_TRUE;
 
@@ -973,10 +937,8 @@ GetLine(Stream *sPtr, Ns_DString *dsPtr)
     int   n   = 0;
 
     Ns_DStringTrunc(dsPtr, 0);
-
     do {
         if (sPtr->cnt > 0) {
-
             eol = strchr(sPtr->ptr, '\n');
             if (eol == NULL) {
                 n = sPtr->cnt;
@@ -984,12 +946,9 @@ GetLine(Stream *sPtr, Ns_DString *dsPtr)
                 *eol++ = '\0';
                 n = eol - sPtr->ptr;
             }
-
             Ns_DStringNAppend (dsPtr, sPtr->ptr, n - 1);
-
             sPtr->ptr += n;
             sPtr->cnt -= n;
-
             if (eol != NULL) {
                 n = dsPtr->length;
                 if (n > 0 && dsPtr->string[n - 1] == '\r') {
@@ -997,68 +956,8 @@ GetLine(Stream *sPtr, Ns_DString *dsPtr)
                 }
                 return NS_TRUE;
             }
-
         }
     } while (FillBuf(sPtr));
 
     return NS_FALSE;
 }
-
-#if 0
-
-/*
- *----------------------------------------------------------------------
- *
- * NsOpenSSLErrorDump --
- *
- *     Send data through an SSL connection
- *
- * Results:
- *     The number of bytes send or a negative number in case of an error.
- *
- * Side effects:
- *     None.
- *
- *----------------------------------------------------------------------
- */
-
-void
-NsOpenSSLErrorDump(NsOpenSSLConn *sslconn, int code) 
-{
-    int           error = 0;
-    unsigned long e     = 0;
-
-    error = SSL_get_error(sslconn->ssl, code);
-
-    switch (error) {
-        case SSL_ERROR_NONE:
-            Ns_Log(Debug, "--- SSL_ERROR_NONE");
-            break;
-        case SSL_ERROR_ZERO_RETURN:
-            Ns_Log(Debug, "--- SSL_ERROR_ZERO_RETURN");
-            break;
-        case SSL_ERROR_WANT_READ:
-            Ns_Log(Debug, "--- SSL_ERROR_WANT_READ");
-            break;
-        case SSL_ERROR_WANT_WRITE:
-            Ns_Log(Debug, "--- SSL_ERROR_WANT_WRITE");
-            break;
-        case SSL_ERROR_WANT_X509_LOOKUP:
-            Ns_Log(Debug, "--- SSL_ERROR_WANT_X509_LOOKUP");
-            break;
-        case SSL_ERROR_SYSCALL:
-            Ns_Log(Debug, "--- SSL_ERROR_SYSCALL");
-            break;
-        case SSL_ERROR_SSL:
-            Ns_Log(Debug, "--- SSL_ERROR_SSL");
-            break;
-    }
-
-    while ((e = ERR_get_error()) != 0) {
-        Ns_Log(Debug, "--- ERR    = %s", ERR_error_string(e, NULL));
-        Ns_Log(Debug, "  - LIB    = %d", ERR_GET_LIB(e));
-        Ns_Log(Debug, "  - FUNC   = %d", ERR_GET_FUNC(e));
-        Ns_Log(Debug, "  - REASON = %d", ERR_GET_REASON(e));
-    }
-}
-#endif

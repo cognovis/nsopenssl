@@ -76,8 +76,10 @@ EnterSock(Tcl_Interp *interp, SOCKET sock);
 static int
 EnterDup(Tcl_Interp *interp, SOCKET sock);
 
+#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock);
+#endif
 
 static int
 GetSet(Tcl_Interp *interp, char *flist, int write, fd_set **setPtrPtr,
@@ -127,7 +129,6 @@ extern Tcl_ObjCmdProc
     NsTclOpenSSLSockCallbackObjCmd,
     NsTclOpenSSLGetUrlObjCmd;
 
-/* XXX check that all are here */
 extern Tcl_CmdProc
     NsTclOpenSSLGetUrlCmd,
     NsTclOpenSSLSockCheckCmd,
@@ -178,7 +179,8 @@ typedef struct SockCallback {
  *
  * NsOpenSSLTclInit --
  *
- *      Initialize Tcl API for a virtual server. The last argument of Ns_TclInitInterps is a pointer to a function that 
+ *      Initialize Tcl API for a virtual server. The last argument of
+ *      Ns_TclInitInterps is a pointer to a function that 
  *
  * Results:
  *      None.
@@ -193,8 +195,6 @@ void
 NsOpenSSLTclInit(char *server)
 {
     Server *thisServer = NsOpenSSLServerGet(server);
-
-    //Ns_Log(Debug, "NsOpenSSLTclInit: thisServer = (%p); thisServer->server = (%s)", thisServer, thisServer->server);
 
     Ns_TclInitInterps(server, AddCmds, (void *) thisServer);
 }
@@ -222,9 +222,6 @@ AddCmds(Tcl_Interp *interp, void *arg)
     Cmd *cmd = (Cmd *) &nsopensslCmds;
 
     while (cmd->name != NULL) {
-
-        //Ns_Log(Debug, "AddCmds: adding (%s)", cmd->name);
-
         if (cmd->objProc != NULL) {
             Tcl_CreateObjCommand(interp, cmd->name, cmd->objProc, arg, NULL);
         } else {
@@ -259,13 +256,13 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
 {
     // XXX Server *thisServer      = (Server *) arg;
     NsOpenSSLConn *sslconn  = NULL;
-    X509 *peercert          = NULL;
-    SSL_CIPHER *cipher      = NULL;
-    Ns_Conn *conn           = NULL;
-    char *string            = NULL;
-    char *name              = NULL;
-    int integer             = 0;
-    int status              = TCL_OK;
+    X509          *peercert = NULL;
+    SSL_CIPHER    *cipher   = NULL;
+    Ns_Conn       *conn     = NULL;
+    char          *string   = NULL;
+    char          *name     = NULL;
+    int            integer  = 0;
+    int            status   = TCL_OK;
 
     static CONST char *opts[] = {
         "info", "module", "protocol", "port", "peerport", "cipher",
@@ -276,7 +273,6 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
         CClientCertIdx 
     } opt;
 
-
     if (objc < 2) {
         Tcl_WrongNumArgs(interp, 1, objv, "option");
         return TCL_ERROR;
@@ -285,7 +281,6 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 (int *) &opt) != TCL_OK) {
         return TCL_ERROR;
     }
-
     if (opt == CInfoIdx) {
         Tcl_SetResult(interp, OPENSSL_VERSION_TEXT, TCL_STATIC);
         return TCL_OK;
@@ -313,9 +308,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
             return TCL_ERROR;
         }
     }
-
     switch (opt) {
-
         case CModuleIdx:
 
             /*
@@ -328,7 +321,6 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 Tcl_WrongNumArgs(interp, 2, objv, "option");
                 return TCL_ERROR;
             }
-
             if (STREQ(Tcl_GetString(objv[2]), "name")) {
                 Tcl_SetResult(interp, MODULE, TCL_VOLATILE);
             } else if (STREQ(Tcl_GetString(objv[2]), "port")) {
@@ -336,11 +328,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 sprintf(interp->result, "%d", sslconn->peerport);
             }
             break;
-
         case CProtocolIdx:
-
-            //Ns_Log(Debug, "*** sslconn->ssl = (%d)", &sslconn->ssl->session->ssl_version);
-
             switch (sslconn->ssl->session->ssl_version) {
                 case SSL2_VERSION:
                     string = "SSLv2";
@@ -356,22 +344,16 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
             }
             Tcl_SetResult(interp, string, TCL_VOLATILE);
             break;
-
         case CPortIdx:
         case CPeerPortIdx:
-
             sprintf(interp->result, "%d", sslconn->peerport);
             break;
-
         case CCipherIdx:
-
             cipher = SSL_get_current_cipher(sslconn->ssl);
-
             if (objc != 3) {
                 Tcl_WrongNumArgs(interp, 2, objv, "option");
                 return TCL_ERROR;
             }
-
             if (STREQ(Tcl_GetString(objv[2]), "name")) {
                 string =
                     (sslconn->ssl != NULL ? (char *) SSL_CIPHER_get_name(cipher) : NULL);
@@ -381,7 +363,6 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 sprintf(interp->result, "%d", integer);
             }
             break;
-
         case CClientCertIdx:
 
             /*
@@ -403,9 +384,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 Tcl_WrongNumArgs(interp, 2, objv, "option");
                 return TCL_ERROR;
             }
-
             peercert = (sslconn == NULL) ? NULL : SSL_get_peer_certificate(sslconn->ssl);
-
             if (STREQ(Tcl_GetString(objv[2]), "exists")) {
                 Tcl_SetResult(interp, peercert == NULL ? "0" : "1",
                         TCL_STATIC);
@@ -485,7 +464,6 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 return TCL_ERROR;
             }
             break;
-
         case CInfoIdx:
             /* NEVER REACHED */
             break;
@@ -506,7 +484,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
  *	Tcl result. 
  *
  * Side effects:
- *	Will open a connection and register two Tcl channels.
+ *	Will open a connection and register a Tcl channel.
  *
  *----------------------------------------------------------------------
  */
@@ -552,9 +530,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         Tcl_WrongNumArgs(interp, 1, objv, "?-nonblock|-timeout seconds? host port ?sslcontext?"); 
         return TCL_ERROR;
     }
-
     if (STREQ(Tcl_GetString(objv[1]), "-nonblock")) {
-
         if (objc == 4) {
             sslctx = 0;
         } else if (objc == 5) {
@@ -563,12 +539,9 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
             Tcl_WrongNumArgs(interp, 1, objv, args);
             return TCL_ERROR;
         }
-
         first = 2;
         async = 1;
-
     } else if (STREQ(Tcl_GetString(objv[1]), "-timeout")) {
-
         if (objc == 5) {
             sslctx = 0;
         } else if (objc == 6) {
@@ -577,15 +550,11 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
             Tcl_WrongNumArgs(interp, 1, objv, args);
             return TCL_ERROR;
         }
-
         if (Tcl_GetIntFromObj(interp, objv[2], &timeout) != TCL_OK) {
             return TCL_ERROR;
         }
-
         first = 3;
-
     } else {
-
         if (objc == 3) {
             sslctx = 0;
         } else if (objc == 4) {
@@ -594,7 +563,6 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
             Tcl_WrongNumArgs(interp, 1, objv, args);
             return TCL_ERROR;
         }
-
     }
 
     if (Tcl_GetIntFromObj(interp, objv[first + 1], &port) != TCL_OK) {
@@ -612,7 +580,6 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     } else {
         sslcontext = NsOpenSSLContextClientDefaultGet(thisServer->server);
     }
-
     if (sslcontext == NULL) {
         Tcl_SetResult(interp, "failed to use either named or default client SSL context", 
                 TCL_STATIC);
@@ -622,6 +589,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     /*
      * Perform the connection.
      */
+
     sslconn = Ns_OpenSSLSockConnect(
             thisServer->server,
             Tcl_GetString(objv[first]),
@@ -630,14 +598,11 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
             timeout, 
             sslcontext
             );
-
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "could not connect to \"",
                 Tcl_GetString(objv[first]), ":", Tcl_GetString(objv[first + 1]), "\"", NULL);
         return TCL_ERROR;
     }
-
-    //Ns_Log(Debug, "NsTclOpenSSLSockOpenObjCmd: sslconn = (%p)", sslconn);
 
     /*
      * Create the Tcl channel that let's us use gets, puts etc. and layer it on
@@ -696,20 +661,14 @@ NsTclOpenSSLSockListenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         Tcl_WrongNumArgs(interp, 1, objv, "address port");
         return TCL_ERROR;
     }
-
     addr = Tcl_GetString(objv[1]);
     if (STREQ(addr, "*")) {
         addr = NULL;
     }
-
     if (Tcl_GetIntFromObj(interp, objv[2], &port) != TCL_OK) {
         return TCL_ERROR;
     }
-
     socket = Ns_OpenSSLSockListen(addr, port);
-
-    //Ns_Log(Debug, "NsTclOpenSSLSockListenObjCmd: socket = (%d)", socket);
-
     if (socket == INVALID_SOCKET) {
         Tcl_AppendResult(interp, "could not listen on \"",
                 addr, ":", Tcl_GetString(objv[2]), "\"", NULL);
@@ -751,19 +710,19 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         Tcl_WrongNumArgs(interp, 1, objv, "sockId");
         return TCL_ERROR;
     }
-
     if (Ns_TclGetOpenFd(interp, Tcl_GetString(objv[1]), 0, (int *) &socket) != TCL_OK) {
         return TCL_ERROR;
     }
 
-    /* Do normal accept on the socket */
-    socket = Ns_SockAccept(socket, NULL, 0);
+    /*
+     * Perform normal socket accept
+     */
 
+    socket = Ns_SockAccept(socket, NULL, 0);
     if (socket == INVALID_SOCKET) {
         Tcl_AppendResult(interp, "accept failed: ", SockError(interp), NULL);
         return TCL_ERROR;
     }
-
     /* Figure out which SSL context to use in creating the SSL connection */
     /* XXX update API to accept last arg of sslcontext */
     //if (sslctx) {
@@ -772,19 +731,16 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     //} else {
     sslcontext = NsOpenSSLContextServerDefaultGet(thisServer->server);
     //}
-
     if (sslcontext == NULL) {
 	Tcl_SetResult(interp, "failed to use either named or default client SSL context",
 		TCL_STATIC);
 	return TCL_ERROR;
     }
-
     sslconn = Ns_OpenSSLSockAccept(socket, sslcontext);
     if (sslconn == NULL) {
         Tcl_SetResult(interp, "SSL accept failed", TCL_STATIC);
         return TCL_ERROR;
     }
-
     if (CreateTclChannel(sslconn, interp) != NS_OK) {
         Ns_Log(Error, "%s (%s): Tcl channel not available",
                 MODULE, sslconn->server);
@@ -839,20 +795,16 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
     char             *url        = NULL;
 
     Ns_DStringInit(&ds);
-
     if ((objc != 3) && (objc != 2)) {
         Tcl_WrongNumArgs(interp, 1, objv, " url ?headersSetIdVar?");
         goto done;
     }
-
     if (objc == 2) {
         headers = NULL;
     } else {
         headers = Ns_SetCreate(NULL);
     }
-
     url = Tcl_GetString(objv[1]);
-
     if (url[1] == '/') {
         if (Ns_FetchPage(&ds, url, Ns_TclInterpServer(interp)) != NS_OK) {
             Tcl_AppendResult(interp, "Could not get contents of URL \"",
@@ -868,14 +820,12 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
         //} else {
         sslcontext = NsOpenSSLContextClientDefaultGet(thisServer->server);
         //}
-
 	if (sslcontext == NULL) {
 	    Tcl_SetResult(interp, 
 		    "failed to use either named or default client SSL context",
 		    TCL_STATIC);
 	    goto done;
 	}
-
         if (Ns_OpenSSLFetchUrl(thisServer->server, &ds, url, headers, sslcontext) != NS_OK) {
             Tcl_AppendResult(interp, "Could not get contents of URL \"",
                     url, "\"", NULL);
@@ -885,15 +835,12 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
             goto done;
         }
     }
-
     if (objc == 3) {
         Ns_TclEnterSet(interp, headers, 1);
         /* XXX there's probably a Tcl_Obj way of doing the following */
         Tcl_SetVar(interp, Tcl_GetString(objv[2]), interp->result, 0);
     }
-
     Tcl_SetResult(interp, ds.string, TCL_VOLATILE);
-
     status = TCL_OK;
 
 done:
@@ -920,8 +867,6 @@ done:
  *----------------------------------------------------------------------
  */
 
-/* XXX needs to be tested */
-
 extern int
 NsTclOpenSSLSockNReadCmd(ClientData arg, Tcl_Interp *interp, 
         int argc, CONST char **argv)
@@ -937,7 +882,6 @@ NsTclOpenSSLSockNReadCmd(ClientData arg, Tcl_Interp *interp,
                 argv[0], " sockId\"", NULL);
         goto done;
     }
-
     chan = Tcl_GetChannel(interp, argv[1], NULL);
     if (
 	    chan == NULL || 
@@ -945,13 +889,11 @@ NsTclOpenSSLSockNReadCmd(ClientData arg, Tcl_Interp *interp,
        ) {
 	goto done;
     }                    
-
     if (ns_sockioctl(socket, FIONREAD, &nread) != 0) {
         Tcl_AppendResult(interp, "ns_sockioctl failed: ",
                 SockError(interp), NULL);
         goto done;
     }
-
     nread += Tcl_InputBuffered(chan);
     sprintf(interp->result, "%d", nread);      
     status = TCL_OK;
@@ -977,9 +919,6 @@ done:
  *----------------------------------------------------------------------
  */
 
-/* XXX needs to be tested */
-/* XXX do I need this wrapper? Can't I use ns_sockcheck directly? */
-
 extern int
 NsTclOpenSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc, CONST char **argv)
 {
@@ -992,19 +931,14 @@ NsTclOpenSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc, CONST cha
                 argv[0], " sockId\"", NULL);
         goto done;
     }
-
     if (Ns_TclGetOpenFd(interp, argv[1], 1, (int *) &socket) != TCL_OK) {
         goto done;
     }
-
-    //Ns_Log(Debug, "#### SOCKET socket = %d", socket);
-
     if (send(socket, NULL, 0, 0) != 0) {
         interp->result = "0";
     } else {
         interp->result = "1";
     }
-
     status = TCL_OK;
 
 done:
@@ -1029,17 +963,11 @@ done:
  *----------------------------------------------------------------------
  */
 
-/* XXX needs to be tested */
-/* XXX can we use ns_sockselect directly and get rid of this command? */
-/* XXX can we make this a wrapper that calls core ns_sockselect? */
-/* XXX this routine is too complicated; returns sprinkled throughout... */
-
 extern int
 NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp, 
         int argc, CONST char *argv[]) 
 {
     Server         *thisServer = (Server *) arg;
-    /* XXX not initialized */
     fd_set          rset;
     fd_set          wset;
     fd_set          eset;
@@ -1050,7 +978,6 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
     Tcl_Channel     chan       = NULL;
     Tcl_DString     dsRfd;
     Tcl_DString     dsNbuf;
-    /* XXX not initialized */
     struct timeval  tv;
     struct timeval *tvPtr      = NULL;
     char          **fargv      = NULL;
@@ -1061,13 +988,11 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
 
     Tcl_DStringInit(&dsRfd);
     Tcl_DStringInit(&dsNbuf);
-
     if (argc != 6 && argc != 4) {
         Tcl_AppendResult(interp, "wrong # args: should be \"",
                 argv[0], " ?-timeout sec? rfds wfds efds\"", NULL);
         return TCL_ERROR;
     }
-
     if (argc == 4) {
         tvPtr = NULL;
         first = 1;
@@ -1096,7 +1021,6 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
     if (Tcl_SplitList(interp, argv[first++], &fargc, &fargv) != TCL_OK) {
         return TCL_ERROR;
     }
-
     for (i = 0; i < fargc; ++i) {
         chan = Tcl_GetChannel(interp, fargv[i], NULL);
         if (chan == NULL) {
@@ -1109,18 +1033,17 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
         }
     }
 
-    if (dsNbuf.length > 0) {
-        /*
-         * Since at least one read fd had buffered input,
-         * turn the select into a polling select just
-         * to pick up anything else ready right now.
-         */
+    /*
+     * Since at least one read fd had buffered input,
+     * turn the select into a polling select just
+     * to pick up anything else ready right now.
+     */
 
+    if (dsNbuf.length > 0) {
         tv.tv_sec = 0;
         tv.tv_usec = 0;
         tvPtr = &tv;
     }
-
     maxfd = 0;
     if (GetSet(interp, dsRfd.string, 0, &rPtr, &rset, &maxfd) != TCL_OK) {
         goto done;
@@ -1141,9 +1064,7 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
             wPtr == NULL &&
             ePtr == NULL &&
             tvPtr == NULL) {
-
         status = TCL_OK;
-
     } else {
 
         /*
@@ -1153,12 +1074,12 @@ NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp,
         do {
             i = select(maxfd + 1, rPtr, wPtr, ePtr, tvPtr);
         } while (i < 0 && ns_sockerrno == EINTR);
-
         if (i == -1) {
             Tcl_AppendResult(interp, "select failed: ",
                     SockError(interp), NULL);
         } else {
             if (i == 0) {
+
                 /*
                  * The sets can have any random value now
                  */
@@ -1207,9 +1128,6 @@ done:
  *----------------------------------------------------------------------
  */
 
-/* XXX this is identical to core command, but that the callback sets up SSL layer */
-/* XXX is there any way to reduce the duplication here and use core capability directly? */
-
 extern int
 NsTclOpenSSLSockCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         Tcl_Obj *CONST objv[])
@@ -1217,7 +1135,6 @@ NsTclOpenSSLSockCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     Server       *thisServer = (Server *) arg;
     SockCallback *cbPtr      = NULL;
     SOCKET        socket     = INVALID_SOCKET;
-    // XXX int           sockid;
     int           when       = 0;
     char         *s          = NULL;
 
@@ -1225,9 +1142,7 @@ NsTclOpenSSLSockCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         Tcl_WrongNumArgs(interp, 1, objv, "sockId script when");
         return TCL_ERROR;
     }
-
     s = Tcl_GetString(objv[3]);
-    /* XXX use STREQ here with switch ??? */
     while (*s != '\0') {
         if (*s == 'r') {
             when |= NS_SOCK_READ;
@@ -1244,30 +1159,24 @@ NsTclOpenSSLSockCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         }
         ++s;
     }
-
     if (when == 0) {
         Tcl_AppendResult(interp, "invalid when specification \"", Tcl_GetString(objv[3]),
                 "\": should be one or more of r, w, e, or x", NULL);
         return TCL_ERROR;
     }
-
     if (Ns_TclGetOpenFd(interp, Tcl_GetString(objv[1]), (when & NS_SOCK_WRITE),
                 (int *) &socket) != TCL_OK) {
         return TCL_ERROR;
     }
-
     socket = ns_sockdup(socket);
-
     if (socket == INVALID_SOCKET) {
         Tcl_AppendResult(interp, "dup failed: ", SockError(interp), NULL);
         return TCL_ERROR;
     }
-
     cbPtr = ns_malloc(sizeof(SockCallback) + strlen(Tcl_GetString(objv[2])));
     cbPtr->server = thisServer->server;
     cbPtr->when = when;
     strcpy(cbPtr->script, Tcl_GetString(objv[2]));
-
     if (Ns_SockCallback(socket, SSLSockCallbackProc, cbPtr, when | NS_SOCK_EXIT) != NS_OK) {
         interp->result = "could not register callback";
         ns_sockclose(socket);
@@ -1314,25 +1223,17 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
         Tcl_WrongNumArgs(interp, 1, objv, "address port script ?sslcontext?");
         return TCL_ERROR;
     }
-
     if (Tcl_GetIntFromObj(interp, objv[2], &port) != TCL_OK) {
         return TCL_ERROR;
     }
-
     addr = Tcl_GetString(objv[1]);
     if (STREQ(addr, "*")) {
         addr = NULL;
     }
-
-    // XXX lcbPtr = ns_malloc(sizeof(SockListenCallback) + Tcl_GetCharLength(objv[3]));
     lcbPtr = ns_malloc(sizeof(SockListenCallback));
     lcbPtr->server = thisServer->server;
-    //Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: objv[3] = (%s)", Tcl_GetString(objv[3]));
-    // XXX (security problem?) strcpy(lcbPtr->script, Tcl_GetString(objv[3]));
     lcbPtr->script = strdup(Tcl_GetString(objv[3]));
-
     if (objc == 5) {
-        // XXX name = (char *) Tcl_GetString(objv[5]);
         lcbPtr->sslcontext = Ns_OpenSSLServerSSLContextGet(thisServer->server, (char *) Tcl_GetString(objv[5]));
     } else {
         lcbPtr->sslcontext = NsOpenSSLContextServerDefaultGet(thisServer->server);
@@ -1346,8 +1247,6 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
 	return TCL_ERROR;
     }
 #endif
-
-    //Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: sslcontext = (%p)", lcbPtr->sslcontext);
 
     if (Ns_SockListenCallback(addr, port, SSLSockListenCallbackProc, lcbPtr) != NS_OK) {
         Ns_Log(Error, "NsTclOpenSSLSockListenCallbackCmd: COULD NOT REGISTER CALLBACK");
@@ -1408,6 +1307,7 @@ EnterDup(Tcl_Interp *interp, SOCKET sock)
     return EnterSock(interp, sock);
 }
 
+#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
 {
@@ -1417,6 +1317,7 @@ EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
     }                    
     return TCL_OK;
 }   
+#endif
 
 
 /*
@@ -1435,10 +1336,6 @@ EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
  *
  *----------------------------------------------------------------------
  */
-
-/* XXX move to x509.c? Make part of C API? */
-/* XXX can write a C / Tcl to get this and all other cert info and load into Ns_Set */
-/* XXX or store in sslconn directly. Extra work might make it slower */
 
 static void
 SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name)
@@ -1468,10 +1365,6 @@ SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name)
  *----------------------------------------------------------------------
  */
 
-/* XXX move to x509.c? Make part of C API? */
-/* XXX can write a C / Tcl to get this and all other cert info and load into Ns_Set */
-/* XXX or store in sslconn directly. Extra work might make it slower */
-
 static void
 SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj)
 {
@@ -1491,10 +1384,6 @@ SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj)
     }
 }
 
-/* XXX move to x509.c? Make part of C API? */
-/* XXX can write a C / Tcl to get this and all other cert info and load into Ns_Set */
-/* XXX or store in sslconn directly. Extra work might make it slower */
-
 
 /*
  *----------------------------------------------------------------------
@@ -1512,12 +1401,6 @@ SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj)
  *
  *---------------------------------------------------------------------- */
 
-/* XXX export to public API? */
-/* XXX will use them in a separate openssl.so library */
-/* XXX move to x509.c? Make part of C API? */
-/* XXX can write a C / Tcl to get this and all other cert info and load into Ns_Set */
-/* XXX or store in sslconn directly. Extra work might make it slower */
-
 static char *
 ValidTime(ASN1_UTCTIME *tm)
 {
@@ -1525,15 +1408,16 @@ ValidTime(ASN1_UTCTIME *tm)
     BIO          *bio    = NULL;
     unsigned int  n      = 0;
 
-    if ((bio = BIO_new(BIO_s_mem())) == NULL)
+    if ((bio = BIO_new(BIO_s_mem())) == NULL) {
         return NULL;
-
+    }
     ASN1_UTCTIME_print(bio, tm);
     n = BIO_pending(bio);
     result = Tcl_Alloc(n + 1);
     n = BIO_read(bio, result, (signed int) n);
     result[n] = '\0';
     BIO_free(bio);
+
     return result;
 }
 
@@ -1554,10 +1438,6 @@ ValidTime(ASN1_UTCTIME *tm)
  *
  *---------------------------------------------------------------------- */
 
-/* XXX move this to x509.c */
-/* XXX try using dstrings for result, exporting it */
-/* XXX make this part of the connection process and store string in conn struct */
-/* XXX that way it can be free'd properly when conn goes away */
 static char *
 PEMCertificate(X509 *peercert)
 {
@@ -1565,16 +1445,16 @@ PEMCertificate(X509 *peercert)
     BIO          *bio    = NULL;
     unsigned int  n      = 0;
 
-    if ((bio = BIO_new(BIO_s_mem())) == NULL)
+    if ((bio = BIO_new(BIO_s_mem())) == NULL) {
         return NULL;
-
+    }
     PEM_write_bio_X509(bio, peercert);
-
     n = BIO_pending(bio);
     result = Tcl_Alloc(n + 1);
     n = BIO_read(bio, result, (signed int) n);
     result[n] = '\0';
     BIO_free(bio);
+
     return result;
 }
 
@@ -1643,7 +1523,6 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
  *----------------------------------------------------------------------
  */
 
-// XXX see if *buf should be CONST
 static int
 ChanOutputProc(ClientData arg, char *buf, int towrite,
 		int *errorCodePtr)
@@ -1651,10 +1530,7 @@ ChanOutputProc(ClientData arg, char *buf, int towrite,
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
     int            rc      = 0;
 
-    //rc = NsOpenSSLConnSend(sslconn->bio, (void *) buf, towrite);
-    //Ns_Log(Debug, "ChanOutputProc: trying puts (%d) bytes", towrite);
     rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
-    //Ns_Log(Debug, "ChanOutputProc: actual puts (%d) bytes", rc);
 
     return rc;
 }
@@ -1686,9 +1562,6 @@ ChanInputProc(ClientData arg, char *buf, int bufSize,
     int            rc      = 0;
 
     rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
-    //rc = NsOpenSSLConnRecv(sslconn->bio, (void *) buf, bufSize);
-
-    //Ns_Log(Debug, "ChanInputProc: gets got (%d) bytes; sslconn = (%p)", rc, sslconn);
 
     return rc;
 }
@@ -1722,8 +1595,6 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
     Tcl_UnregisterChannel(interp, sslconn->chan);
-    sslconn->chan = NULL;
-    /* socket is close by ConnDestroy */
     NsOpenSSLConnDestroy(sslconn);
 
     return TCL_OK;
@@ -1789,16 +1660,13 @@ ChanGetHandleProc(ClientData arg, int direction, ClientData *handlePtr)
  *
  * ChanWatchProc --
  *
- *	Callback proc used by the Tcl channels. Doesn't do anything for
- *      us at the moment, but it is still required to be defined.
- *      Not having it causes a segfault when Tcl tries to
- *      work with it. Go read the Tcl_CreateChannel man page for Tcl 8.3+.
+ *	Callback proc used by the Tcl channels. Doesn't do anything for us at
+ *	the moment, but it is still required to be defined.  Not having it
+ *	causes a segfault when Tcl tries to work with it. Go read the
+ *	Tcl_CreateChannel man page for Tcl 8.3+.
  *
  * Results:
  *	None.
- *
- * Side effects:
- *	
  *
  *----------------------------------------------------------------------
  */
@@ -1806,8 +1674,6 @@ ChanGetHandleProc(ClientData arg, int direction, ClientData *handlePtr)
 static void
 ChanWatchProc(ClientData arg, int mask)
 {
-    //NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
-
     return;
 }
 
@@ -1835,7 +1701,6 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     SockListenCallback  *lcbPtr    = arg;
     NsOpenSSLConn       *sslconn   = NULL;
     Tcl_Interp          *interp    = NULL;
-    /* XXX not initialized */
     Tcl_DString          script;
     Tcl_Obj             *listPtr   = NULL;
     Tcl_Obj            **objv      = NULL;
@@ -1843,15 +1708,12 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     int                  objc      = 0;
 
     interp = Ns_TclAllocateInterp(lcbPtr->server);
-
     sslconn = Ns_OpenSSLSockAccept(sock, lcbPtr->sslcontext);
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
         return TCL_ERROR;
     }
-
     status = CreateTclChannel(sslconn, interp);
-
     if (status == TCL_OK) {
         listPtr = Tcl_GetObjResult(interp);
         if (Tcl_ListObjGetElements(interp, listPtr, &objc, &objv) == TCL_OK && objc == 2) {
@@ -1864,11 +1726,9 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
             Tcl_DStringFree(&script);
         }
     }
-
     if (status != TCL_OK) {
         Ns_TclLogError(interp);
     }
-
     Ns_TclDeAllocateInterp(interp);
 
     return NS_TRUE;
@@ -1903,7 +1763,6 @@ AppendReadyFiles (Tcl_Interp * interp, fd_set * setPtr, int write,
     Tcl_DString   ds;
 
     Tcl_DStringInit(&ds);
-
     if (dsPtr == NULL) {
         dsPtr = &ds;
     }
@@ -2020,16 +1879,12 @@ SSLSockCallbackProc(SOCKET sock, void *arg, int why)
     int           status  = TCL_ERROR;
 
     if (why != NS_SOCK_EXIT || (cbPtr->when & NS_SOCK_EXIT)) {
-
 	interp = Ns_TclAllocateInterp(cbPtr->server);
 	status = EnterDup(interp, sock);
-
 	if (status == TCL_OK) {
-
 	    Tcl_DStringInit (&script);
 	    Tcl_DStringAppend (&script, cbPtr->script, -1);
 	    Tcl_DStringAppendElement (&script, interp->result);
-
 	    if (why == NS_SOCK_READ) {
 		w = "r";
 	    } else if (why == NS_SOCK_WRITE) {
@@ -2039,23 +1894,17 @@ SSLSockCallbackProc(SOCKET sock, void *arg, int why)
 	    } else {
 		w = "x";
 	    }
-
 	    Tcl_DStringAppendElement(&script, w);
             status = Tcl_EvalEx(interp, script.string, script.length, 0);
 	    Tcl_DStringFree(&script);
-
 	}
-
 	if (status != TCL_OK) {
 	    Ns_TclLogError(interp);
 	} else if (!STREQ(interp->result, "1")) {
 	    why = NS_SOCK_EXIT;
 	}
-
 	Ns_TclDeAllocateInterp(interp);
-
     }
-
     if (why == NS_SOCK_EXIT) {
 	ns_sockclose(sock);
 	ns_free(cbPtr);

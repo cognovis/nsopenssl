@@ -1,4 +1,20 @@
+2004-04-09  Scott Goodwin  <scott@scottg.net>
+
+      * All: Lot's of cleanup, deleting old comments, restructing some code.
+
+      * defaults.h, nsopenssl.h: Pulled default defines out of nsopenssl.h and
+      into separate defaults.h file.
+
+      * nsopenssl.h, ssl.c: Added DEBUG_NSOPENSSL define: uncomment it to dump
+      more info to log; comment out for production runs.  Recompilation
+      necessary.
+
+      * sslcontext: fixed SSLContextCacheInit to take into account the
+      context's server / client role.
+
 2004-04-04  Scott Goodwin  <scott@scottg.net>
+
+      * Tagged: 3_0beta19
 
       * nsopenssl.h, ssl.c, tclcmds.c, https.tcl: Cleaned up CreateTclChannel.
       This affects calls to ns_openssl_sockopen and friends: the number of

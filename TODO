@@ -1,5 +1,9 @@
 TODO for nsopenssl:
 
+- Make library loadable into tclsh
+- Make ns_openssl commands available to Tcl API conns
+- 
+
 nsopenssl 3.0 release:
   - Ensure sslcontexts are not NULL before accessing (mostly tclcmds.c)
   - Remove all debug statements

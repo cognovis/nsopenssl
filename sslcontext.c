@@ -114,7 +114,8 @@ NsOpenSSLContextCreate(char *server, char *name)
     Ns_DStringInit(&ds);
 
     /*
-     * The name of an SSL context must be unique within a virtual server.
+     * Check to see if the context name is already in use. The name of an SSL
+     * context must be unique within a virtual server.
      */
 
     if (Ns_OpenSSLServerSSLContextGet(server, name) != NULL) {
@@ -123,10 +124,12 @@ NsOpenSSLContextCreate(char *server, char *name)
         return NULL;
     }
 
+    /*
+     * Create the SSL context.
+     */
+
     sslcontext = ns_calloc(1, sizeof(*sslcontext));
-
     Ns_MutexInit(&sslcontext->lock);
-
     Ns_DStringPrintf(&ds, "ctx:%s", name);
     lockName = Ns_DStringExport(&ds);
     Ns_MutexSetName2(&sslcontext->lock, MODULE_SHORT, lockName);
@@ -134,50 +137,41 @@ NsOpenSSLContextCreate(char *server, char *name)
     ns_free(lockName);
     lockName = NULL;
 
+    /*
+     * Set SSL context initial values.
+     */
+
     sslcontext->server              = server;
     sslcontext->name                = name;
-
     sslcontext->initialized         = NS_FALSE;
     sslcontext->refcnt              = 0;
-
     sslcontext->peerVerify          = DEFAULT_PEER_VERIFY;
     sslcontext->peerVerifyDepth     = DEFAULT_PEER_VERIFY_DEPTH;
     sslcontext->protocols           = DEFAULT_PROTOCOLS;
     sslcontext->cipherSuite         = DEFAULT_CIPHER_LIST;
-
     sslcontext->sessionCache        = DEFAULT_SESSION_CACHE;
     sslcontext->sessionCacheSize    = DEFAULT_SESSION_CACHE_SIZE;
     sslcontext->sessionCacheTimeout = DEFAULT_SESSION_CACHE_TIMEOUT;
     sslcontext->trace               = DEFAULT_TRACE;
-
     sslcontext->bufsize             = DEFAULT_BUFFER_SIZE;
     sslcontext->timeout             = DEFAULT_TIMEOUT;
-
     sslcontext->sessionCacheId      = SSLContextSessionCacheIdNew(server);
-
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, NULL);
     sslcontext->moduleDir = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CERT_FILE, NULL);
     sslcontext->certFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_KEY_FILE, NULL);
     sslcontext->keyFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CA_FILE, NULL);
     sslcontext->caFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CA_DIR, NULL);
     sslcontext->caDir = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-
     Ns_DStringFree(&ds);
-
-    //Ns_Log(Debug, "NsOpenSSLContextCreate: sslcontext = (%p)", sslcontext);
 
     return sslcontext;
 }
@@ -202,21 +196,14 @@ NsOpenSSLContextCreate(char *server, char *name)
 int
 NsOpenSSLContextDestroy(char *server, NsOpenSSLContext *sslcontext)
 {
-    /*
-     * We only need to free structure members where we've used strdup to create
-     * them.
-     */
-
     ns_free(sslcontext->certFile);
     ns_free(sslcontext->keyFile);
     ns_free(sslcontext->caFile);
     ns_free(sslcontext->caDir);
-
     ns_free(sslcontext);
 
-    /* XXX REMOVE THE CONTEXT FROM THE SERVER STATE */
-    /* XXX should be a private func??? */
 #if 0
+    /* XXX REMOVE THE CONTEXT FROM THE SERVER STATE */
     Ns_OpenSSLServerContextRemove();
 #endif
 
@@ -249,14 +236,10 @@ NsOpenSSLContextDestroy(char *server, NsOpenSSLContext *sslcontext)
 int
 NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
 {
-
-    /* XXX argh -- gotta use a goto here to pop out and unlock struct */
     if (sslcontext == NULL) {
-        Ns_Log(Error, "%s (%s): SSL context passed to NsOpenSSLContextValidate is NULL",
-                MODULE, server);
+        Ns_Log(Error, "%s (%s): SSL context is NULL", MODULE, server);
         return NS_ERROR;
     }
-
     if (!STREQ(server, sslcontext->server)) {
         Ns_Log(Error, "%s (%s): SSL context server field (%s) does not match the virtual server name",
                 MODULE, server, sslcontext->server);
@@ -264,15 +247,12 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
     }
 
     /*
-     * Initialize parts of SSL_CTX that are common to all NsOpenSSLContexts
-     * (i.e. these are not configurable via nsd.tcl or Ns_OpenSSL* calls).
+     * Initialize the SSL_CTX based on the role this context will play.
      */
 
     if (sslcontext->role) {
-        //Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_server_method(): sslcontext = (%p)", sslcontext);
         sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
     } else {
-        //Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_client_method(): sslcontext = (%p)", sslcontext);
         sslcontext->sslctx = SSL_CTX_new(SSLv23_client_method());
     }
 
@@ -309,17 +289,12 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
      * instances. I believe this is a bug in OpenSSL, as the error returned
      * comes from that library after the SSL_CTX_use_certificate_chain_file
      * call.
-     * XXX I need to research the warning above and find out why that's
-     * so.
-     * XXX I could store certs in memory and check to see if the same cert
-     * is already in memory and use if from there instead.
      */
 
-    if ( 
-            SSLContextCiphersInit(sslcontext)  == NS_ERROR
-            || SSLContextProtocolsInit(sslcontext) == NS_ERROR
-            || SSLContextKeyFileInit(sslcontext) == NS_ERROR
-            || SSLContextCertFileInit(sslcontext) == NS_ERROR
+    if ( SSLContextCiphersInit(sslcontext)           == NS_ERROR
+            || SSLContextProtocolsInit(sslcontext)   == NS_ERROR
+            || SSLContextKeyFileInit(sslcontext)     == NS_ERROR
+            || SSLContextCertFileInit(sslcontext)    == NS_ERROR
             || SSLContextValidateCertKey(sslcontext) == NS_ERROR
        ) {
         return NS_ERROR;
@@ -339,12 +314,10 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
 
     /*
      * We succeeded in initializing the context. We now have an OpenSSL SSL_CTX
-     * structure we can use to create connections.
+     * structure we can use to create SSL connections.
      */
 
     sslcontext->initialized = 1;
-
-    //Ns_Log(Debug, "NsOpenSSLContextInit: sslcontext = (%p), sslctx = (%p)", sslcontext, sslcontext->sslctx);
 
     return NS_OK;
 }
@@ -372,7 +345,6 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
  */
 
 #if 0
-/* XXX add the ability to wait for the context to be inactive? */
 int
 NsOpenSSLContextRelease(char *server, NsOpenSSLContext *sslcontext)
 {
@@ -420,7 +392,6 @@ NsOpenSSLContextRoleSet(char *server, NsOpenSSLContext *sslcontext,
         char *role)
 {
     Ns_MutexLock(&sslcontext->lock);
-
     if (STREQ(role, "client")) {
         sslcontext->role = 0;
     } else if (STREQ(role, "server")) {
@@ -430,7 +401,6 @@ NsOpenSSLContextRoleSet(char *server, NsOpenSSLContext *sslcontext,
                 server, role);
         return NS_ERROR;
     }
-
     Ns_MutexUnlock(&sslcontext->lock);
 
     return NS_OK;
@@ -457,7 +427,6 @@ char *
 NsOpenSSLContextRoleGet(char *server, NsOpenSSLContext *sslcontext)
 {
     Ns_MutexLock(&sslcontext->lock);
-
     if (sslcontext->role == 0) {
         return "client";
     } else if (sslcontext->role == 1) {
@@ -465,7 +434,6 @@ NsOpenSSLContextRoleGet(char *server, NsOpenSSLContext *sslcontext)
     } else {
         return "undefined";
     }
-
     Ns_MutexUnlock(&sslcontext->lock);
 
     return NS_OK;
@@ -558,7 +526,6 @@ NsOpenSSLContextCertFileSet(char *server, NsOpenSSLContext *sslcontext,
     Ns_DString ds;
 
     Ns_DStringInit(&ds);
-
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->certFile = ns_strdup(certFile);
     if (!Ns_PathIsAbsolute(sslcontext->certFile)) {
@@ -620,7 +587,6 @@ NsOpenSSLContextKeyFileSet(char *server, NsOpenSSLContext *sslcontext,
     Ns_DString ds;
 
     Ns_DStringInit(&ds);
-
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->keyFile = ns_strdup(keyFile);
     if (!Ns_PathIsAbsolute(sslcontext->keyFile)) {
@@ -783,7 +749,6 @@ NsOpenSSLContextCAFileSet(char *server, NsOpenSSLContext *sslcontext,
     Ns_DString ds;
 
     Ns_DStringInit(&ds);
-
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->caFile = ns_strdup(caFile);
     if (!Ns_PathIsAbsolute(sslcontext->caFile)) {
@@ -843,7 +808,6 @@ NsOpenSSLContextCADirSet(char *server, NsOpenSSLContext *sslcontext,
     Ns_DString ds;
 
     Ns_DStringInit(&ds);
-
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->caDir = ns_strdup(caDir);
     if (!Ns_PathIsAbsolute(sslcontext->caDir)) {
@@ -955,8 +919,6 @@ int
 NsOpenSSLContextPeerVerifyDepthSet(char *server, NsOpenSSLContext *sslcontext,
         int peerVerifyDepth)
 {
-    /* XXX how do I handle the default case? with varargs in func call? */
-    /* XXX ah, no, preset all the default values in NsOpenSSLContextCreate */
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->peerVerifyDepth = peerVerifyDepth;
     Ns_MutexUnlock(&sslcontext->lock);
@@ -1169,7 +1131,6 @@ NsOpenSSLContextTraceSet(char *server, NsOpenSSLContext *sslcontext,
 {
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->trace = trace;
-    //Ns_Log(Debug, "*****>>>>> TRACE = (%d)", trace);
     Ns_MutexUnlock(&sslcontext->lock);
 
     return NS_OK;
@@ -1259,7 +1220,6 @@ NsOpenSSLContextAdd(char *server, NsOpenSSLContext *sslcontext)
     } else {
         thisServer = NsOpenSSLServerGet(server);
         Ns_MutexLock(&thisServer->lock);
-
         hPtr = Tcl_CreateHashEntry(&thisServer->sslcontexts, sslcontext->name, &new);
         if (new) {
             Tcl_SetHashValue(hPtr, sslcontext);
@@ -1267,7 +1227,6 @@ NsOpenSSLContextAdd(char *server, NsOpenSSLContext *sslcontext)
             Ns_Log(Error, "%s (%s): duplicate SSL context name: %s",
                     MODULE, server, sslcontext->name);
         }
-
         Ns_MutexUnlock(&thisServer->lock);
     }
 
@@ -1299,17 +1258,12 @@ NsOpenSSLContextRemove(char *server, NsOpenSSLContext *sslcontext)
     if (sslcontext == NULL) {
         return;
     }
-
     thisServer = NsOpenSSLServerGet(server);
-
     Ns_MutexLock(&thisServer->lock);
-
     hPtr = Tcl_FindHashEntry(&thisServer->sslcontexts, sslcontext->name);
-
     if (hPtr != NULL) {
         Tcl_DeleteHashEntry(hPtr);
     }
-
     Ns_MutexUnlock(&thisServer->lock);
 
     return;
@@ -1331,8 +1285,6 @@ NsOpenSSLContextRemove(char *server, NsOpenSSLContext *sslcontext)
  *----------------------------------------------------------------------
  */
 
-/* XXX should this be in sslcontext.c ??? */
-
 NsOpenSSLContext *
 Ns_OpenSSLServerSSLContextGet(char *server, char *name)
 {
@@ -1345,7 +1297,6 @@ Ns_OpenSSLServerSSLContextGet(char *server, char *name)
                 MODULE, server);
         return NULL;
     }
-
     thisServer = NsOpenSSLServerGet(server);
     Ns_MutexLock(&thisServer->lock);
     hPtr = Tcl_FindHashEntry(&thisServer->sslcontexts, name);
@@ -1428,7 +1379,6 @@ IssueTmpRSAKey(SSL *ssl, int export, int keylen)
     static RSA    *rsa_tmp = NULL;
 
     sslconn = (NsOpenSSLConn *) SSL_get_app_data(ssl);
-
     rsa_tmp = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
     if (rsa_tmp == NULL) {
         Ns_Log(Error, "%s (%s): Temporary RSA key generation failed",
@@ -1461,7 +1411,6 @@ IssueTmpRSAKey(SSL *ssl, int export, int keylen)
  *----------------------------------------------------------------------
  */
 
-/* XXX figure out how to monitor OpenSSL's session cache performance */
 static char *
 SSLContextSessionCacheIdNew(char *server)
 {
@@ -1471,20 +1420,15 @@ SSLContextSessionCacheIdNew(char *server)
     int          id             = 0;
 
     Ns_DStringInit(&ds);
-
-    //XXX thisServer = NsOpenSSLServerGet(server);
-
     Ns_MutexLock(&thisServer->lock);
     id = thisServer->nextSessionCacheId;
     thisServer->nextSessionCacheId++;
     Ns_MutexUnlock(&thisServer->lock);
-
     Ns_DStringPrintf(&ds, "%s:%s:%d", MODULE, server, id);
     if (Ns_DStringLength(&ds) > SSL_MAX_SSL_SESSION_ID_LENGTH) {
         Ns_Log(Error, "%s (%s): session cache id generated is too big; truncating",
                 MODULE, server);
         Ns_DStringTrunc(&ds, 0);
-        /* XXX it could still be longer than 32 chars, though not likely */
         Ns_DStringPrintf(&ds, "%s:%d", server, id);
     }
     sessionCacheId = Ns_DStringExport(&ds);
@@ -1492,9 +1436,6 @@ SSLContextSessionCacheIdNew(char *server)
 
     return sessionCacheId;
 }
-
-
-/* XXX MAKE ALL TEH FOLLOWING STATICS */
 
 
 /*
@@ -1515,20 +1456,11 @@ SSLContextSessionCacheIdNew(char *server)
 static int
 SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
 {
-#if 0
-    char *error;
-#endif
-
     if (sslcontext->certFile == NULL ||
             SSL_CTX_use_certificate_chain_file(sslcontext->sslctx, sslcontext->certFile) == 0
        ) {
         Ns_Log(Error, "%s (%s): error loading certificate '%s'",
                 MODULE, sslcontext->server, sslcontext->certFile);
-#if 0
-        error = ERR_reason_error_string(ERR_get_error());
-        Ns_Log(Error, "%s (%s): OpenSSL reports: %s",
-                MODULE, sslcontext->server, error);
-#endif
         if ((access(sslcontext->certFile, F_OK) != 0) || (access(sslcontext->certFile, R_OK) != 0))
             Ns_Log(Error, "%s (%s): '%s' certificate file is not readable or does not exist", 
                     MODULE, sslcontext->server, sslcontext->name);
@@ -1536,6 +1468,7 @@ SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
     }
     Ns_Log(Notice, "%s (%s): '%s' certificate loaded successfully", 
             MODULE, sslcontext->server, sslcontext->name);
+
     return NS_OK;
 }
 
@@ -1558,7 +1491,6 @@ SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
 static int
 SSLContextKeyFileInit(NsOpenSSLContext *sslcontext)
 {
-    /* XXX add ability to read DER etc. file formats? */
     if (sslcontext->keyFile == NULL ||
             SSL_CTX_use_PrivateKey_file(sslcontext->sslctx, sslcontext->keyFile,
                 SSL_FILETYPE_PEM) == 0) {
@@ -1571,6 +1503,7 @@ SSLContextKeyFileInit(NsOpenSSLContext *sslcontext)
     }
     Ns_Log(Notice, "%s (%s): '%s' key loaded successfully", 
             MODULE, sslcontext->server, sslcontext->name);
+
     return NS_OK;
 }
 
@@ -1598,6 +1531,7 @@ SSLContextValidateCertKey(NsOpenSSLContext *sslcontext)
                 MODULE, sslcontext->server, sslcontext->name);
         return NS_ERROR;
     }
+
     return NS_OK;
 }
 
@@ -1697,6 +1631,7 @@ SSLContextCiphersInit(NsOpenSSLContext *sslcontext)
     }
     Ns_Log(Notice, "%s (%s): '%s' ciphers loaded successfully",
             MODULE, sslcontext->server, sslcontext->name);
+
     return NS_OK;
 }
 
@@ -1767,10 +1702,7 @@ SSLContextPeerVerifyDepthInit(NsOpenSSLContext *sslcontext)
  * SSLContextSessionCacheInit --
  *
  *       Initialize the per-SSL context session cache. We use OpenSSL's
- *       internal cache for storage and let it handle all of the work. We can
- *       set up callbacks to manage an external session cache that could be
- *       shared across multiple servers. If you want this capability, contact
- *       me and we'll see what we can work out.
+ *       internal cache for storage and let it do the work. 
  *
  * Results:
  *
@@ -1779,19 +1711,20 @@ SSLContextPeerVerifyDepthInit(NsOpenSSLContext *sslcontext)
  *----------------------------------------------------------------------
  */
 
-/* XXX move this to sslcontext.c */
-
 static void
 SSLContextSessionCacheInit(NsOpenSSLContext *sslcontext)
 {
-    /* XXX need to make this work well with Timeout, Size set/get funcs */
     if (sslcontext->sessionCache) {
 
         /*
-         * Turn on server-side session caching for this SSL context.
+         * Turn on session caching for this SSL context.
          */
 
-        SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_SERVER);
+        if (sslcontext->role == SERVER_ROLE) {
+            SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_SERVER);
+        } else {
+            SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_CLIENT);
+        }
 
         /*
          * Create the session cache context id which must be unique to each SSL
@@ -1800,10 +1733,11 @@ SSLContextSessionCacheInit(NsOpenSSLContext *sslcontext)
          * inadvertently use the same session cache context id.
          */
 
-        /* XXX might need to use strlen here? */
-        SSL_CTX_set_session_id_context(sslcontext->sslctx,
-                (void *) &sslcontext->sessionCacheId,
-                sizeof(sslcontext->sessionCacheId));
+        SSL_CTX_set_session_id_context(
+            sslcontext->sslctx,
+            (void *) &sslcontext->sessionCacheId,
+            sizeof(sslcontext->sessionCacheId)
+        );
 
         /*
          * Set the time to live for a session in this session cache. After this
@@ -1821,11 +1755,12 @@ SSLContextSessionCacheInit(NsOpenSSLContext *sslcontext)
          */
 
         SSL_CTX_sess_set_cache_size(sslcontext->sslctx, sslcontext->sessionCacheSize);
-
+        Ns_Log(Notice, "%s (%s): session cache is turned on for sslcontext '%s'",
+            sslcontext->name, MODULE, sslcontext->server);
     } else {
-        Ns_Log(Warning, "%s (%s): session cache is turned off; this will cause some browsers to fail",
-                MODULE, sslcontext->server);
         SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_OFF);
+        Ns_Log(Notice, "%s (%s): session cache is turned off for sslcontext '%s'",
+            sslcontext->name, MODULE, sslcontext->server);
     }
 }
 
@@ -1880,49 +1815,35 @@ SSLContextProtocolsInit(NsOpenSSLContext *sslcontext)
     int   bits       = 0;
     char *lprotocols = NULL;
 
-    /* XXX ifdef out the protocols and ciphers that aren't compiled into OpenSSL ??? */
     bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
-
     if (sslcontext->protocols == NULL) {
-
         Ns_Log(Notice, "%s (%s): '%s' protocol parameter not set; using all protocols: SSLv2, SSLv3 and TLSv1",
                 MODULE, sslcontext->server, sslcontext->name);
         bits &= ~bits;
-
     } else {
-
         lprotocols = ns_strdup(sslcontext->protocols);
         lprotocols = Ns_StrToLower(lprotocols);
-
-        /* XXX check use of strstr here */
         if (strstr(lprotocols, "all") != NULL) {
             Ns_Log(Notice, "%s (%s): '%s' using all protocols: SSLv2, SSLv3 and TLSv1",
                     MODULE, sslcontext->server, sslcontext->name);
             bits &= ~bits;
-
         } else {
-
             if (strstr(lprotocols, "sslv2") != NULL) {
                 Ns_Log(Notice, "%s (%s): '%s' using SSLv2 protocol", MODULE, sslcontext->server, sslcontext->name);
                 bits &= ~SSL_OP_NO_SSLv2;
             }
-
             if (strstr(lprotocols, "sslv3") != NULL) {
                 Ns_Log(Notice, "%s (%s): '%s' using SSLv3 protocol", MODULE, sslcontext->server, sslcontext->name);
                 bits &= ~SSL_OP_NO_SSLv3;
             }
-
             if (strstr(lprotocols, "tlsv1") != NULL) {
                 Ns_Log(Notice, "%s (%s): '%s' using TLSv1 protocol",
                         MODULE, sslcontext->server, sslcontext->name);
                 bits &= ~SSL_OP_NO_TLSv1;
             }
-
         }
         ns_free(lprotocols);
     }
-
-    /* XXX log a warning when SSLv2 is configured */
     if (SSL_CTX_set_options(sslcontext->sslctx, bits) == 0) {
         Ns_Log(Error, "%s (%s): protocol initialization failed",
                 MODULE, sslcontext->server);
@@ -1992,7 +1913,7 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
             microseconds,
             SSL_state_string_long(ssl),
             alertTypePrefix, alertType, alertDescPrefix, alertDesc
-          );
+    );
 }
 
 
