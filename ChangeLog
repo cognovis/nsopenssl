@@ -1,3 +1,8 @@
+2001-08-15  Scott S. Goodwin  <scott@scottg.net>
+
+	* https.tcl: add the rqset parameter to ns_httpsget so that
+	cookies can be used.
+
 2001-08-09  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsopenssl 2.0 released.
