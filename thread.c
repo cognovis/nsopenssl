@@ -31,7 +31,9 @@
  * version of this file under either the License or the GPL.
  */
 
-static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
+static const char *RCSID =
+    "@(#) $Header$, compiled: "
+    __DATE__ " " __TIME__;
 
 #define OPENSSL_THREAD_DEFINES
 
@@ -44,16 +46,16 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 static Ns_Mutex *locks;
 
-static void LockCallback(int mode, int n, const char *file, int line);
-static unsigned long IdCallback(void);
-static struct CRYPTO_dynlock_value *DynlockCreateCallback(char *file,
-    int line);
-static void DynlockLockCallback(int mode,
-    struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
-static void DynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock,
-    const char *file, int line);
+static void LockCallback (int mode, int n, const char *file, int line);
+static unsigned long IdCallback (void);
+static struct CRYPTO_dynlock_value *DynlockCreateCallback (char *file,
+							   int line);
+static void DynlockLockCallback (int mode,
+				 struct CRYPTO_dynlock_value *dynlock,
+				 const char *file, int line);
+static void DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
+				    const char *file, int line);
 
-
 /*
  *----------------------------------------------------------------------
  *
@@ -71,38 +73,36 @@ static void DynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock,
  */
 
 int
-NsOpenSSLInitThreads(void)
+NsOpenSSLInitThreads (void)
 {
     static int initialized = 0;
 
-    int  i;
-    int  num_locks;
+    int i;
+    int num_locks;
     char buf[100];
 
     if (!initialized) {
 	initialized = 1;
 
-	if (CRYPTO_set_mem_functions(ns_malloc, ns_realloc, ns_free) == 0) {
-	    Ns_Log(Warning, DRIVER_NAME
-		": could not set OpenSSL memory functions");
+	if (CRYPTO_set_mem_functions (ns_malloc, ns_realloc, ns_free) == 0) {
+	    Ns_Log (Warning, DRIVER_NAME
+		    ": could not set OpenSSL memory functions");
 	}
 
-	num_locks = CRYPTO_num_locks();
-	locks = ns_calloc(num_locks, sizeof *locks);
+	num_locks = CRYPTO_num_locks ();
+	locks = ns_calloc (num_locks, sizeof *locks);
 	for (i = 0; i < num_locks; i++) {
-	    sprintf(buf, "openssl-%d", i);
-	    Ns_MutexSetName2(locks + i, DRIVER_NAME, buf);
+	    sprintf (buf, "openssl-%d", i);
+	    Ns_MutexSetName2 (locks + i, DRIVER_NAME, buf);
 	}
 
-	CRYPTO_set_locking_callback(LockCallback);
-	CRYPTO_set_id_callback(IdCallback);
+	CRYPTO_set_locking_callback (LockCallback);
+	CRYPTO_set_id_callback (IdCallback);
     }
 
     return NS_OK;
 }
-
 
-
 /*
  *----------------------------------------------------------------------
  *
@@ -120,12 +120,12 @@ NsOpenSSLInitThreads(void)
  */
 
 static void
-LockCallback(int mode, int n, const char *file, int line)
+LockCallback (int mode, int n, const char *file, int line)
 {
     if (mode & CRYPTO_LOCK) {
-	Ns_MutexLock(locks + n);
+	Ns_MutexLock (locks + n);
     } else {
-	Ns_MutexUnlock(locks + n);
+	Ns_MutexUnlock (locks + n);
     }
 }
 
@@ -146,9 +146,9 @@ LockCallback(int mode, int n, const char *file, int line)
  */
 
 static unsigned long
-IdCallback(void)
+IdCallback (void)
 {
-    return (unsigned long) Ns_ThreadId();
+    return (unsigned long) Ns_ThreadId ();
 }
 
 /*
@@ -168,18 +168,18 @@ IdCallback(void)
  */
 
 static struct CRYPTO_dynlock_value *
-DynlockCreateCallback(char *file, int line)
+DynlockCreateCallback (char *file, int line)
 {
     Ns_Mutex *lock;
     Ns_DString ds;
 
-    lock = ns_calloc(1, sizeof *lock);
+    lock = ns_calloc (1, sizeof *lock);
 
-    Ns_DStringInit(&ds);
-    Ns_DStringVarAppend(&ds, "openssl: ", file, ": ");
-    Ns_DStringPrintf(&ds, "%d", line);
+    Ns_DStringInit (&ds);
+    Ns_DStringVarAppend (&ds, "openssl: ", file, ": ");
+    Ns_DStringPrintf (&ds, "%d", line);
 
-    Ns_MutexSetName2(lock, DRIVER_NAME, Ns_DStringValue(&ds));
+    Ns_MutexSetName2 (lock, DRIVER_NAME, Ns_DStringValue (&ds));
 
     return (struct CRYPTO_dynlock_value *) lock;
 }
@@ -201,13 +201,13 @@ DynlockCreateCallback(char *file, int line)
  */
 
 static void
-DynlockLockCallback(int mode, struct CRYPTO_dynlock_value *dynlock,
-    const char *file, int line)
+DynlockLockCallback (int mode, struct CRYPTO_dynlock_value *dynlock,
+		     const char *file, int line)
 {
     if (mode & CRYPTO_LOCK) {
-	Ns_MutexLock((Ns_Mutex *) dynlock);
+	Ns_MutexLock ((Ns_Mutex *) dynlock);
     } else {
-	Ns_MutexUnlock((Ns_Mutex *) dynlock);
+	Ns_MutexUnlock ((Ns_Mutex *) dynlock);
     }
 }
 
@@ -228,9 +228,8 @@ DynlockLockCallback(int mode, struct CRYPTO_dynlock_value *dynlock,
  */
 
 static void
-DynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock,
-    const char *file, int line)
+DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
+			const char *file, int line)
 {
-    Ns_MutexDestroy((Ns_Mutex *) dynlock);
+    Ns_MutexDestroy ((Ns_Mutex *) dynlock);
 }
-

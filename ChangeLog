@@ -1,3 +1,8 @@
+2002-03-05  Scott S. Goodwin  <scott@scottg.net>
+
+	* all: ran *.c and *.h through indent: indent -i2 -br -brs -ce
+	-hnl -psl -sob <filename.c>.
+
 2002-03-04  Scott S. Goodwin  <scott@scottg.net>
 
 	* ssl.c, nsopenssl.c, nsopenssl.h, tclcmds.c: Added 'ns_openssl

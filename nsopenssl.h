@@ -33,7 +33,7 @@
 
 /* @(#) $Header$ */
 
-#if 0 /* XXX need to add version.h to AOLserver core */
+#if 0				/* XXX need to add version.h to AOLserver core */
 /* XXX set this to have nsopenssl compile with aolserver 4.x */
 #define NS_MAJOR_VERSION 4
 #endif
@@ -87,79 +87,78 @@ struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
 
-    struct NsOpenSSLDriver     *nextPtr;
+    struct NsOpenSSLDriver *nextPtr;
     struct Ns_OpenSSLConn *firstFreePtr;
 
-    Ns_Mutex         lock;
-    int              refcnt;
-    Ns_Driver        driver;
+    Ns_Mutex lock;
+    int refcnt;
+    Ns_Driver driver;
 
-    char            *server;       /* Server name */
-    char            *module;       /* Module name */
-    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
-    char            *dir;          /* Module directory (on disk) */
+    char *server;		/* Server name */
+    char *module;		/* Module name */
+    char *configPath;		/* E.g. ns/server/s1/module/nsopenssl */
+    char *dir;			/* Module directory (on disk) */
 
-    char            *location;     /* E.g. https://example.com:8443 */
-    char            *address;      /* Advertised address */
-    char            *bindaddr;     /* Bind address - might be 0.0.0.0 */
-    int              port;         /* Bind port */
+    char *location;		/* E.g. https://example.com:8443 */
+    char *address;		/* Advertised address */
+    char *bindaddr;		/* Bind address - might be 0.0.0.0 */
+    int port;			/* Bind port */
 
-    int              bufsize;
-    int              timeout;
-    SOCKET           lsock;
+    int bufsize;
+    int timeout;
+    SOCKET lsock;
 
-    SSL_CTX         *context; /* XXX change to nsdServerContext */
-    SSL_CTX         *sockClientContext;
-    SSL_CTX         *sockServerContext;
+    SSL_CTX *context;		/* XXX change to nsdServerContext */
+    SSL_CTX *sockClientContext;
+    SSL_CTX *sockServerContext;
 
-    char            *randomFile;   /* Used to seed PRNG */
+    char *randomFile;		/* Used to seed PRNG */
 
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
 
-    char        *server;     /* Server name */
-    char        *module;     /* Module name (e.g. 'nsopenssl') */
-    char        *configPath; /* Path to the configuration file */
-    char        *dir;        /* Module directory (on disk) */
+    char *server;		/* Server name */
+    char *module;		/* Module name (e.g. 'nsopenssl') */
+    char *configPath;		/* Path to the configuration file */
+    char *dir;			/* Module directory (on disk) */
 
-    int          refcnt;     /* Don't free if refcnt > 0 */
+    int refcnt;			/* Don't free if refcnt > 0 */
 
-    int          role;       /* client or server */
-    int          conntype;   /* nsd server, sock server or client server conn */
-    char        *type;       /* 'nsdserver', 'sockserver', sockclient' */
+    int role;			/* client or server */
+    int conntype;		/* nsd server, sock server or client server conn */
+    char *type;			/* 'nsdserver', 'sockserver', sockclient' */
 
-    int          bufsize;
-    int          timeout;
+    int bufsize;
+    int timeout;
 
-    SOCKET       sock;
-    SOCKET       wsock;
+    SOCKET sock;
+    SOCKET wsock;
 
-    SSL_CTX     *context;    /* Read-only context for creating SSL structs */
-    SSL         *ssl;
-    BIO         *io;         /* All SSL i/o goes through this BIO */
-    X509        *peercert;   /* Certificate for peer, may be NULL if no cert */
+    SSL_CTX *context;		/* Read-only context for creating SSL structs */
+    SSL *ssl;
+    BIO *io;			/* All SSL i/o goes through this BIO */
+    X509 *peercert;		/* Certificate for peer, may be NULL if no cert */
 
-    char         peer[16];   /* Not used by nsd server conns in 4.x API */
-    int          port;       /* Not used by nsd server conns in 4.x API */
+    char peer[16];		/* Not used by nsd server conns in 4.x API */
+    int port;			/* Not used by nsd server conns in 4.x API */
 
-    char        *address;    /* Advertised address for this module instance */
-    char        *bindaddr;   /* Bind address for this module instance - might be 0.0.0.0 */
-    int          bindport;   /* The port the server is listening on for this module instance */
+    char *address;		/* Advertised address for this module instance */
+    char *bindaddr;		/* Bind address for this module instance - might be 0.0.0.0 */
+    int bindport;		/* The port the server is listening on for this module instance */
 
 #ifndef NS_MAJOR_VERSION
-    struct Ns_OpenSSLConn   *nextPtr;
-    struct NsOpenSSLDriver  *sdPtr;
+    struct Ns_OpenSSLConn *nextPtr;
+    struct NsOpenSSLDriver *sdPtr;
 #endif
 
 } Ns_OpenSSLConn;
 
-
 typedef struct SSLTclCmd {
 
-    char           *name;
-    Tcl_CmdProc    *proc;
-    ClientData      clientData;
+    char *name;
+    Tcl_CmdProc *proc;
+    ClientData clientData;
 
 } SSLTclCmd;
 
@@ -167,65 +166,59 @@ typedef struct SSLTclCmd {
  * config.c
  */
 
-extern char *ConfigStringDefault(char *module, char *path, char *name,
-    char *def);
-extern int ConfigBoolDefault(char *module, char *path, char *name,
-    int def);
-extern int ConfigIntDefault(char *module, char *path, char *name,
-    int def); 
-extern char *ConfigPathDefault(char *module, char *path, char *name,
-    char *dir, char *def); 
+extern char *ConfigStringDefault (char *module, char *path, char *name,
+				  char *def);
+extern int ConfigBoolDefault (char *module, char *path, char *name, int def);
+extern int ConfigIntDefault (char *module, char *path, char *name, int def);
+extern char *ConfigPathDefault (char *module, char *path, char *name,
+				char *dir, char *def);
 
 /*
  * init.c
  */
 
 #ifndef NS_MAJOR_VERSION
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
-           Ns_DrvProc *procs);
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module,
+					       Ns_DrvProc * procs);
 #else
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module);
 #endif
-extern void     NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
+extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
 
 /*
  * ssl.c
  */
 
-extern int            NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr);
-extern void           NsOpenSSLDestroyConn(Ns_OpenSSLConn *ccPtr);
-extern int            NsOpenSSLFlush(Ns_OpenSSLConn *ccPtr);
-extern int            NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer,
-			  int toread);
-extern int            NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer,
-			  int towrite);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect(char *host, int port, int async,
-			  int timeout);
-extern int            Ns_OpenSSLFetchPage(Ns_DString *dsPtr, char *url,
-                          char *server);
-extern int            Ns_OpenSSLFetchURL(Ns_DString *dsPtr, char *url,
-                          Ns_Set *headers);
-extern int            Ns_OpenSSLSockCallback(SOCKET sock, Ns_SockProc *proc,
-                          void *arg, int when);
-extern int            Ns_OpenSSLSockListenCallback(char *addr, int port,
-                          Ns_SockProc *proc, void *arg);
-extern SOCKET         Ns_OpenSSLSockListen(char *address, int port);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept(SOCKET sock);
-extern void           NsOpenSSLTrace(SSL *ssl, int where, int rc);
-extern int            NsOpenSSLShutdown(SSL *ssl);
-extern int            Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *ccPtr);
+extern int NsOpenSSLCreateConn (Ns_OpenSSLConn * ccPtr);
+extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr);
+extern int NsOpenSSLFlush (Ns_OpenSSLConn * ccPtr);
+extern int NsOpenSSLRecv (Ns_OpenSSLConn * ccPtr, void *buffer, int toread);
+extern int NsOpenSSLSend (Ns_OpenSSLConn * ccPtr, void *buffer, int towrite);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, int port, int async,
+					      int timeout);
+extern int Ns_OpenSSLFetchPage (Ns_DString * dsPtr, char *url, char *server);
+extern int Ns_OpenSSLFetchURL (Ns_DString * dsPtr, char *url,
+			       Ns_Set * headers);
+extern int Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc * proc,
+				   void *arg, int when);
+extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
+					 Ns_SockProc * proc, void *arg);
+extern SOCKET Ns_OpenSSLSockListen (char *address, int port);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
+extern void NsOpenSSLTrace (SSL * ssl, int where, int rc);
+extern int NsOpenSSLShutdown (SSL * ssl);
+extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * ccPtr);
 
 /*
  * tclcmds.c
  */
 
-extern int NsOpenSSLCreateCmds(Tcl_Interp *interp, void *arg);
+extern int NsOpenSSLCreateCmds (Tcl_Interp * interp, void *arg);
 
 /*
  * nsopenssl.c
  */
 
-extern char    *NsOpenSSLGetModuleName(void);
-extern SSL_CTX *NsOpenSSLGetSockServerSSLContext(void);
-extern SSL_CTX *NsOpenSSLGetSockClientSSLContext(void);
-
+extern char *NsOpenSSLGetModuleName (void);
+extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
+extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);

@@ -31,11 +31,12 @@
  * version of this file under either the License or the GPL.
  */
 
-static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
+static const char *RCSID =
+    "@(#) $Header$, compiled: "
+    __DATE__ " " __TIME__;
 
 #include <ns.h>
 #include "config.h"
-
 
 /*
  *----------------------------------------------------------------------
@@ -55,16 +56,15 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
  */
 
 extern char *
-ConfigStringDefault(char *module, char *path, char *name, char *def)
+ConfigStringDefault (char *module, char *path, char *name, char *def)
 {
-    char *value = Ns_ConfigGetValue(path, name);
+    char *value = Ns_ConfigGetValue (path, name);
     if (value == NULL) {
 	value = def;
     }
-    Ns_Log(Notice, "%s: %s = %s", module, name, value ? value : "(null)");
+    Ns_Log (Notice, "%s: %s = %s", module, name, value ? value : "(null)");
     return value;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -84,16 +84,15 @@ ConfigStringDefault(char *module, char *path, char *name, char *def)
  */
 
 extern int
-ConfigBoolDefault(char *module, char *path, char *name, int def)
+ConfigBoolDefault (char *module, char *path, char *name, int def)
 {
     int value;
-    if (Ns_ConfigGetBool(path, name, &value) == NS_FALSE) {
+    if (Ns_ConfigGetBool (path, name, &value) == NS_FALSE) {
 	value = def;
     }
-    Ns_Log(Notice, "%s: %s = %d", module, name, value);
+    Ns_Log (Notice, "%s: %s = %d", module, name, value);
     return value;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -113,16 +112,15 @@ ConfigBoolDefault(char *module, char *path, char *name, int def)
  */
 
 extern int
-ConfigIntDefault(char *module, char *path, char *name, int def)
+ConfigIntDefault (char *module, char *path, char *name, int def)
 {
     int value;
-    if (Ns_ConfigGetInt(path, name, &value) == NS_FALSE) {
+    if (Ns_ConfigGetInt (path, name, &value) == NS_FALSE) {
 	value = def;
     }
-    Ns_Log(Notice, "%s: %s = %d", module, name, value);
+    Ns_Log (Notice, "%s: %s = %d", module, name, value);
     return value;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -144,32 +142,31 @@ ConfigIntDefault(char *module, char *path, char *name, int def)
  */
 
 extern char *
-ConfigPathDefault(char *module, char *path, char *name, char *dir, char *def)
+ConfigPathDefault (char *module, char *path, char *name, char *dir, char *def)
 {
-    char       *value;
-    Ns_DString  ds;
+    char *value;
+    Ns_DString ds;
 
-    value = Ns_ConfigGetValue(path, name);
+    value = Ns_ConfigGetValue (path, name);
     if (value == NULL) {
-        if (def == NULL) {
-            return value;
-        }
+	if (def == NULL) {
+	    return value;
+	}
 	value = def;
     }
 
-    if (Ns_PathIsAbsolute(value)) {
-	value = ns_strdup(value);
+    if (Ns_PathIsAbsolute (value)) {
+	value = ns_strdup (value);
     } else {
-	Ns_DStringInit(&ds);
-	Ns_MakePath(&ds, dir, value, NULL);
+	Ns_DStringInit (&ds);
+	Ns_MakePath (&ds, dir, value, NULL);
 #if 0
-	Ns_DStringVarAppend(&ds, dir, value, NULL);
+	Ns_DStringVarAppend (&ds, dir, value, NULL);
 #endif
-	value = Ns_DStringExport(&ds);
-	Ns_DStringFree(&ds);
+	value = Ns_DStringExport (&ds);
+	Ns_DStringFree (&ds);
     }
 
-    Ns_Log(Notice, "%s: %s = %s", module, name, value);
+    Ns_Log (Notice, "%s: %s = %s", module, name, value);
     return value;
 }
-
