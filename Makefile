@@ -66,7 +66,7 @@ MOD      =  nsopenssl.so
 #
 # Objects to build
 #
-OBJS     =  nsopenssl.o init.o ssl.o tclcmds.o config.o thread.o
+OBJS     =  nsopenssl.o init.o driver.o ssl.o tclcmds.o config.o thread.o
 
 #
 # Header files in THIS directory (included with your module)

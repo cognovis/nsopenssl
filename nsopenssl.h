@@ -205,18 +205,22 @@ extern char *ConfigPathDefault (char *module, char *path, char *name,
  * init.c
  */
 
-#ifndef NS_MAJOR_VERSION
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module,
-					       Ns_DrvProc * procs);
-#else
-extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module);
-#endif
-extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
 extern int NsOpenSSLInitModule (char *server, char *module);
 
 /*
- * socket.c
+ * driver.c
  */
+
+//#ifndef NS_MAJOR_VERSION
+//extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module,
+//					       Ns_DrvProc * procs);
+//#else
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver (char *server, char *module);
+//#endif
+extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
+extern char *NsOpenSSLGetModuleName (void);
+extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
+extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);
 
 
 /*
@@ -253,9 +257,6 @@ extern int NsOpenSSLCreateCmds (Tcl_Interp * interp, void *arg);
  * nsopenssl.c
  */
 
-extern char *NsOpenSSLGetModuleName (void);
-extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
-extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, char *module, char *name);
 extern int Ns_OpenSSLContextInit (Ns_OpenSSLContext *sslContext);
 
