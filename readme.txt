@@ -5,10 +5,11 @@ $Header$
 SSLv2, SSLv3, TLSv1 Module
 --------------------------
 
-Please note that this software is beta quality and probably should not
-be used in a production environment. Feedback would be appreciated.
+This software is now production-quality. I have load-tested it under
+RedHat 6.x and Debian 2.2 Linux. 
 
 This module *REQUIRES* OpenSSL 0.9.6.
+This module also *REQUIRES* that you use nsd8x, not nsd76
 
 Feature Highlights
 ------------------
