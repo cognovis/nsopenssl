@@ -608,7 +608,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
             continue;
         }
 
-        //Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
+        Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
 
         switch(SSL_get_error(ssl, rc)) {
 
