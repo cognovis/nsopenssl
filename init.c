@@ -52,6 +52,8 @@ static const char *RCSID =
 
 static int InitOpenSSL (void);
 static int CheckModuleDir (NsOpenSSLDriver * sdPtr);
+static int LoadSSLContexts (char *server, char *module, Server *thisServer);
+static Ns_OpenSSLContext *LoadSSLContext (char *server, char *module, char *name);
 static int MakeDriverSSLContext (NsOpenSSLDriver * sdPtr);
 
 static int MakeSockServerSSLContext (NsOpenSSLDriver * sdPtr);
@@ -128,9 +130,120 @@ NsOpenSSLInitModule (char *server, char *module)
      * servers may not use this module.
      */
 
-    /* XXX Initialize SSL drivers from configuration file */
+    LoadSSLContexts(server, module, thisServer);
+
+    /*
+     * Load and start the driver(s) for this virtual server.  Each driver must
+     * be associated with a specific, named SSL context.  A driver manages one
+     * SSL port; to get multiple SSL ports in one virtual server, you define a
+     * driver for each port in the virtual server's config area.
+     */
+
+    //StartSSLDrivers(server, module);
 
     return NS_OK;
+}
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * LoadSSLContexts --
+ *
+ *       Load the SSL contexts that are defined for this server from the
+ *       configuration file.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+LoadSSLContexts (char *server, char *module, Server *thisServer)
+{
+    char *path, *name;
+    int i, new;
+    Ns_Set *sslContexts;
+    Ns_OpenSSLContext *sslContext;
+    Tcl_HashEntry *hPtr;
+    
+    path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
+    sslContexts = Ns_ConfigGetSection(path);
+
+    if (sslContexts == NULL) {
+        /* Can't have an SSL driver if there's no SSL context */
+        Ns_Log (Notice, "%s: %s: no SSL contexts defined for server; no SSL drivers will be started",
+                MODULE, server);
+        return NS_OK;
+    }
+
+    for (i = 0; i < Ns_SetSize(sslContexts); ++i) {
+        name = Ns_SetKey(sslContexts, i);
+        Ns_Log(Notice, "%s: %s: loading SSL context '%s'", MODULE, server,
+                name);
+        sslContext = LoadSSLContext(server, module, name);
+        if (sslContext == NULL)
+            continue;
+        
+        hPtr = Tcl_CreateHashEntry(&thisServer->sslContexts, name, &new);
+        if (!new) {
+            Ns_Log(Error, "%s: %s: duplicate SSL context name: %s",
+                    MODULE, server, name);
+        // XXX   Ns_OpenSSLContextDestroy(sslContext);
+        } else {
+            Tcl_SetHashValue(hPtr, sslContext);
+        }
+    }
+
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * LoadSSLContext --
+ *
+ *       Load a specifically-named SSL context for this server from the
+ *       configuration file.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static Ns_OpenSSLContext *
+LoadSSLContext (char *server, char *module, char *name)
+{
+    Ns_OpenSSLContext *sslContext;
+    char *path, *role;
+
+    path = Ns_ConfigGetPath(server, module, "sslcontext", name, NULL);
+    if (path == NULL) {
+        Ns_Log(Error, "%s: %s: failed to find SSL context '%s' in configuration file",
+                MODULE, server, name);
+        return NULL;
+    }
+
+    role = Ns_ConfigGetValue(path, "role");
+    if (role == NULL) {
+        Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
+                MODULE, server, name);
+        return NULL;
+    }
+
+    sslContext = Ns_OpenSSLContextCreate (server, module, name);
+
+    return sslContext;
 }
 
 

@@ -82,6 +82,31 @@
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION
 
 
+typedef struct Ns_OpenSSLContext {
+    char              *server;
+    char              *module;
+    char              *name;
+    char              *desc;
+    char              *moduleDir;
+    int                refcnt;
+    int                role;
+    Ns_Mutex           lock;
+    SSL_CTX           *sslctx;
+    char              *certFile;             /* Cert file, PEM format */
+    char              *keyFile;              /* Key file, PEM format */
+    char              *protocols;            /* Protocols to use */
+    char              *cipherSuite;          /* OpenSSL-formatted cipher string */
+    char              *caFile;               /* CA file, PEM format, concatenated */
+    char              *caDir;                /* CA dir */
+    int                peerVerify;           /* 0 = peer verify off; 1 = peer verify on */
+    int                peerVerifyDepth;      /* How deep do we allow a verification path to be? */
+    int                sessionCache;         /* 0 = off; 1 = on */
+    int                sessionCacheId;
+    int                sessionCacheSize;     /* In bytes */
+    int                sessionCacheTimeout;  /* Flush session cache in seconds */
+    int                trace;                /* 0 = off; 1 = on */
+} Ns_OpenSSLContext;
+
 struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
@@ -226,3 +251,5 @@ extern int NsOpenSSLCreateCmds (Tcl_Interp * interp, void *arg);
 extern char *NsOpenSSLGetModuleName (void);
 extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
 extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);
+extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, char *module, char *name);
+

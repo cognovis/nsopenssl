@@ -50,13 +50,14 @@
  * for the connection.
  */
 
-#define ROLE_SSL_CLIENT                        0
-#define ROLE_SSL_SERVER                        1
+#define ROLE_SSL_SERVER                        0
+#define ROLE_SSL_CLIENT                        1
 
 #define STR_SOCK_CLIENT                        "sockclient"
 #define STR_SOCK_SERVER                        "sockserver"
 #define STR_NSD_SERVER                         "nsdserver"
 
+#define DEFAULT_TRACE                          NS_FALSE
 #define CONFIG_SERVER_TRACE                    "ServerTrace"
 #define DEFAULT_SERVER_TRACE                   NS_FALSE
 
@@ -66,6 +67,7 @@
 #define CONFIG_SOCKCLIENT_TRACE                "SockClientTrace"
 #define DEFAULT_SOCKCLIENT_TRACE               NS_FALSE
 
+#define DEFAULT_CIPHER_SUITE                   SSL_DEFAULT_CIPHER_LIST
 #define CONFIG_SERVER_CIPHERSUITE              "ServerCipherSuite"
 #define DEFAULT_SERVER_CIPHERSUITE             SSL_DEFAULT_CIPHER_LIST
 
@@ -75,6 +77,7 @@
 #define CONFIG_SOCKCLIENT_CIPHERSUITE          "SockClientCipherSuite"
 #define DEFAULT_SOCKCLIENT_CIPHERSUITE         SSL_DEFAULT_CIPHER_LIST
 
+#define DEFAULT_PROTOCOLS                      "All"
 #define	CONFIG_SERVER_PROTOCOLS                "ServerProtocols"
 #define DEFAULT_SERVER_PROTOCOLS               "All"
 
@@ -84,6 +87,7 @@
 #define	CONFIG_SOCKCLIENT_PROTOCOLS            "SockClientProtocols"
 #define DEFAULT_SOCKCLIENT_PROTOCOLS           "All"
 
+#define DEFAULT_CERT_FILE                      "certificate.pem"
 #define CONFIG_SERVER_CERTFILE                 "ServerCertFile"
 #define DEFAULT_SERVER_CERTFILE                "certificate.pem"
 
@@ -93,6 +97,7 @@
 #define CONFIG_SOCKCLIENT_CERTFILE             "SockClientCertFile"
 #define DEFAULT_SOCKCLIENT_CERTFILE            NULL
 
+#define DEFAULT_KEY_FILE                       "key.pem"
 #define CONFIG_SERVER_KEYFILE                  "ServerKeyFile"
 #define DEFAULT_SERVER_KEYFILE                 "key.pem"
 
@@ -102,6 +107,7 @@
 #define CONFIG_SOCKCLIENT_KEYFILE              "SockClientKeyFile"
 #define DEFAULT_SOCKCLIENT_KEYFILE             NULL
 
+#define DEFAULT_CA_FILE                        "ca.pem"
 #define CONFIG_SERVER_CAFILE                   "ServerCAFile"
 #define DEFAULT_SERVER_CAFILE                  "ca.pem"
 
@@ -111,6 +117,7 @@
 #define CONFIG_SOCKCLIENT_CAFILE               "SockClientCAFile"
 #define DEFAULT_SOCKCLIENT_CAFILE              "ca.pem"
 
+#define DEFAULT_CA_DIR                         "cadir"
 #define CONFIG_SERVER_CADIR                    "ServerCADir"
 #define DEFAULT_SERVER_CADIR                   "ca"
 
@@ -120,6 +127,7 @@
 #define CONFIG_SOCKCLIENT_CADIR                "SockClientCADir"
 #define DEFAULT_SOCKCLIENT_CADIR               "ca"
 
+#define DEFAULT_SESSION_CACHE                  NS_TRUE
 #define CONFIG_SERVER_SESSIONCACHE             "ServerSessionCache"
 #define DEFAULT_SERVER_SESSIONCACHE            NS_TRUE
 
@@ -138,6 +146,7 @@
 #define CONFIG_SOCKCLIENT_SESSIONCACHEID       "SockClientSessionCacheId"
 #define DEFAULT_SOCKCLIENT_SESSIONCACHEID      3
 
+#define DEFAULT_SESSION_CACHE_SIZE             128
 #define CONFIG_SERVER_SESSIONCACHESIZE         "ServerSessionCacheSize"
 #define DEFAULT_SERVER_SESSIONCACHESIZE        128
 
@@ -147,6 +156,7 @@
 #define CONFIG_SOCKCLIENT_SESSIONCACHESIZE     "SockClientSessionCacheSize"
 #define DEFAULT_SOCKCLIENT_SESSIONCACHESIZE    128
 
+#define DEFAULT_SESSION_CACHE_TIMEOUT          300
 #define CONFIG_SERVER_SESSIONTIMEOUT           "ServerSessionTimeout"
 #define DEFAULT_SERVER_SESSIONTIMEOUT          300
 
@@ -174,6 +184,7 @@
 #define CONFIG_SOCKCLIENT_BUFFERSIZE           "SockClientBufferSize"
 #define DEFAULT_SOCKCLIENT_BUFFERSIZE          16384
 
+#define DEFAULT_PEER_VERIFY                    NS_FALSE
 #define CONFIG_SERVER_PEERVERIFY               "ServerPeerVerify"
 #define DEFAULT_SERVER_PEERVERIFY              NS_FALSE
 
@@ -183,6 +194,7 @@
 #define CONFIG_SOCKCLIENT_PEERVERIFY           "SockClientPeerVerify"
 #define DEFAULT_SOCKCLIENT_PEERVERIFY          NS_TRUE
 
+#define DEFAULT_PEER_VERIFY_DEPTH              10
 #define CONFIG_SERVER_VERIFYDEPTH              "ServerPeerVerifyDepth"
 #define DEFAULT_SERVER_VERIFYDEPTH             10
 

@@ -62,7 +62,8 @@ static void DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
  *
  * NsOpenSSLInitThreads --
  *
- *       Set up thread callbacks for the SSL library.
+ *       Set up thread callbacks for the SSL library. This is only performed
+ *       once.
  *
  * Results:
  *       NS_OK or NS_ERROR.
@@ -76,30 +77,22 @@ static void DynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
 int
 NsOpenSSLInitThreads (void)
 {
-    static int initialized = 0;
-
     int i;
     int num_locks;
     char buf[100];
 
-    if (!initialized) {
-	initialized = 1;
-
-	if (CRYPTO_set_mem_functions (ns_malloc, ns_realloc, ns_free) == 0) {
-	    Ns_Log (Warning, DRIVER_NAME
-		    ": could not set OpenSSL memory functions");
-	}
-
-	num_locks = CRYPTO_num_locks ();
-	locks = ns_calloc (num_locks, sizeof *locks);
-	for (i = 0; i < num_locks; i++) {
-	    sprintf (buf, "openssl-%d", i);
-	    Ns_MutexSetName2 (locks + i, DRIVER_NAME, buf);
-	}
-
-	CRYPTO_set_locking_callback (LockCallback);
-	CRYPTO_set_id_callback (IdCallback);
+    if (CRYPTO_set_mem_functions (Ns_Malloc, Ns_Realloc, Ns_Free) == 0) {
+        Ns_Log (Warning, DRIVER_NAME ": could not set OpenSSL memory functions");
     }
+
+    num_locks = CRYPTO_num_locks ();
+    locks = ns_calloc (num_locks, sizeof *locks);
+    for (i = 0; i < num_locks; i++) {
+        sprintf (buf, "openssl-%d", i);
+        Ns_MutexSetName2 (locks + i, DRIVER_NAME, buf);
+    }
+    CRYPTO_set_locking_callback (LockCallback);
+    CRYPTO_set_id_callback (IdCallback);
 
     return NS_OK;
 }
