@@ -38,7 +38,7 @@
 #
 
 # XXX AOLserver 3.x defines this, but AOLserver 4.x uses the install binary
-# instead. We'll need to update all the modules to use install
+# XXX instead. We'll need to update all the modules to use install
 CP = /bin/cp -fp
 
 ifdef INST
