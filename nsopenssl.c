@@ -166,8 +166,7 @@ NsSSLCreateServer (SSLConf * config)
 
 	/* Set the cipher suite that we support.  */
 
-	if (SSL_CTX_set_cipher_list (srvPtr->context, srvPtr->ciphersuite) ==
-	    0) {
+	if (SSL_CTX_set_cipher_list (srvPtr->context, srvPtr->ciphersuite) == 0) {
 	    Ns_Log (Error, "Unable to configure permitted SSL ciphers (%s).",
 		    srvPtr->ciphersuite);
 	    NsSSLDestroyServer (srvPtr);
@@ -207,8 +206,7 @@ NsSSLCreateServer (SSLConf * config)
 
 	if (!SSL_CTX_load_verify_locations
 	    (srvPtr->context, config->cacertfile, config->cacertpath)) {
-	    Ns_Log (Error,
-		    "Failed to load CAs using SSL_CTX_load_verify_locations in NsSSLCreateServer");
+	    Ns_Log (Error, "Failed to load CA certificates");
 	    return NULL;
 	}
 
@@ -238,15 +236,7 @@ NsSSLCreateServer (SSLConf * config)
 
 	Ns_Log (Debug, "Setting client verify mode");
 
-	SSL_CTX_set_verify (srvPtr->context, SSL_VERIFY_PEER, NULL);
-#if 0
 	SSL_CTX_set_verify (srvPtr->context, srvPtr->clientverify, NULL);
-#endif
-
-	/* TODO: FEATURE: add 'sessionid = on|off' in config, and turn
-	   on sess caching to enable session ids only. Session ids are
-	   on by default if session caching is enabled, even if your session
-	   cache size is zero */
 
 	/*
 	 * The two valid values for session cache mode are
@@ -424,18 +414,19 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 	return (NsSSLAbortConn (conPtr));
 
 #if 0
-    /* TODO: TEST STATEMENT: Forcing an abort here cleans up the
+    /*
+     * TODO: TEST STATEMENT: Forcing an abort here cleans up the
      * server-side stuff but leaves the browser spinning. Is there
      * anyway I can get the connection to close cleanly if an abort
-     * happens up here?  */
+     * happens up here?
+     */
 
     NsSSLAbortConn (conPtr);
 #endif
 
     /*
      * Create a socket BIO where all read and write operations refer
-     * to the socket. Thus any BIO read/write calls actually go to
-     * sock.
+     * to the socket.
      */
 
     sbio = BIO_new_socket (sock, BIO_NOCLOSE);
@@ -445,20 +436,20 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
      * when calling SSL_read and SSL_write for the specified SSL
      * connection. Argument two is the read bio; argument three is the
      * write bio. The RSA SSL-C docs say that you can refer to the
-     * same BIO for read and write -- is this true with OpenSSL as
-     * well?  */
+     * same BIO for read and write; this is probably true with OpenSSL
+     * as well.
+     */
 
     SSL_set_bio (conPtr->ssl, sbio, sbio);
 
     /*
      * Put the SSL connection reference in the accept state; this is
-     * how I tell I'm the server and not the client.  When an
+     * how you tell I'm the server and not the client.  When an
      * SSL_do_handshake or an SSL_read or SSL_write is called, the
      * server side of the SSL protocol is initiated.
      */
 
     SSL_set_accept_state (conPtr->ssl);
-
     BIO_set_ssl (conPtr->ssl_bio, conPtr->ssl, BIO_CLOSE);
 
     /* 
@@ -470,7 +461,7 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
      * top. Writing to any of the filter BIOs causes the data to work
      * its way down the stack with each filter BIO modifying the data
      * until it gets to the source/sink BIO, at which point it goes to
-     * the device.
+     * the device, and vice versa.
      */
 
     BIO_push (conPtr->io, conPtr->ssl_bio);
@@ -481,7 +472,13 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 
     SSL_set_fd (conPtr->ssl, sock);
 
-    /* TODO: TEST: to see if it aborts conn if no cert without this statement */
+    /* 
+     * We force the client certificate to be 'accepted' so the
+     * connection isn't aborted. We may want the application to handle
+     * any invalid or missing client certificates with a friendly
+     * error page.
+     */
+
 #if 0
     SSL_set_verify_result (conPtr->ssl, X509_V_OK);
 #endif
@@ -515,47 +512,34 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 
 		if (errno > 0) {
 		    Ns_Log (Notice,
-			    "SSL handshake interrupted by system; stop button possibly pressed in browser");
+			    "SSL handshake interrupted by system; browser stop button?");
 		} else {
 		    Ns_Log (Notice,
 			    "Spurious SSL handshake interrupt");
 		}
 	    } else {
-		Ns_Log (Notice, "Error: Other");
+		Ns_Log (Notice, "Error: Unknown error");
 	    }
 
 	    /* For all errors we destroy the connection */
+
 	    return (NsSSLAbortConn (conPtr));
 
 	} else {
 
 	    /*
 	     * Successful SSL_accept. This means that the handshake was done
-	     * and that the SSL communication channel has been setup. Before
-	     * we continue, we do some extra checks.
+	     * and that the SSL communication channel has been setup.
 	     */
 
 	    Ns_Log (Debug, "SSL_accept was successful");
 
-	    /* TODO: FEATURE: Check client cert -- what if we want to
-	     * give the user a useful error page?  then we wouldn't
-	     * want to die here -- we'd want to accept the connection,
-	     * but, in the interests of orthogonality, we'd want
-	     * another module to see that the certificate was invalid
-	     * and do something in the perms module or in Tcl
-	     * interface to do what you want.  */
-
-	    /* TODO: FEATURE: When SSL_VERIFY_PEER is set and the
-	     * client has no certificate, processing still continues
-	     * (as it's supposed to). Need to add code here that will
-	     * indicate in the ClientCertificate that no client cert
-	     * was given.  */
-
 	    /*
-	     * Tie the client certificate structure, if a client cert
-	     * exists, to the SSLConnection structure. We must use
-	     * X509_free to free the clientcert structure when we're
-	     * done with it (see NsSSLDestroyConn).  */
+	     * Tie the client certificate structure to the
+	     * SSLConnection structure if a client cert exists. We
+	     * must use X509_free to free the clientcert structure
+	     * when we're done with it (see NsSSLDestroyConn).
+	     */
 
 	    if ((conPtr->clientcert = SSL_get_peer_certificate (conPtr->ssl))
 		!= NULL) {
@@ -572,12 +556,9 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 	    }
 
 #if 0
-	    /* TODO: Feature: clean this up -- put the cert name and
-	       other info into the ClientCertificate structure */
-	    /* we should optionally fail here...we might want the app
-	       to handle invalid certificates -- make it a config
-	       option called "AbortOnFailedCert true" for this */
-	    /* Check for failed client authentication */
+	    /*
+	     * This is where we check the validity of the client certificate.
+	     */
 
 	    if ((err = SSL_get_verify_result (conPtr->ssl)) != X509_V_OK) {
 		char *errstr = (char *) X509_verify_cert_error_string (err);
@@ -655,12 +636,6 @@ NsSSLAbortConn (SSLConnection * conPtr)
  *
  * Side effects:
  *      None.
- *
- * Todo:
- *      Add our own checks here. One possibility would be to use
- *      this function to always verify, but to return a different
- *      integer number if cert was invalid so we can then go off 
- *      and show user an error page before we chop the connection.
  *
  *----------------------------------------------------------------------
  */

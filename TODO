@@ -49,3 +49,17 @@ Scott S. Goodwin - scott@scottg.net
 - Load problems: last time I tested, nsopenssl could handle lots of
   small files (< 100k) fairly well; but 1MB file downloads put the
   server into deadlock. Same thing happens with nsssl module as well.
+
+- Add UseSessionId parameter so that a session id will be generated
+  and used by client and server, even if caching is turned off. Wonder
+  if this is really all that useful.
+
+- Add an ErrorPage option to the config file to handle invalid or
+  missing client certificates that nsopenssl would automatically run
+  in these cases.
+
+- Figure out how to tell the client ahead of time what CA's are
+  acceptable, or what type of certificates can be used. Right now,
+  both MSIE and Netscape ask me which certificate I'd like to use each
+  time I connect, even though I have only one client certificate in
+  the browser.

@@ -1,5 +1,9 @@
 2000-11-05  root  <scott@scottg.net>
 
+	* nsopenssl.c: left it in SSL_VERIFY_PEER mode by mistake. It now
+	uses the config file parameter ClientVerify properly. Also did
+	some cleanup.
+
 	* sock.c: the 'ssl' command has been changed to 'ns_openssl'.
 
 2000-11-04  root  <scott@scottg.net>
