@@ -2,6 +2,22 @@ Todo List:
 
 ---------------------------------------------------------------------
 
+* Not happy with multiple nsopenssl's running at the same time:
+
+It appears that functions such as NsOpenSSLGetModuleName simply
+grab it from the first module in the driver linked list. Not a good
+thing.
+
+From what I see in modload.c, Ns_ModuleLoad calls the module's init
+proc and passes it the server, module names. The module name in this
+case should be coming from the section in nsd.tcl where the modules
+are loaded, and it appears that this is where I can grab and store
+the module's name in a static var for use later.
+
+
+
+---------------------------------------------------------------------
+
 * Should probably fix form.tcl to do the right thing.
 
 form.tcl doesn't respect the fact that a boundary

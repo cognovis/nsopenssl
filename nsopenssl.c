@@ -19,7 +19,7 @@
  * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 2000 Freddie Mendoza
- * Copyright (C) 1999 Stefan Arentz.
+ * Copyright (C) 1999 Stefan Arentz
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -33,10 +33,9 @@
  */
 
 /*
- * nsopenssl.c
+ * nsopenssl.c --
  *
- * This module implements an SSL socket driver using the OpenSSL library.
- *
+ *       This module implements an SSL socket driver using the OpenSSL library.
  */
 
 static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
@@ -49,7 +48,9 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #include "config.h"
 #include "tclcmds.h"
 
-/* Standard module interface symbols */
+/*
+ * Global symbols
+ */
 
 NS_EXPORT int Ns_ModuleVersion = 1;
 
@@ -57,13 +58,13 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
 
 
 /*
- * Local functions defined in this file
+ * Private symbols
  */
 
 #ifndef NS_MAJOR_VERSION
 
 /*
- * AOLserver/OpenNSD 3.x Comm API
+ * AOLserver 3.x Comm API
  */
 
 static Ns_ThreadProc SockThread;
@@ -110,7 +111,7 @@ static Ns_DrvProc sockProcs[] = {
 #else
 
 /*
- * AOLserver/OpenNSD 4.x Comm API
+ * AOLserver 4.x Comm API
  */
 
 static Ns_DriverProc OpenSSLProc;
@@ -123,14 +124,14 @@ static Ns_DriverProc OpenSSLProc;
  *
  * Ns_ModuleInit --
  *
- *  Sock module init routine.
+ *     Sock module init routine.
  *
  * Results:
- *  NS_OK if initialized ok, NS_ERROR otherwise.
+ *     NS_OK if initialized ok, NS_ERROR otherwise.
  *
  * Side effects:
- *  Calls Ns_RegisterLocation as specified by this instance
- *  in the config file.
+ *     Calls Ns_RegisterLocation as specified by this instance
+ *     in the config file.
  *
  *----------------------------------------------------------------------
  */
@@ -161,6 +162,8 @@ Ns_ModuleInit(char *server, char *module)
 
     return NS_OK;
 #else
+    /* XXX - see what effect changing the "nsopenssl" arg has here. It may be the key
+     * XXX - to asking the core server to return info on that particular driver. */
     return Ns_DriverInit(server, module, "nsopenssl", OpenSSLProc, sdPtr, NS_DRIVER_SSL);
 #endif
 }
@@ -186,9 +189,19 @@ NsOpenSSLGetModuleName(void)
 {
     NsOpenSSLDriver *sdPtr;
 
+#ifndef NS_MAJOR_VERSION
+    /* XXX - this looks like a problem anyway: what if the first driver
+     * XXX - is not this driver? Then I'll be getting the name from the wrong driver
+     * XXX - (and other functions will get the wrong SSL_CTX and such. I need to
+     * XXX - check into this */
     sdPtr = firstSSLDriverPtr;
-    
     return sdPtr->module;
+#else
+    /* XXX - for AS 4.x, how do I know what this module's name is if it's stored
+     * XXX - in the core server's driver pointer linked list? I'll need to store
+     * XXX - that info within this module's dataspace somehow. */
+    return "nsopenssl";
+#endif
 }
 
 
@@ -238,6 +251,9 @@ NsOpenSSLGetSockClientSSLContext(void)
 {
     NsOpenSSLDriver *sdPtr;
 
+    /* XXX - for AS 4.x, looks like I'll need to get the module's name from
+     * XXX - the config section, then ask the core server to find and return
+     * XXX - a pointer to the datastructure or return the values I want */
     sdPtr = firstSSLDriverPtr;
     
     return sdPtr->sockClientContext;
