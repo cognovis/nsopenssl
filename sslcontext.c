@@ -1952,13 +1952,14 @@ SSLContextProtocolsInit(NsOpenSSLContext *sslcontext)
 static void
 OpenSSLTrace(SSL *ssl, int where, int rc)
 {
-    NsOpenSSLConn *sslconn         = NULL;
+    NsOpenSSLConn *sslconn         = (NsOpenSSLConn *) SSL_get_app_data(ssl);
     char          *alertTypePrefix = NULL;
     char          *alertType       = NULL;
     char          *alertDescPrefix = NULL;
     char          *alertDesc       = NULL;
-
-    sslconn = (NsOpenSSLConn *) SSL_get_app_data(ssl);
+    struct timeval previoustime;
+    unsigned long  seconds;
+    unsigned long  microseconds;
 
     if (where & SSL_CB_ALERT) {
         alertTypePrefix = "; alert type = ";
@@ -1970,11 +1971,28 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
         alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log(Notice, "%s (%s): trace: %s%s%s%s%s; sslconn = (%p)",
+    /* Get time since last timer update */
+    previoustime = sslconn->timer;
+
+    /* Update the timer */
+    gettimeofday(&sslconn->timer, NULL);
+
+    /* Find the difference in seconds */
+    seconds = sslconn->timer.tv_sec - previoustime.tv_sec;
+
+    /* Find the difference in microseconds */
+    microseconds = sslconn->timer.tv_usec - previoustime.tv_usec;
+
+    /* Convert the difference in seconds to microseconds and add */
+    microseconds = microseconds + (seconds * 1000000);
+
+    Ns_Log(Notice, "%s (%s): trace (%p): %8l usecs: %s%s%s%s%s",
             MODULE, sslconn->server,
+            sslconn,
+            microseconds,
             SSL_state_string_long(ssl),
-            alertTypePrefix, alertType, alertDescPrefix, alertDesc,
-            sslconn);
+            alertTypePrefix, alertType, alertDescPrefix, alertDesc
+          );
 }
 
 

@@ -9,12 +9,18 @@ nsopenssl 3.0 release:
   - Ensure locking around structs is happening properly
   - Review session cache code
   - Clean up compiler warnings
+  - Convert Tcl commands to TclObj commands
 
 nsopenssl 3.1 release:
   - Add client IP address to log messages
   - Fix OpenSSL version reporting
-  - Review any commands that can be converted to TclObjs
+  - Review any further commands that can be converted to TclObjs
+  - Add ability to refuse keepalive an a per-user agent basis
   - Automate the testing via wget, openssl command line
+  - Add instrumentation to nsopenssl and OpenSSL to benchmark timing at every point
+  - Add ability to turn off Nagle algorithm for SSL connections
+  - See if nsopenssl can adjust OpenSSL's default buffer size w/o a recompile
+  - Are there any tunings I can  
 
 nsopenssl 4.0 release:
   - Revamp Tcl API -- major overhaul will require changing of Tcl proc names
@@ -27,8 +33,7 @@ nsopenssl 4.0 release:
   - Add benchmarking/performance testing
   - Figure out how to work with keepalive
 
-
-General Wish List:
+Wish List:
   - Move https.tcl into C
   - Give nsopenssl the ability to perform certificate operations so it can be
     used to drive a CA process.

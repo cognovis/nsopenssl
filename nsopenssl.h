@@ -167,8 +167,7 @@ typedef struct NsOpenSSLConn {
     SOCKET                    wsock;
     int                       refcnt;    /* don't ns_free() unless this is 0 */
     int                       timeout;
-    int                       readabortcount;
-    int                       writeabortcount;
+    struct timeval            timer;
     struct NsOpenSSLDriver   *ssldriver; /* the driver this conn belongs to */
 } NsOpenSSLConn;
 

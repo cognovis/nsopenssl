@@ -1105,7 +1105,7 @@ static int
 OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 {
     NsOpenSSLDriver *ssldriver = (NsOpenSSLDriver *) sock->driver->arg;
-    NsOpenSSLConn   *sslconn   = (NsOpenSSLConn *) sock->arg;
+    NsOpenSSLConn   *sslconn   = (NsOpenSSLConn *)   sock->arg;
     int              n         = 0;
     int              total     = 0;
 
@@ -1131,13 +1131,8 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
                     return NS_ERROR;
                 }
                 sslconn->refcnt++;
-
-                // XXX Ns_Log(Debug, "OpenSSLProc: ssldriver = (%p), sslcontext = (%p), sslconn = (%p)", 
-                // XXX        ssldriver, ssldriver->sslcontext, sslconn);
-
-                /* XXX find way to ditch this part -- set later or on-demand */
                 sslconn->peerport = ssldriver->port;
-                sock->arg = (void *) sslconn;
+                sock->arg         = (void *) sslconn;
             }
 
             /* 
@@ -1147,10 +1142,10 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             total = 0;
             do {
                 if (cmd == DriverSend) {
-		    // XXX Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
+		            Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 } else {
-		    // XXX Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
+		            Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
                 }
                 if (n < 0 && total > 0) {
@@ -1164,6 +1159,16 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             break;
 
         case DriverKeep:
+            /* XXX TODO:
+             * Some clients (MSIE) don't work well with keepalive over SSL. I
+             * need to research the user agent capabilities and then smartly
+             * determine whether to prevent keepalive from working with some of
+             * the clients that are known to have problems. This will probably
+             * mean I'll need to have some default rules for how the module
+             * acts with certain user agents, with the ability to override the
+             * behavior on a per user-agent basis in the configuration file.
+             */
+
             if (sslconn != NULL && NsOpenSSLConnFlush(sslconn) == NS_OK) {
                 n = 0;
             } else {

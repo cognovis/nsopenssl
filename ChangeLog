@@ -1,3 +1,14 @@
+2004-02-15  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.h, ssl.c, sslcontext.c: Added microsecond timers to the
+      connection structure for OpenSSLTrace to output. This incurs no overhead
+      when SSL handshake tracing is turned off. When handshake tracing is
+      turned on, the trace output includes times in microseconds for each step
+      relative to when the previous step completed. This will assist in doing
+      performance analysis and tuning for a particular installation.
+
+      * ssl.c, nsopenssl.h: Removed read/write attempt counts.
+
 2004-02-13  Scott Goodwin  <scott@scottg.net>
 
       * ssl.c, nsopenssl.h: Added read and write attempt counts; if a conn
