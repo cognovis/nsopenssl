@@ -35,14 +35,22 @@ export OPENSSL=/usr/local/ssl
 gmake
 gmake install INST=/usr/local/aolserver
 
-To compile with RSA's BSAFE Crypto-C libarary, simply make sure your
-OpenSSL library has been compiled with BSAFE, and add another make
-option:
+Solaris Users:
 
-gmake OPENSSL=/usr/local/openssl-bsafe BSAFE=/path/to/bsafe
+You may have to add an extra library search path and the gcc library
+for the linker to work. Specifically, you may need to change this:
 
-(for more information on how to compile with BSAFE, see
-http://scottg.net/aolserver).
+MODLIBS  =  -L$(OPENSSL) -lssl -lcrypto \
+
+to this:
+
+MODLIBS  =  -L$(OPENSSL) -lssl -lcrypto \
+ -L/usr/local/lib/gcc-lib/sparc-sun-solaris2.6/2.8.1 -lgcc
+
+Adjust for which version of Solaris and GCC you're using.
+Much thanks to Ron Patterson, ron.patterson@corp.usa.net, for
+this information.
+
 
 See nsd.tcl for a sample configuration that uses SSL on port 8443.
 
@@ -54,6 +62,19 @@ https://hostname:8443/.
 The default key and certificate for the non-existent 'SnakeOil'
 company are included for testing purposes. Do not use these on a real
 server -- they are for testing only.
+
+
+Compiling nsopenssl with OpenSSL+BSAFE:
+---------------------------------------
+
+To compile with RSA's BSAFE Crypto-C libarary, simply make sure your
+OpenSSL library has been compiled with BSAFE, and add another make
+option:
+
+gmake OPENSSL=/usr/local/openssl-bsafe BSAFE=/path/to/bsafe
+
+For more information on how to compile with BSAFE, see
+http://scottg.net.
 
 
 Development Environment
@@ -179,7 +200,7 @@ ns_openssl clientcert pem
 Open Issues
 -----------
 
-See the TODO file...
+See the TODO file.
 
 
 Copyright Notices
