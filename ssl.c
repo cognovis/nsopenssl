@@ -609,6 +609,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
         }
 
         Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
+
         switch(SSL_get_error(ssl, rc)) {
 
             case SSL_ERROR_NONE:
@@ -617,13 +618,15 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
 
             case SSL_ERROR_WANT_WRITE:
                 //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-                    if (rc < 0 && ns_sockerrno == EWOULDBLOCK && Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait) != NS_OK) {
-                        return -1;
-                    }
+                if (rc < 0 
+                    && ns_sockerrno == EWOULDBLOCK 
+                    && Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait) != NS_OK) 
+                {
+                    return -1;
+                }
                 break;
 
             case SSL_ERROR_WANT_READ:
-                /* We want to read but socket's nothing to read yet */
                 //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
@@ -645,7 +648,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
 
             case SSL_ERROR_ZERO_RETURN:
                 /* We'll never see this error: either some bytes were written or we get a real error */
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
             default:
@@ -656,6 +659,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
     }
 
     //Ns_Log(Debug, "Send(%d): END:   towrite = %d, wrote = %d", socket, towrite, total);
+
     return total;
 }
 
@@ -702,7 +706,6 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
      * multiple calls to SSL_read().
      */
 
-
     //Ns_Log(Debug, "Recv(%d): START: toread = %d, read = %d, pending = %d", socket, toread, total, SSL_pending(ssl));
 
     do {
@@ -728,7 +731,7 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
                     break;
 
                 case SSL_ERROR_WANT_WRITE:
-                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
                     break;
 
                 case SSL_ERROR_WANT_READ:
@@ -739,7 +742,7 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
                     break;
 
                 case SSL_ERROR_WANT_X509_LOOKUP:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
                     break;
 
                 case SSL_ERROR_SYSCALL:
@@ -753,7 +756,7 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
                     break;
 
                 case SSL_ERROR_ZERO_RETURN:
-                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
                     return -1;
                     break;
 
