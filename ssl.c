@@ -96,7 +96,7 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
                 MODULE, sslcontext->server);
         return NULL;
     }
-    Ns_Log(Debug, "NsOpenSSLConnCreate(%p)", sslconn);
+    //Ns_Log(Debug, "NsOpenSSLConnCreate(%p)", sslconn);
 
     /*
      * Default is a core-driven connection. Connections created by nsopenssl's
@@ -221,7 +221,7 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     int i  = 0;
     int rc = 0;
 
-    Ns_Log(Debug, "NsOpenSSLConnDestroy(%p)", sslconn);
+    //Ns_Log(Debug, "NsOpenSSLConnDestroy(%p)", sslconn);
 
     if (sslconn == NULL) {
 	return;

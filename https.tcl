@@ -103,14 +103,13 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
    
     set fds [ns_openssl_sockopen -nonblock $host $port]
     set rfd [lindex $fds 0]
-    # XXX set wfd [lindex $fds 1]
+    set wfd [lindex $fds 1]
     if [catch {
 	#
 	# First write the request, then the headers if they exist.
 	#
 
-	# XXX _ns_https_puts $timeout $wfd "$method $uri HTTP/1.0\r"
-	_ns_https_puts $timeout $rfd "$method $uri HTTP/1.0\r"
+	_ns_https_puts $timeout $wfd "$method $uri HTTP/1.0\r"
 	
 	if {$rqset != ""} {
 	    #
@@ -122,8 +121,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	    for {set i 0} {$i < [ns_set size $rqset]} {incr i} {
 		set key [ns_set key $rqset $i]
 		set val [ns_set value $rqset $i]
-		# XXX_ns_https_puts $timeout $wfd "$key: $val\r"
-		_ns_https_puts $timeout $rfd "$key: $val\r"
+		_ns_https_puts $timeout $wfd "$key: $val\r"
 	    }
 	} else {
 	    #
@@ -131,10 +129,8 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	    # required headers.
 	    #
 
-	    # XXX _ns_https_puts $timeout $wfd "Accept: */*\r"
-	    _ns_https_puts $timeout $rfd "Accept: */*\r"
-	    # XXX _ns_https_puts $timeout $wfd \
-	    _ns_https_puts $timeout $rfd \
+	    _ns_https_puts $timeout $wfd "Accept: */*\r"
+	    _ns_https_puts $timeout $wfd \
 		    "User-Agent: [ns_info name]-Tcl/[ns_info version]\r"
 	}
 
@@ -148,8 +144,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	} else {
 	    set hostheader "Host: ${host}:${port}\r"
 	}
-	# XXX _ns_https_puts $timeout $wfd $hostheader
-	_ns_https_puts $timeout $rfd $hostheader
+	_ns_https_puts $timeout $wfd $hostheader
 
 	#
 	# If optional content exists, then output that. Otherwise spit
@@ -157,14 +152,11 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	#
 	
 	if {$pdata != ""} {
-	    # XXX _ns_https_puts $timeout $wfd "\r\n$pdata\r"
-	    _ns_https_puts $timeout $rfd "\r\n$pdata\r"
+	    _ns_https_puts $timeout $wfd "\r\n$pdata\r"
 	} else {
-	    # XXX _ns_https_puts $timeout $wfd "\r"
-	    _ns_https_puts $timeout $rfd "\r"
+	    _ns_https_puts $timeout $wfd "\r"
 	}
-	# XXX flush $wfd
-	flush $rfd
+	flush $wfd
 
 	#
 	# Create a new set; its name will be the result line from
@@ -185,7 +177,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	#
 	
 	global errorInfo
-	# XXX close $wfd
+	close $wfd
 	close $rfd
 	if [info exists rpset] {
 	    ns_set free $rpset
@@ -197,8 +189,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
     # Return a list of read file, write file, and headers set.
     #
     
-    # XXX return [list $rfd $wfd $rpset]
-    return [list $rfd $rfd $rpset]
+    return [list $rfd $wfd $rpset]
 }
 
 #

@@ -1,3 +1,13 @@
+2004-06-12  Scott Goodwin  <scott@scottg.net>
+
+      * https.tcl: fixed to use separate read and write handles again. We
+      don't really need a separate read and write sockets (which are both
+      wrapped in Tcl channels) since sockets can be bidirectional. I decided
+      I'd clean up that code so you'd only need one socket, and thus would
+      only be using up one file descriptor instead of two. But doing this made
+      the code more complex and would change the number of args.  Ah well,
+      live and learn. 
+
 2004-04-14  Scott Goodwin  <scott@scottg.net>
 
       * nsopenssl.h, ssl.c, tclcmd.c: Restructured Tcl channel process; now

@@ -1548,8 +1548,8 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
     Tcl_DStringAppendElement(&ds, Tcl_GetChannelName(getschan->chan));
     Tcl_DStringAppendElement(&ds, Tcl_GetChannelName(putschan->chan));
 
-    Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(getschan->chan));
-    Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(putschan->chan));
+    //Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(getschan->chan));
+    //Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(putschan->chan));
 
     Tcl_DStringResult(interp, &ds);
 
@@ -1645,14 +1645,14 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
     ChanInfo *chaninfo      = (ChanInfo *) arg;
     ChanInfo *otherchaninfo = NULL;
 
-    Ns_Log(Debug, "*** CHAN DESTROY: %s", Tcl_GetChannelName(chaninfo->chan));
+    //Ns_Log(Debug, "*** CHAN DESTROY: %s", Tcl_GetChannelName(chaninfo->chan));
     Tcl_UnregisterChannel(interp, chaninfo->chan);
     ns_sockclose(chaninfo->socket);
     chaninfo->socket = INVALID_SOCKET;
     otherchaninfo = (ChanInfo *) chaninfo->otherchaninfo;
 
     if (otherchaninfo->socket == INVALID_SOCKET) {
-    Ns_Log(Debug, "*** SSL DESTROY");
+    //Ns_Log(Debug, "*** SSL DESTROY");
         ns_free(otherchaninfo);
         NsOpenSSLConnDestroy(chaninfo->sslconn);
         ns_free(chaninfo);
@@ -1683,7 +1683,7 @@ ChanFlushProc (ClientData arg)
 {
     ChanInfo *chaninfo = (ChanInfo *) arg;
 
-    Ns_Log(Debug, "ChanFlushProc %s", Tcl_GetChannelName(chaninfo->chan));
+    //Ns_Log(Debug, "ChanFlushProc %s", Tcl_GetChannelName(chaninfo->chan));
     NsOpenSSLConnFlush(chaninfo->sslconn);
 
     return TCL_OK;
@@ -1769,7 +1769,7 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     int                  result    = TCL_ERROR;
     int                  objc      = 0;
 
-    Ns_Log(Debug, "*** SockListenCallbackProc running");
+    //Ns_Log(Debug, "*** SockListenCallbackProc running");
 
     interp  = Ns_TclAllocateInterp(lcbPtr->server);
     sslconn = Ns_OpenSSLSockAccept(sock, lcbPtr->sslcontext);
@@ -1777,10 +1777,10 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
         return TCL_ERROR;
     }
-    Ns_Log(Debug, "*** SockListenCallbackProc running 2");
+    //Ns_Log(Debug, "*** SockListenCallbackProc running 2");
     result = CreateTclChannel(sslconn, interp);
     if (result == TCL_OK) {
-        Ns_Log(Debug, "*** SockListenCallbackProc running 3");
+        //Ns_Log(Debug, "*** SockListenCallbackProc running 3");
         listPtr = Tcl_GetObjResult(interp);
         if (Tcl_ListObjGetElements(interp, listPtr, &objc, &objv) == TCL_OK && objc == 1) {
             Tcl_DStringInit(&script);
@@ -1789,10 +1789,10 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
             result = Tcl_EvalEx(interp, script.string, script.length, 0);
             Tcl_DStringFree(&script);
         }
-        Ns_Log(Debug, "*** SockListenCallbackProc running 4");
+        //Ns_Log(Debug, "*** SockListenCallbackProc running 4");
     }
     if (result != TCL_OK) {
-        Ns_Log(Debug, "*** SockListenCallbackProc running 5");
+        //Ns_Log(Debug, "*** SockListenCallbackProc running 5");
         Ns_TclLogError(interp);
     }
     Ns_TclDeAllocateInterp(interp);
