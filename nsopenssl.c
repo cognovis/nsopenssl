@@ -365,10 +365,6 @@ Ns_OpenSSLContextInit (Ns_OpenSSLContext *sslContext)
     return NS_OK;
 }
 
-
-
-
-
 
 /*
  *----------------------------------------------------------------------

@@ -215,6 +215,11 @@ extern void NsOpenSSLFreeDriver (NsOpenSSLDriver * sdPtr);
 extern int NsOpenSSLInitModule (char *server, char *module);
 
 /*
+ * socket.c
+ */
+
+
+/*
  * ssl.c
  */
 

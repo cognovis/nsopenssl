@@ -53,8 +53,8 @@ static const char *RCSID =
 static int InitOpenSSL (void);
 static int CheckModuleDir (NsOpenSSLDriver * sdPtr);
 static int LoadSSLContexts (char *server, char *module, Server *thisServer);
-static Ns_OpenSSLContext *LoadSSLContext (char *server, char *module, char *name);
 static int MakeDriverSSLContext (NsOpenSSLDriver * sdPtr);
+static int MakeDriverSSLContext_OLD (NsOpenSSLDriver * sdPtr);
 
 static int MakeSockServerSSLContext (NsOpenSSLDriver * sdPtr);
 static int MakeSockClientSSLContext (NsOpenSSLDriver * sdPtr);
@@ -105,7 +105,7 @@ NsOpenSSLInitModule (char *server, char *module)
 
     thisServer = ns_malloc(sizeof(Server));
     thisServer->server = server;
-    Ns_RWLockInit(&thisServer->lock);
+    // XXX Ns_RWLockInit(&thisServer->lock);
     hPtr = Tcl_CreateHashEntry(&NsOpenSSLServers, server, &new);
     Tcl_SetHashValue(hPtr, thisServer);
     Tcl_InitHashTable(&thisServer->sslContexts, TCL_STRING_KEYS);
@@ -139,11 +139,11 @@ NsOpenSSLInitModule (char *server, char *module)
      * driver for each port in the virtual server's config area.
      */
 
+
     //StartSSLDrivers(server, module);
 
     return NS_OK;
 }
-
 
 
 /*
@@ -166,7 +166,7 @@ NsOpenSSLInitModule (char *server, char *module)
 static int
 LoadSSLContexts (char *server, char *module, Server *thisServer)
 {
-    char *path, *name;
+    char *path, *name, *subpath, *role;
     int i, new;
     Ns_Set *sslContexts;
     Ns_OpenSSLContext *sslContext;
@@ -186,7 +186,21 @@ LoadSSLContexts (char *server, char *module, Server *thisServer)
         name = Ns_SetKey(sslContexts, i);
         Ns_Log(Notice, "%s: %s: loading SSL context '%s'", MODULE, server,
                 name);
-        sslContext = LoadSSLContext(server, module, name);
+        subpath = Ns_ConfigGetPath(server, module, "sslcontext", name, NULL);
+        if (subpath == NULL) {
+            Ns_Log(Error, "%s: %s: failed to find SSL context '%s' in configuration file",
+                    MODULE, server, name);
+            return NULL;
+        }
+    
+        role = Ns_ConfigGetValue(subpath, "role");
+        if (role == NULL) {
+            Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
+                    MODULE, server, name);
+            return NULL;
+        }
+
+        sslContext = Ns_OpenSSLContextCreate (server, module, name);
         if (sslContext == NULL)
             continue;
         
@@ -201,49 +215,6 @@ LoadSSLContexts (char *server, char *module, Server *thisServer)
     }
 
     return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * LoadSSLContext --
- *
- *       Load a specifically-named SSL context for this server from the
- *       configuration file.
- *
- * Results:
- *       NS_OK or NS_ERROR
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static Ns_OpenSSLContext *
-LoadSSLContext (char *server, char *module, char *name)
-{
-    Ns_OpenSSLContext *sslContext;
-    char *path, *role;
-
-    path = Ns_ConfigGetPath(server, module, "sslcontext", name, NULL);
-    if (path == NULL) {
-        Ns_Log(Error, "%s: %s: failed to find SSL context '%s' in configuration file",
-                MODULE, server, name);
-        return NULL;
-    }
-
-    role = Ns_ConfigGetValue(path, "role");
-    if (role == NULL) {
-        Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
-                MODULE, server, name);
-        return NULL;
-    }
-
-    sslContext = Ns_OpenSSLContextCreate (server, module, name);
-
-    return sslContext;
 }
 
 
@@ -265,15 +236,14 @@ LoadSSLContext (char *server, char *module, char *name)
 
 extern NsOpenSSLDriver *
 #ifndef NS_MAJOR_VERSION
-NsOpenSSLCreateDriver (char *server, char *module, Ns_DrvProc * procs)
+NsOpenSSLCreateDriver (char *server, char *module, Ns_DrvProc *procs)
 #else
 NsOpenSSLCreateDriver (char *server, char *module)
 #endif
 {
-    NsOpenSSLDriver *sdPtr = NULL;
+    NsOpenSSLDriver *sdPtr;
 
     sdPtr = (NsOpenSSLDriver *) ns_calloc (1, sizeof *sdPtr);
-
     Ns_MutexSetName (&sdPtr->lock, module);
     sdPtr->server = server;
     sdPtr->module = module;
@@ -463,6 +433,7 @@ CheckModuleDir (NsOpenSSLDriver * sdPtr)
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
