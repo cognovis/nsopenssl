@@ -200,6 +200,7 @@ NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr)
 	if (sdPtr->dir      != NULL)           ns_free(sdPtr->dir);
 	if (sdPtr->address  != NULL)           ns_free(sdPtr->address);
 	if (sdPtr->location != NULL)           ns_free(sdPtr->location);
+	if (sdPtr->randomFile != NULL)         ns_free(sdPtr->randomFile);
 	ns_free(sdPtr);
     }
 }
