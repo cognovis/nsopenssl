@@ -24,6 +24,17 @@ nsopenssl 1.1:
 
 next:
 
+ * - investigate the keep-alive problem with MSIE; investigate how
+     Apache uses ssl-unclean-shutdown, downgrade-1.0,
+     force-reponse-1.0
+
+ * - verify that SGC is working.
+
+ * - investigate IntermediateChainFile implementation and implement
+     feature in mod_ssl where you can allow connections at less than
+     128-bit but force the browser to bump up to 128-bit for the actual
+     communication.
+
  * - set 'info version' string dynamically from the OpenSSL library
 
  * - revisit Tcl command naming; commands may need to be
