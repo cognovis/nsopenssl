@@ -1,3 +1,14 @@
+2003-01-08  Scott Goodwin  <scott@scottg.net>
+
+	* All: Committing back to AOLserver SourceForge area prior to ripping
+	out AOLserver 3.x support. nsopenssl 3.x will only be supporting
+	AOLserver 4.x.
+
+2002-12-22  Scott Goodwin  <scott@scottg.net>
+
+	* Changes Today:
+	Merged thread.c into nsopenssl.c.
+	
 2002-11-23  Scott Goodwin  <scott@scottg.net>
 
 	* all: Cleaned up the directory; moved some files to the test

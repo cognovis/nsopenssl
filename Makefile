@@ -26,7 +26,7 @@
 # If you do not delete the provisions above, a recipient may use your
 # version of this file under either the License or the GPL.
 #
-# Copyright (C) 2001 Scott S. Goodwin
+# Copyright (C) 2001-2003 Scott S. Goodwin
 #
 # Derived from http.tcl, originally written by AOL
 #
@@ -66,7 +66,7 @@ MOD      =  nsopenssl.so
 #
 # Objects to build
 #
-OBJS     =  nsopenssl.o init.o ssl.o thread.o tclcmds.o
+OBJS     =  nsopenssl.o init.o ssl.o tclcmds.o
 
 #
 # Header files in THIS directory (included with your module)

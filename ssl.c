@@ -26,7 +26,7 @@
  * If you do not delete the provisions above, a recipient may use your
  * version of this file under either the License or the GPL.
  *
- * Copyright (C) 2000-2002 Scott S. Goodwin
+ * Copyright (C) 2000-2003 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 1999 Stefan Arentz.
  */
@@ -137,7 +137,7 @@ NsOpenSSLCreateConn (SOCKET sock, NsOpenSSLDriver * driver, int role, int connty
 	} else {
 	    Ns_Log (Debug, "NsOpenSSLCreateConn -- 4.1.3");
 	    Ns_Log(Error, "%s: Invalid conntype; should be SSL sock or SSL nsd",
-		   DRIVER_NAME);
+		   MODULE_NAME);
 	}
 	break;
     case ROLE_SSL_CLIENT:
@@ -148,7 +148,7 @@ NsOpenSSLCreateConn (SOCKET sock, NsOpenSSLDriver * driver, int role, int connty
     default:
 	Ns_Log (Debug, "NsOpenSSLCreateConn -- 4.3");
 	Ns_Log(Error, "%s: Invalid role; should be SSL client or SSL server",
-	       DRIVER_NAME);
+	       MODULE_NAME);
     }
 
     if (CreateSSL (conn) == NS_ERROR

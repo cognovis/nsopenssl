@@ -26,7 +26,7 @@
  * If you do not delete the provisions above, a recipient may use your
  * version of this file under either the License or the GPL.
  *
- * Copyright (C) 2000-2002 Scott S. Goodwin
+ * Copyright (C) 2000-2003 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  */
 
@@ -41,17 +41,6 @@ static const char *RCSID =
     __DATE__ " " __TIME__;
 
 #include "nsopenssl.h"
-
-#ifdef WIN32
-#define SockError(i)    NsWin32ErrMsg(GetLastError())
-#else
-#include <sys/ioctl.h>
-#define SockError(i)    Tcl_PosixError((i))
-#endif
-
-#ifdef __sun
-#include <sys/filio.h>
-#endif
 
 /*
  * The following structure is used to maintain the state for a socket callback.
@@ -1255,7 +1244,7 @@ NsOpenSSLGetConn (Tcl_Interp * interp)
     conn = Ns_TclGetConn (interp);
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
-	if (name != NULL && STREQ (name, DRIVER_NAME)) {
+	if (name != NULL && STREQ (name, MODULE_NAME)) {
 	    return (Ns_OpenSSLConn *) Ns_ConnDriverContext (conn);
 	}
     }

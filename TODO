@@ -1,25 +1,127 @@
-TODO and IDEAS:
+These goals and/or their release dates are subject to change at any time based
+on my availability:
 
 
-- Get working with AOLserver 4.x
+nsopenssl 3.0 release
 
-- Create fully automated tests for nsopenssl that can run without a browser. Issues
-  will include how to configure AOLserver's nsd.tcl file for the testing. OpenSSL
-  and other programs may be required for testing as well. Not sure how to handle this,
-  other than distributing my test and debugging development platform.
+  - Make one loaded nsopenssl 3.x module handle n number of listen ports
+
+  - Allow multiple "named" sockserver / sockclient contexts to be defined
+
+  - Clean up things admins don't need to see (e.g. sessionCacheId can be
+    internally generated)
+
+  - Clean up Tcl API to conform to AOLserver core standards
+
+  - Make work with AOLserver 4.x (AOLserver 3.x won't be supported)
+
+  - Extract global C API calls into libnsopenssl.so.
+
+  - Fix OpenSSL version info reporting in nsopenssl.
+
+
+nsopenssl 3.1 release
+
+  - Convert to TclObj commands
+
+  - Ensure virtual server support works properly in AOLserver 4.x
+
+  - Clean up error logging
+  
+  - Add IP address to error log on peer closing connection
+
+  - Allow sockservers to have a Tcl or C callback defined in config, and
+    option to start sockservers at server start time (?)
+
+  - Allow named sockserver / sockclient contexts to be dynamically
+    modifiable / copyable
+
+  - Update Tcl API to allow for dynamically creating / using new SSL
+    contexts
+
+  - Add use of memory struct pools to store unused NsOpenSSLConns,
+    NsOpenSSLContexts up to a configured number.
+
+
+nsopenssl 3.2 release
+
+  - Create Ns_OpenSSLWrap C API functions that will allow other Tcl / C
+    modules to have nsopenssl wrap their incoming and/or outgoing socket
+    conns with SSL.  The calling module will define config path to SSL
+    context setup, or optionally name which nsopenssl-defined context they
+    want used for the connection.  nspostgres will probably be the first module
+    to use this capability, followed by nsldap.
+
+
+nsopenssl 3.3 release
+
+  - Update C and Tcl API to allow for generation of CA / Client / Server
+    and other certs; this will allow AOLserver + nsopenssl to be used for
+    running a Certificate Authority.  
+
+
+nsopenssl 3.4 release
+
+  - Add CRL support.
+
+
+nsopenssl 3.5 release
+
+  - Add Online Certificate Status Protocol (OCSP) support.
+
+
+
+
+-----------------------------------------------------------------
+MISCELLANEOUS STUFF:
+
+- Make all function call syntax consistent (e.g. Call(Ns_Blah * haha);
+
+- Add config var to exit server if PRNG can't be seeded fully (?)
+
+- Add SSL bug options to config and NsOpenSSLContext
+
+- Add Mutex lock to NsOpenSSLContext to protect refcnt and changes to
+  context->trace etc.
+
+- Provide ability to 'dup' a particular NsOpenSSLContext struct and
+  new-name it.
+
+- Create Ns_OpenSSLContextSanityCheck routine
+
+- Create fully automated tests for nsopenssl that can run without a
+  browser.  Issues will include how to configure AOLserver's nsd.tcl file
+  for the testing. OpenSSL and other programs may be required for testing
+  as well. Not sure how to handle this, other than distributing my test
+  and debugging development platform.
+
+- Figure out how to detect whether BSAFE or OpenSSL's encryption library
+  is compiled in to this copy of nsopenssl/openssl.
 
 - Test Eric's old nsssl key and cert with nsopenssl
 
-- Apply patch to fix OpenSSL version info in nsopenssl.
+- Add a version.h file, like the one found in nsoracle? See if I can get
+  tag-release and file-release to automatically update the release number
+  in the file.
 
-- Add a version.h file, like the one found in nsoracle. See if I can get 
-  tag-release and file-release to automatically update the release number in the file.
+- Create Ns_FileCheck routine: 'exists', 'isreadable', 'iswritable'. Use
+  it to check and log problems with finding and using files.
+
+- Create an Ns_StructPool API that will allow reuse of structs like
+  Ns_OpenSSLConn. See if this capability is already in the core server,
+  and if not, look at moving it into the core server. Have callbacks to
+  clean out a struct when it's not being used.
+
+- Update the Config routines. Compare them to what's in the core server.
+  Determine if they would be useful in the core server.
 
 
+-----------------------------------------------------------------
 NOTES ON C CODE:
 
 - Ns_Sock * is passed to OpenSSLProc for AOLserver 4.x. This is important,
-  because the first element in Ns_Sock is a pointer to the Ns_Driver struct,
-  which contains all the info needed to run the conn. (How do I use this
-  info within nsopenssl? I could add a pointer to the driver at first i/o
-  within OpenSSLProc, then have that available for the conn always...)
+  because the first element in Ns_Sock is a pointer to the Ns_Driver
+  struct, which contains all the info needed to run the conn. (How do I
+  use this info within nsopenssl? I could add a pointer to the driver at
+  first i/o within OpenSSLProc, then have that available for the conn
+  always...)
