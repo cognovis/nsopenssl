@@ -22,7 +22,7 @@
 # Global nsopenssl settings
 #
 
-ns_section "ns/server/module/nsopenssl"
+ns_section "ns/module/nsopenssl"
 ns_param RandomFile /some/file
 ns_param SeedBytes  1024
 

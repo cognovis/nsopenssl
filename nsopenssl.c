@@ -656,7 +656,7 @@ SeedPRNG(void)
     if (RAND_status()) {
         return NS_TRUE;
     } 
-    path = Ns_ConfigGetPath(MODULE, NULL);
+    path = Ns_ConfigGetPath(NULL, MODULE, NULL);
     if (Ns_ConfigGetInt(path, "seedbytes", &seedBytes) == NS_FALSE) {
         seedBytes = DEFAULT_SEEDBYTES;
     }
