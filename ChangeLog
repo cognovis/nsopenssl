@@ -1,5 +1,19 @@
 2001-08-08  Scott S. Goodwin  <scott@scottg.net>
 
+	* docs: go see http://scottg.net for the new documentation on
+	nsopenssl.
+
+	* All: added ns_openssl_sock* commands and C API. The C API isn't
+	ready for prime time, and there's more work to do on how the Tcl
+	commands are going to use cert validation, but it can make
+	outgoing SSL conns and set up SSL ports to listen on, from Tcl or
+	C.
+
+        * TODO: removed this file from distribution. Will host
+        it on http://scottg.net.
+
+2001-08-08  Scott S. Goodwin  <scott@scottg.net>
+
 	* nsopenssl 1.1c released.
 
 	* all: Bug fix. If a file upload is interrupted, the connection
@@ -7,6 +21,11 @@
 	memory. This fix checks to see if the client has gone away and
 	forces an error, at which point the connection is cleaned up
 	properly.
+
+2001-06-20  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: changed SetProtocols to allow putting all protocols on
+	one line instead of one per line.
 
 2001-06-15  Scott S. Goodwin  <scott@scottg.net>
 

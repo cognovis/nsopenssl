@@ -1,14 +1,16 @@
 $Header$
 
 
+Note: this file may or may not be up to date. Please see the nsopenssl
+section of http://scottg.net for the latest.
+
+
+
 SSLv2, SSLv3, TLSv1 Module
 --------------------------
 
-This software is now production-quality. I have load-tested it under
-RedHat 6.x and Debian 2.2 Linux. 
-
-This module *REQUIRES* OpenSSL 0.9.6 or higher.
-This module also *REQUIRES* that you use nsd8x, not nsd76
+This module requires OpenSSL 0.9.6 or higher. This module also
+requires that you use nsd8x, not nsd76.
 
 
 Feature Highlights
@@ -36,6 +38,7 @@ export OPENSSL=/usr/local/ssl
 gmake
 gmake install INST=/usr/local/aolserver
 
+
 **** NOTE: Solaris Users:
 
 You may have to add an extra library search path and the gcc library
@@ -43,7 +46,7 @@ for the linker to work. Specifically, you may need to change this:
 
 MODLIBS  =  -L$(OPENSSL) -lssl -lcrypto \
 
-to this:
+to something like this:
 
 MODLIBS  =  -L$(OPENSSL) -lssl -lcrypto \
  -L/usr/local/lib/gcc-lib/sparc-sun-solaris2.6/2.8.1 -lgcc
@@ -69,10 +72,12 @@ Development Environment
 -----------------------
 
 The code was developed under Debian 2.2 with OpenSSL 0.9.6. It will
-probably run without too many problems on different flavors of UNIX.
+probably run on different flavors of UNIX, though minor modifications
+may be necessary.
 
 You can see debug output by putting the server itself in debug
-mode. There isn't a separate debug option for nsopenssl.
+mode. There isn't a separate debug option for nsopenssl, but you can
+turn on Trace to see the handshaking in action as clients connect.
 
 OpenSSL must be compiled as position-independent, but it does not
 build that way in the configuration that comes from the OpenSSL
@@ -93,15 +98,16 @@ gmake CC="gcc -fPIC"
 Configuration Options
 ---------------------
 
+For versions prior to 2.x:
+
 ns_section "ns/server/${servername}/module/nsopenssl"
 ns_param port                     $httpsport
 ns_param hostname                 $hostname
+ns_param address                  192.168.0.2  # will use global address param if this isn't set here
 ns_param CertFile                 certfile.pem
 ns_param KeyFile                  keyfile.pem
-ns_param Protocol                 All
-#ns_param Protocol                 SSLv2
-#ns_param Protocol                 SSLv3
-#ns_param Protocol                 TLSv1
+ns_param Protocols                All
+#ns_param Protocols                "SSLv2,SSLv3, TLSv1, all"
 #ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
 #ns_param SessionCache		   false
 #ns_param SessionCacheSize         512
@@ -113,10 +119,66 @@ ns_param Trace                    false
 ns_param RandomFile               /some/file
 ns_param SeedBytes                1024
 
-# NOT IMPLEMENTED YET:
-#ns_param VerifyDepth            3
-#ns_param CRLDir                 crl
-#ns_param CRLFile                crl.pem
+
+For 2.x and above:
+
+
+ns_section "ns/server/${servername}/module/nsopenssl"
+
+# NSD-driven connections:
+ns_param ServerPort                      $httpsport
+ns_param ServerHostname                  $hostname
+ns_param ServerAddress                   $address
+ns_param ServerCertFile                  certfile.pem
+ns_param ServerKeyFile                   keyfile.pem
+ns_param ServerProtocols                 "SSLv2, SSLv3, TLSv1"
+ns_param ServerCipherSuite               "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param ServerSessionCache              false
+ns_param ServerSessionCacheID            1
+ns_param ServerSessionCacheSize          512
+ns_param ServerSessionCacheTimeout       300
+ns_param ServerPeerVerify                true
+ns_param ServerPeerVerifyDepth           3
+ns_param ServerCADir                     ca
+ns_param ServerCAFile                    ca.pem
+ns_param ServerTrace                     false
+
+# For listening and accepting SSL connections via Tcl/C API:
+ns_param SockServerCertFile              certfile.pem
+ns_param SockServerKeyFile               keyfile.pem
+ns_param SockServerProtocols             "SSLv2, SSLv3, TLSv1"
+ns_param SockServerCipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param SockServerSessionCache          false
+ns_param SockServerSessionCacheID        2
+ns_param SockServerSessionCacheSize      512
+ns_param SockServerSessionCacheTimeout   300
+ns_param SockServerPeerVerify            true
+ns_param SockServerPeerVerifyDepth       3
+ns_param SockServerCADir                 internal_ca
+ns_param SockServerCAFile                internal_ca.pem
+ns_param SockServerTrace                 false
+
+# Outgoing SSL connections
+ns_param SockClientCertFile              clientcertfile.pem
+ns_param SockClientKeyFile               clientkeyfile.pem
+ns_param SockClientProtocols             "SSLv2, SSLv3, TLSv1"
+ns_param SockClientCipherSuite           "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param SockClientSessionCache          false
+ns_param SockClientSessionCacheID        3
+ns_param SockClientSessionCacheSize      512
+ns_param SockClientSessionCacheTimeout   300
+ns_param SockClientPeerVerify            true
+ns_param SockServerPeerVerifyDepth       3
+ns_param SockClientCADir                 ca
+ns_param SockClientCAFile                ca.pem
+ns_param SockClientTrace                 false
+
+# OpenSSL library support:
+ns_param RandomFile                      /some/file
+ns_param SeedBytes                       1024
+
+
+And to load the module:
 
 ns_section "ns/server/${servername}/modules"
 ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
@@ -125,7 +187,7 @@ ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
 Configuration Notes
 -------------------
 
-Session caching enabled by default.
+Session caching is turned on by default.
 
 RandomFile isn't necessary, but if you want to use your own random
 bits, you can set this. On Linux, it won't matter: OpenSSL will use
@@ -206,10 +268,35 @@ ns_openssl clientcert pem
     "--- END CERTIFICATE ---" lines in it.
 
 
-Open Issues
------------
+New Commands in 2.0:
 
-See the TODO file.
+ns_openssl_sockopen hostname port
+  - opens an SSL connection to the host on the specified port.
+
+ns_openssl_socklisten 
+  - listens for SSL connections from clients
+
+ns_openssl_sockaccept 
+  - accepts SSL connections from clients
+
+ns_openssl_sockcallback 
+  - run a script when the SSL socket is in a certain state
+
+ns_openssl_socklistencallback 
+  - listen for SSL connections and run a script when a client connects
+
+ns_httpsget 
+  - grab a page from an SSL server
+
+ns_httpsopen 
+  - open an SSL connection to a server
+
+ns_openssl_geturl 
+  - grab a page from an SSL server
+
+
+To use the last three commands, you'll need to have https.tcl installed in
+your server's module/tcl directory.
 
 
 Copyright Notices
@@ -223,15 +310,17 @@ license.txt for more information.
 This product includes software developed by the OpenSSL Project for
 use in the OpenSSL Toolkit. (http://www.openssl.org/)
 
-This product includes cryptographic software written by Eric Young
-(eay@cryptsoft.com).
+This product links to cryptographic software (OpenSSL) originally
+written by Eric Young (eay@cryptsoft.com). There is no cryptographic
+software within the source code of this module.
 
 
 Related Links
 -------------
 
+  http://scottg.net         Information on AOLserver and this module
+  http://www.opennsd.org    OpenNSD site
   http://www.aolserver.com  AOLserver homepage
   http://www.openssl.org    OpenSSL toolkit homepage
   http://www.modssl.org     OpenSSL module for Apache
   http://www.thawte.com     For getting test certificates
-  http://scottg.net         Information on AOLserver and this module

@@ -16,8 +16,9 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz.
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 1999 Stefan Arentz.
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -32,60 +33,223 @@
 
 /* @(#) $Header$ */
 
-#define DEFAULT_PORT                443
-#define DEFAULT_PROTOCOL            "https"
-#define DEFAULT_NAME                "nsopenssl"
+#define DEFAULT_PORT                          443
+#define DEFAULT_PROTOCOL                      "https"
+#define DEFAULT_NAME                          "nsopenssl"
 
-#define CONFIG_TRACE                "Trace"
-#define DEFAULT_TRACE               NS_FALSE
+/*
+ * Used to determine whether NSD is handling the
+ * underlying socket or not.
+ */
 
-#define CONFIG_CIPHERSUITE          "CipherSuite"
-#define DEFAULT_CIPHERSUITE         SSL_DEFAULT_CIPHER_LIST
+#define CONNTYPE_SSL_NSD                       0
+#define CONNTYPE_SSL_SOCK                      1
 
-#define	CONFIG_PROTOCOLS            "Protocols"
+/*
+ * Used to determine if we're the client or the server
+ * for the connection.
+ */
 
-#define CONFIG_CERTFILE             "CertFile"
-#define DEFAULT_CERTFILE            "certificate.pem"
+#define ROLE_SSL_CLIENT                        0
+#define ROLE_SSL_SERVER                        1
 
-#define CONFIG_KEYFILE              "KeyFile"
-#define DEFAULT_KEYFILE             "key.pem"
+#define STR_SOCK_CLIENT                        "sockclient"
+#define STR_SOCK_SERVER                        "sockserver"
+#define STR_NSD_SERVER                         "nsdserver"
 
-#define CONFIG_CAFILE               "CAFile"
-#define DEFAULT_CAFILE              "ca.pem"
 
-#define CONFIG_CADIR                "CADir"
-#define DEFAULT_CADIR               "ca"
 
-#define CONFIG_SESSIONCACHE         "SessionCache"
-#define DEFAULT_SESSIONCACHE        NS_TRUE
+#define CONFIG_SERVER_TRACE                    "ServerTrace"
+#define DEFAULT_SERVER_TRACE                   NS_FALSE
 
-#define CONFIG_SESSIONCACHESIZE     "SessionCacheSize"
-#define DEFAULT_SESSIONCACHESIZE    128
+#define CONFIG_SOCKSERVER_TRACE                "SockServerTrace"
+#define DEFAULT_SOCKSERVER_TRACE               NS_FALSE
 
-#define CONFIG_SESSIONTIMEOUT       "SessionTimeout"
-#define DEFAULT_SESSIONTIMEOUT      300
+#define CONFIG_SOCKCLIENT_TRACE                "SockClientTrace"
+#define DEFAULT_SOCKCLIENT_TRACE               NS_FALSE
 
-#define CONFIG_SOCKTIMEOUT          "SockTimeout"
-#define DEFAULT_SOCKTIMEOUT         30
 
-#define CONFIG_BUFFERSIZE           "BufferSize"
-#define DEFAULT_BUFFERSIZE          16384
 
-#define CONFIG_CLIENTVERIFY         "ClientVerify"
-#define DEFAULT_CLIENTVERIFY        NS_FALSE
+
+#define CONFIG_SERVER_CIPHERSUITE              "ServerCipherSuite"
+#define DEFAULT_SERVER_CIPHERSUITE             SSL_DEFAULT_CIPHER_LIST
+
+#define CONFIG_SOCKSERVER_CIPHERSUITE          "SockServerCipherSuite"
+#define DEFAULT_SOCKSERVER_CIPHERSUITE         SSL_DEFAULT_CIPHER_LIST
+
+#define CONFIG_SOCKCLIENT_CIPHERSUITE          "SockClientCipherSuite"
+#define DEFAULT_SOCKCLIENT_CIPHERSUITE         SSL_DEFAULT_CIPHER_LIST
+
+
+
+
+#define	CONFIG_SERVER_PROTOCOLS                "ServerProtocols"
+#define DEFAULT_SERVER_PROTOCOLS               "All"
+
+#define	CONFIG_SOCKSERVER_PROTOCOLS            "SockServerProtocols"
+#define DEFAULT_SOCKSERVER_PROTOCOLS           "All"
+
+#define	CONFIG_SOCKCLIENT_PROTOCOLS            "SockClientProtocols"
+#define DEFAULT_SOCKCLIENT_PROTOCOLS           "All"
+
+
+
+
+#define CONFIG_SERVER_CERTFILE                 "ServerCertFile"
+#define DEFAULT_SERVER_CERTFILE                "certificate.pem"
+
+#define CONFIG_SOCKSERVER_CERTFILE             "SockServerCertFile"
+#define DEFAULT_SOCKSERVER_CERTFILE            "certificate.pem"
+
+#define CONFIG_SOCKCLIENT_CERTFILE             "SockClientCertFile"
+#define DEFAULT_SOCKCLIENT_CERTFILE            NULL 
+
+
+
+
+#define CONFIG_SERVER_KEYFILE                  "ServerKeyFile"
+#define DEFAULT_SERVER_KEYFILE                 "key.pem"
+
+#define CONFIG_SOCKSERVER_KEYFILE              "SockServerKeyFile"
+#define DEFAULT_SOCKSERVER_KEYFILE             "key.pem"
+
+#define CONFIG_SOCKCLIENT_KEYFILE              "SockClientKeyFile"
+#define DEFAULT_SOCKCLIENT_KEYFILE             NULL
+
+
+
+
+#define CONFIG_SERVER_CAFILE                   "ServerCAFile"
+#define DEFAULT_SERVER_CAFILE                  "ca.pem"
+
+#define CONFIG_SOCKSERVER_CAFILE               "SockServerCAFile"
+#define DEFAULT_SOCKSERVER_CAFILE              "ca.pem"
+
+#define CONFIG_SOCKCLIENT_CAFILE               "SockClientCAFile"
+#define DEFAULT_SOCKCLIENT_CAFILE              "ca.pem"
+
+
+
+
+#define CONFIG_SERVER_CADIR                    "ServerCADir"
+#define DEFAULT_SERVER_CADIR                   "ca"
+
+#define CONFIG_SOCKSERVER_CADIR                "SockServerCADir"
+#define DEFAULT_SOCKSERVER_CADIR               "ca"
+
+#define CONFIG_SOCKCLIENT_CADIR                "SockClientCADir"
+#define DEFAULT_SOCKCLIENT_CADIR               "ca"
+
+
+
+
+#define CONFIG_SERVER_SESSIONCACHE             "ServerSessionCache"
+#define DEFAULT_SERVER_SESSIONCACHE            NS_TRUE
+
+#define CONFIG_SOCKSERVER_SESSIONCACHE         "SockServerSessionCache"
+#define DEFAULT_SOCKSERVER_SESSIONCACHE        NS_TRUE
+
+#define CONFIG_SOCKCLIENT_SESSIONCACHE         "SockClientSessionCache"
+#define DEFAULT_SOCKCLIENT_SESSIONCACHE        NS_TRUE
+
+
+
+
+#define CONFIG_SERVER_SESSIONCACHEID           "ServerSessionCacheId"
+#define DEFAULT_SERVER_SESSIONCACHEID          1
+
+#define CONFIG_SOCKSERVER_SESSIONCACHEID       "SockServerSessionCacheId"
+#define DEFAULT_SOCKSERVER_SESSIONCACHEID      2
+
+#define CONFIG_SOCKCLIENT_SESSIONCACHEID       "SockClientSessionCacheId"
+#define DEFAULT_SOCKCLIENT_SESSIONCACHEID      3
+
+
+
+
+
+#define CONFIG_SERVER_SESSIONCACHESIZE         "ServerSessionCacheSize"
+#define DEFAULT_SERVER_SESSIONCACHESIZE        128
+
+#define CONFIG_SOCKSERVER_SESSIONCACHESIZE     "SockServerSessionCacheSize"
+#define DEFAULT_SOCKSERVER_SESSIONCACHESIZE    128
+
+#define CONFIG_SOCKCLIENT_SESSIONCACHESIZE     "SockClientSessionCacheSize"
+#define DEFAULT_SOCKCLIENT_SESSIONCACHESIZE    128
+
+
+
+
+#define CONFIG_SERVER_SESSIONTIMEOUT           "ServerSessionTimeout"
+#define DEFAULT_SERVER_SESSIONTIMEOUT          300
+
+#define CONFIG_SOCKSERVER_SESSIONTIMEOUT       "SockServerSessionTimeout"
+#define DEFAULT_SOCKSERVER_SESSIONTIMEOUT      300
+
+#define CONFIG_SOCKCLIENT_SESSIONTIMEOUT       "SockClientSessionTimeout"
+#define DEFAULT_SOCKCLIENT_SESSIONTIMEOUT      300
+
+
+
+
+#define CONFIG_SERVER_SOCKTIMEOUT              "ServerSockTimeout"
+#define DEFAULT_SERVER_SOCKTIMEOUT             30
+
+#define CONFIG_SOCKSERVER_SOCKTIMEOUT          "SockServerSockTimeout"
+#define DEFAULT_SOCKSERVER_SOCKTIMEOUT         30
+
+#define CONFIG_SOCKCLIENT_SOCKTIMEOUT          "SockClientSockTimeout"
+#define DEFAULT_SOCKCLIENT_SOCKTIMEOUT         30
+
+
+
+
+#define CONFIG_SERVER_BUFFERSIZE               "ServerBufferSize"
+#define DEFAULT_SERVER_BUFFERSIZE              16384
+
+#define CONFIG_SOCKSERVER_BUFFERSIZE           "SockServerBufferSize"
+#define DEFAULT_SOCKSERVER_BUFFERSIZE          16384
+
+#define CONFIG_SOCKCLIENT_BUFFERSIZE           "SockClientBufferSize"
+#define DEFAULT_SOCKCLIENT_BUFFERSIZE          16384
+
+
+
+
+#define CONFIG_SERVER_PEERVERIFY               "ServerPeerVerify"
+#define DEFAULT_SERVER_PEERVERIFY              NS_FALSE
+
+#define CONFIG_SOCKSERVER_PEERVERIFY           "SockServerPeerVerify"
+#define DEFAULT_SOCKSERVER_PEERVERIFY          NS_FALSE
+
+#define CONFIG_SOCKCLIENT_PEERVERIFY           "SockClientPeerVerify"
+#define DEFAULT_SOCKCLIENT_PEERVERIFY          NS_TRUE
+
+
+
+
+#define CONFIG_SERVER_VERIFYDEPTH              "ServerPeerVerifyDepth"
+#define DEFAULT_SERVER_VERIFYDEPTH             10
+
+#define CONFIG_SOCKSERVER_VERIFYDEPTH          "SockServerPeerVerifyDepth"
+#define DEFAULT_SOCKSERVER_VERIFYDEPTH         10
+
+#define CONFIG_SOCKCLIENT_VERIFYDEPTH          "SockClientPeerVerifyDepth"
+#define DEFAULT_SOCKCLIENT_VERIFYDEPTH         10
+
+
+
+
+
+
 
 #define CONFIG_RANDOMFILE           "RandomFile"
 
-/* If PRNG fails to seed, up this number in your nsd.tcl */
+/*
+ * If PRNG fails to seed, increase this number in the
+ * nsd.tcl file.
+ */
+
 #define CONFIG_SEEDBYTES            "SeedBytes"
 #define DEFAULT_SEEDBYTES           1024
-
-char *ConfigStringDefault(char *module, char *path, char *name,
-    char *def);
-int ConfigBoolDefault(char *module, char *path, char *name,
-    int def);
-int ConfigIntDefault(char *module, char *path, char *name,
-    int def);
-char *ConfigPathDefault(char *module, char *path, char *name,
-    char *dir, char *def);
 

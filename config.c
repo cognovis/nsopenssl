@@ -36,6 +36,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #include <ns.h>
 #include "config.h"
 
+
 /*
  *----------------------------------------------------------------------
  *
@@ -53,7 +54,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
  *----------------------------------------------------------------------
  */
 
-char *
+extern char *
 ConfigStringDefault(char *module, char *path, char *name, char *def)
 {
     char *value = Ns_ConfigGetValue(path, name);
@@ -64,6 +65,7 @@ ConfigStringDefault(char *module, char *path, char *name, char *def)
     return value;
 }
 
+
 /*
  *----------------------------------------------------------------------
  *
@@ -81,7 +83,7 @@ ConfigStringDefault(char *module, char *path, char *name, char *def)
  *----------------------------------------------------------------------
  */
 
-int
+extern int
 ConfigBoolDefault(char *module, char *path, char *name, int def)
 {
     int value;
@@ -92,6 +94,7 @@ ConfigBoolDefault(char *module, char *path, char *name, int def)
     return value;
 }
 
+
 /*
  *----------------------------------------------------------------------
  *
@@ -109,7 +112,7 @@ ConfigBoolDefault(char *module, char *path, char *name, int def)
  *----------------------------------------------------------------------
  */
 
-int
+extern int
 ConfigIntDefault(char *module, char *path, char *name, int def)
 {
     int value;
@@ -120,6 +123,7 @@ ConfigIntDefault(char *module, char *path, char *name, int def)
     return value;
 }
 
+
 /*
  *----------------------------------------------------------------------
  *
@@ -139,7 +143,7 @@ ConfigIntDefault(char *module, char *path, char *name, int def)
  *----------------------------------------------------------------------
  */
 
-char *
+extern char *
 ConfigPathDefault(char *module, char *path, char *name, char *dir, char *def)
 {
     char       *value;

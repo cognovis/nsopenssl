@@ -16,9 +16,9 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 1999 Stefan Arentz
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -33,36 +33,60 @@
 
 /* @(#) $Header$ */
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#include <openssl/x509v3.h>
+#if 0 /* XXX need to add version.h to AOLserver core */
+/* XXX set this to have nsopenssl compile with aolserver 4.x */
+#define NS_MAJOR_VERSION 4
+#endif
+
+/* Required for Tcl channels to work */
+#ifndef USE_TCL8X
+#define USE_TCL8X
+#endif
+
+#include <ns.h>
 
 #ifdef closesocket
 /* openssl and nsd both define this */
 #undef closesocket
 #endif
 
-#include <ns.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
+#include <openssl/x509v3.h>
 
 #define DRIVER_NAME                   "nsopenssl"
 
 /*
- * The encryption library may be different. For example, you may have
- * OpenSSL as the LIBRARY but BSAFE 4.3 as the CRYPTO_LIBRARY. There
- * should be ifdef's here that'll handle this later.
+ * It is possible to have the encryption library be different
+ * from the SSL library. A good example would be if you are
+ * using RSA's BSAFE encryption library within OpenSSL.
  */
 
-#define SSL_LIBRARY_NAME               "OpenSSL"
-#define SSL_LIBRARY_VERSION            "0.9.6"
-#define SSL_CRYPTO_LIBRARY_NAME        "OpenSSL"
-#define SSL_CRYPTO_LIBRARY_VERSION     "0.9.6"
+#define SSL_LIBRARY_NAME  "OpenSSL"
 
-struct NsOpenSSLConnection;
+#if OPENSSL_VERSION_NUMBER   == 0x0090601fL
+#  define SSL_LIBRARY_VERSION  "0.9.6a"
+#elif OPENSSL_VERSION_NUMBER == 0x0090600fL
+#  define SSL_LIBRARY_VERSION  "0.9.6"
+#elif OPENSSL_VERSION_NUMBER == 0x0090581fL
+#  define SSL_LIBRARY_VERSION  "0.9.5a"
+#elif OPENSSL_VERSION_NUMBER == 0x00905100L
+#  define SSL_LIBRARY_VERSION  "0.9.5"
+#else
+#  define SSL_LIBRARY_VERSION  "Unknown"
+#endif
+
+/* XXX figure out how to autodetect BSAFE vs OpenSSL encryption lib */
+#define SSL_CRYPTO_LIBRARY_NAME     SSL_LIBRARY_NAME
+#define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION
+
+struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
-    struct NsOpenSSLDriver   *nextPtr;
-    struct NsOpenSSLConnection *firstFreePtr;
+
+    struct NsOpenSSLDriver     *nextPtr;
+    struct Ns_OpenSSLConn *firstFreePtr;
 
     Ns_Mutex         lock;
     int              refcnt;
@@ -81,45 +105,119 @@ typedef struct NsOpenSSLDriver {
     int              timeout;
     SOCKET           lsock;
 
-    SSL_CTX         *context;
+    SSL_CTX         *context; /* XXX change to nsdServerContext */
+    SSL_CTX         *sockClientContext;
+    SSL_CTX         *sockServerContext;
 
     char            *randomFile;   /* Used to seed PRNG */
+
 } NsOpenSSLDriver;
 
-typedef struct NsOpenSSLConnection {
-    struct NsOpenSSLConnection *nextPtr;
-    struct NsOpenSSLDriver   *sdPtr;
+typedef struct Ns_OpenSSLConn {
 
-    SOCKET  sock;
-    char    peer[16];
-    int     port;
+    char        *module;     /* Module name (e.g. 'nsopenssl') */
+    char        *configPath; /* Path to the configuration file */
+    char        *dir;        /* Module directory (on disk) */
 
-    SSL    *ssl;
-    BIO    *io;
+    int          refcnt;     /* Don't free if refcnt > 0 */
 
-    X509   *clientcert;
-} NsOpenSSLConnection;
+    int          role;       /* client or server */
+    int          conntype;   /* nsd server, sock server or client server conn */
+    char        *type;       /* 'nsdserver', 'sockserver', sockclient' */
+
+    int          bufsize;
+    int          timeout;
+
+    SOCKET       sock;
+    SOCKET       wsock;
+
+    SSL_CTX     *context;    /* Read-only context for creating SSL structs */
+    SSL         *ssl;
+    BIO         *io;         /* All SSL i/o goes through this BIO */
+    X509        *peercert;   /* Certificate for peer, may be NULL if no cert */
+
+    char         peer[16];   /* Not used by nsd server conns in 4.x API */
+    int          port;       /* Not used by nsd server conns in 4.x API */
+
+#ifndef NS_MAJOR_VERSION
+    struct Ns_OpenSSLConn   *nextPtr;
+    struct NsOpenSSLDriver  *sdPtr;
+#endif
+
+} Ns_OpenSSLConn;
+
+
+typedef struct SSLTclCmd {
+
+    char           *name;
+    Tcl_CmdProc    *proc;
+    ClientData      clientData;
+
+} SSLTclCmd;
+
+/*
+ * config.c
+ */
+
+extern char *ConfigStringDefault(char *module, char *path, char *name,
+    char *def);
+extern int ConfigBoolDefault(char *module, char *path, char *name,
+    int def);
+extern int ConfigIntDefault(char *module, char *path, char *name,
+    int def); 
+extern char *ConfigPathDefault(char *module, char *path, char *name,
+    char *dir, char *def); 
 
 /*
  * init.c
  */
 
+#ifndef NS_MAJOR_VERSION
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
-    Ns_DrvProc *procs);
-extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
+           Ns_DrvProc *procs);
+#else
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module);
+#endif
+extern void     NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
 
 /*
  * ssl.c
  */
 
-extern int NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr);
-extern void NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr);
-extern void NsOpenSSLTrace(SSL *ssl, int where, int rc);
-extern int NsOpenSSLShutdown(SSL *ssl);
-extern int NsOpenSSLFlush(NsOpenSSLConnection *scPtr);
-extern void NsDestroyOpenSSLConn(NsOpenSSLConnection *scPtr);
-extern int NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
-    int toread);
-extern int NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
-    int towrite);
+extern int            NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr);
+extern void           NsOpenSSLDestroyConn(Ns_OpenSSLConn *ccPtr);
+extern int            NsOpenSSLFlush(Ns_OpenSSLConn *ccPtr);
+extern int            NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer,
+			  int toread);
+extern int            NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer,
+			  int towrite);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect(char *host, int port, int async,
+			  int timeout);
+extern int            Ns_OpenSSLFetchPage(Ns_DString *dsPtr, char *url,
+                          char *server);
+extern int            Ns_OpenSSLFetchURL(Ns_DString *dsPtr, char *url,
+                          Ns_Set *headers);
+extern int            Ns_OpenSSLSockCallback(SOCKET sock, Ns_SockProc *proc,
+                          void *arg, int when);
+extern int            Ns_OpenSSLSockListenCallback(char *addr, int port,
+                          Ns_SockProc *proc, void *arg);
+extern SOCKET         Ns_OpenSSLSockListen(char *address, int port);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept(SOCKET sock);
+extern void           NsOpenSSLTrace(SSL *ssl, int where, int rc);
+extern int            NsOpenSSLShutdown(SSL *ssl);
+extern int            Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *ccPtr);
+
+/*
+ * tclcmds.c
+ */
+
+extern int NsOpenSSLCreateCmds(Tcl_Interp *interp, void *arg);
+
+/*
+ * nsopenssl.c
+ */
+
+extern char    *NsOpenSSLGetModuleName(void);
+extern SSL_CTX *NsOpenSSLGetSockServerSSLContext(void);
+extern SSL_CTX *NsOpenSSLGetSockClientSSLContext(void);
 

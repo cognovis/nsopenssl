@@ -6,7 +6,10 @@
 # $Header$
 #
 
+# Applies only to nsopenssl versions prior to 2.x
+# See docs at http://scottg.net for updated info on 2.x
 ns_section "ns/server/${servername}/module/nsopenssl"   
+ns_param address                  $address
 ns_param port                     $httpsport
 ns_param hostname                 $hostname
 ns_param CertFile                 certfile.pem

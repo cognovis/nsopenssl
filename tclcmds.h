@@ -16,7 +16,7 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
@@ -32,6 +32,28 @@
 
 /* @(#) $Header$ */
 
-extern Ns_TclInterpInitProc NsOpenSSLInterpInit;
+extern Ns_TclInterpInitProc NsOpenSSLCreateCmds;
+
+extern Tcl_CmdProc NsTclOpenSSLCmd;
+extern Tcl_CmdProc NsTclSSLGetUrlCmd;
+
+extern Tcl_CmdProc NsTclSSLSockOpenCmd;
+extern Tcl_CmdProc NsTclSSLSockReadCmd;
+extern Tcl_CmdProc NsTclSSLSockWriteCmd;
+extern Tcl_CmdProc NsTclSSLSockListenCmd;
+extern Tcl_CmdProc NsTclSSLSockAcceptCmd;
+extern Tcl_CmdProc NsTclSSLSockNReadCmd;
+extern Tcl_CmdProc NsTclSSLSockSelectCmd;
+extern Tcl_CmdProc NsTclSSLSockCheckCmd;
+extern Tcl_CmdProc NsTclSSLSockSetBlockingCmd;
+extern Tcl_CmdProc NsTclSSLSockSetNonBlockingCmd;
+extern Tcl_CmdProc NsTclSSLSockCallbackCmd;
+extern Tcl_CmdProc NsTclSSLSockListenCallbackCmd;
+
+#if 0 /* not yet implemented */
+extern Tcl_CmdProc NsTclSSLSocketPairCmd;
+extern Tcl_CmdProc NsTclSSLGetByCmd;
+#endif
+
 
 

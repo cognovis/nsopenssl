@@ -16,8 +16,8 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz.
  * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 1999 Stefan Arentz.
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -38,7 +38,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #include "thread.h"
 
 #ifndef THREADS
-#include "OpenSSL was not compiled with thread support!"
+#error "OpenSSL was not compiled with thread support!"
 #endif
 
 static Ns_Mutex *locks;
