@@ -2,13 +2,11 @@
 $Header$
 
 
-SSL v3 Module
--------------
+SSLv2, SSLv3, TLSv1 Module
+--------------------------
 
-This is an experimental version of an SSL module for AOLserver.
-
-PLEASE NOTE THAT THIS SOFTWARE IS STILL PRE-ALPHA QUALITY AND SHOULD NOT
-BE USED IN A PRODUCTION ENVIRONMENT.
+Please note that this software is beta quality and probably should not
+be used in a production environment. Feedback would be appreciated.
 
 
 Feature Highlights
@@ -57,7 +55,7 @@ server -- they are for testing only.
 Development Environment
 -----------------------
 
-The code was developed under RedHat 6.0 with OpenSSL 0.9.4. It will
+The code was developed under RedHat 6.2 with OpenSSL 0.9.5a. It will
 probably run without too many problems on different flavours of a UNIX
 like operating system.
 
@@ -90,11 +88,19 @@ ns_param keyfile             $sslkeyfile
 ns_param debug               off
 ns_param sessioncachesize    512
 ns_param sessioncachetimeout 300
-ns_param protocol            "SSLv2, SSLv3, TLSv1"
+ns_param protocol            "ALL, SSLv2, SSLv3, TLSv1"
 #ns_param ciphersuite         "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param ClientVerify              true
+ns_param ClientVerifyDepth         3
+ns_param ClientVerifyOnce          true
+ns_param ClientVerifyDefault       true
+ns_param ClientCACertPath          /p/d/asssg/ssl.ca
+ns_param ClientCACertFile          /p/d/asssg/ssl.ca/ca-bundle.crt
 
 ns_section "ns/server/${servername}/modules"
 ns_param nsopenssl    ${bindir}/nsopenssl.so
+
+Note that "ALL" in the protocol parameter obviates the need for listing the other protocols.
 
 
 Open Issues
@@ -102,6 +108,7 @@ Open Issues
 
 Here's some things on my list.
 
+ - Client certificate support needs to be added
  - Session caching seems to be flakey
  - Enable and test keepalive
  - done: Integrate and test with AOLserver 3.0b4
@@ -115,8 +122,9 @@ Here's some things on my list.
 Copyright Notices
 -----------------
 
-The nsopenssl module is written and Copyrighted by Stefan Arentz. It
-is distributed under the AOLserver Public License. See the file
+The nsopenssl module is written and Copyrighted by Stefan
+Arentz. Parts of it are also copyrighted by Scott S. Goodwin. It is
+distributed under the AOLserver Public License. See the file
 license.txt for more information.
 
 This product includes software developed by the OpenSSL Project for
@@ -133,4 +141,4 @@ Related Links
   http://www.openssl.org    OpenSSL toolkit homepage
   http://www.modssl.org     OpenSSL module for Apache
   http://www.thawte.com     For getting test certificates
-
+  http://scottg.net         Information on AOLserver

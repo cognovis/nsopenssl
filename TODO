@@ -1,0 +1,48 @@
+Things that need to be done:
+Scott S. Goodwin - scott@scottg.net
+
+- MSIE 5.x doesn't work with this module yet. It breaks the connection
+  to the server and then prompts you to select the client cert that
+  you want to use, then reconnects. You're supposed to get a
+  passphrase box from MSIE next, and something does popup, but there
+  is nowhere to type in the passphrase. I'm not sure whether the
+  problem is with the nsopenssl or MSIE, but I suspect nsopenssl isn't
+  handling the disconnect properly, because it used to work fine, and
+  I'm not sure what I changed that caused this problem. OpenSSL's
+  s_client works fine, as does Netscape. All three were using the same
+  client certificate.
+
+- Add more Tcl commands for examining the server's cert, generating
+  keypairs and CSRs etc.
+
+- Caching was flakey before. I have it half-working. Before, the cache
+  delete callback was being called when the connection was closed,
+  thus removing the cached session. Not sure what the behavior should
+  be here yet. Now, the first connection gets cached, and it's used
+  for the second connection. The third connection finds the cached
+  session, but a new session id is generated anyway and we have to go
+  through the whole process again.
+
+- There are lots of comments sprinkled throughout the code that begin
+  with "TODO:". Some are bugs, some are features that could be added,
+  and that I'll get to.
+
+- Add Certificate Revocation support. Should optionally pass through
+  nsopenssl and be handled by the app.
+
+- Lots of cleanup. I'm new to C and I'm afraid I've left a lot of
+  cruft lying around.
+
+- The nsd.tcl config parameters need to be scrutinized:
+  ns_param ClientVerify              true
+  ns_param ClientVerifyDepth         3
+  ns_param ClientVerifyOnce          true
+  ns_param ClientVerifyDefault       true
+  ns_param ClientCACertPath          ssl.ca
+  ns_param ClientCACertFile          ssl.ca/ca-bundle.crt
+
+- Testing -- lots of it. Maybe even a regression suite to run against
+  each release.
+
+- Compilation against OpenSSL 0.9.6.
+

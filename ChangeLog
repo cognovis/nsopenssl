@@ -1,3 +1,131 @@
+2000-11-04  root  <scott@scottg.net>
+
+	* tclcmds: Changed the tcl command names. All nsopenssl Tcl
+	commands now start with 'ssl'; all new commands should also start
+	with 'ssl':
+
+          ssl info
+          ssl clientcert version
+	  ssl clientcert serial
+	  ssl clientcert subject
+	  ssl clientcert issuer
+	  ssl clientcert notbefore
+	  ssl clientcert notafter
+	  ssl clientcert signature_algorithm
+	  ssl clientcert key_algorithm
+	  ssl clientcert pem
+		
+	* nsopenssl.c, sock.c: Moved default ca chain processing from
+	nsopenssl.c to sock.c.
+
+	* nsopenssl.c: took out FIONBIO ifdef'd code.
+
+2000-10-30  [ ROOT I ]  <scott@scottg.net>
+
+	* nsd.tcl, nsopenssl.h, nsopenssl.c, sock.c: added CACertPath and
+	CACertFile parameters to config file processing; these now get
+	passed from nsd.tcl to Ns_SSLCreateServer.
+
+	* nsopenssl.h, nsopenssl.c, sock.c: Created SSLConf data
+	structure to hold config parameters that are passed from
+	Ns_ModuleInit to Ns_SSLCreateServer. Changed all 'keyfile'
+	variable name types to 'config->keyfile'. This seems like
+	double-duty since the SSLServer data structure contains some of
+	the same information. To get rid of SSLConf we'd have to move the
+	code that's currently in Ns_SSLCreateServer into Ns_ModuleInit
+	which wouldn't be wise. First, you want to factor out any code you
+	can to keep each function as simple as possible. Second, we might
+	want to create multiple servers using Ns_SSLCreateServer
+	(say for virtual hosting); having it a separate function that you
+	pass these parameters to is useful, I think.
+
+2000-10-27  Scott S. Goodwin  <scott@scottg.net>
+
+	* tclcmds.c: added CertInfoCmd which is called in Tcl as:
+
+	  client_cert_info version
+	  client_cert_info serial
+	  client_cert_info subject
+	  client_cert_info issuer
+	  client_cert_info notbefore
+	  client_cert_info notafter
+	  client_cert_info sig_algorithm
+	  client_cert_info key_algorithm
+	  client_cert_info pem_certificate
+
+	I also added three functions to support the above Tcl commands:
+	ValidTime, which is used to return the notbefore and notafter
+	strings in the format "Aug 28 20:00:38 2000 GMT"; SerialNumber
+	which returns the serial number as a string (serial number is in
+	hex); and PEMCertificate, which returns the PEM format of the
+	client certificate.
+
+2000-10-25  Scott S. Goodwin  <scott@scottg.net>
+
+	* tclcmds.c: added InfoCmd which returns a true Tcl list with the
+	SSL library name (OpenSSL), version (0.9.5a), crypto library name
+	(OpenSSL, but could be BSAFE/Crypto-C), and crypto library version
+	(0.9.5a). It's called as 'openssl_info' from Tcl (though this may
+	change to ssl_info later -- I didn't want to clash with nssock's
+	ssl_info Tcl command).
+
+2000-10-24  Scott S. Goodwin  <scott@scottg.net>
+
+	* all: ifdef'd all client verification specific code so they won't
+	be included in a normal compile. Eventually all of this code
+	should be conditionally run if the config file says to do client
+	verification. To use it, set VERIFY_CLIENT=1 as a make argument.
+
+2000-10-23  Scott S. Goodwin  <scott@scottg.net>
+
+	* nsopenssl.c: Went back to "standard" SSL handshaking
+	loop. Freddie's explicit select loop *works* better in that it
+	allows more connections before it gets balled up (probably due to
+	a threading problem) but that problem still exists. I'm still
+	learning C, and I'm using the Apache/mod_ssl combo as my
+	reference, as well as RSA's SSL-C toolkit, so for now I want to
+	use the "standard" method until I can get the other stuff fixed
+	and I understand what's going on. I'll then check to see if
+	Freddie's changes improve performance without sacrificing
+	maintainability across platforms and put it back in.
+	
+2000-10-17  Scott S. Goodwin  <scott@scottg.net>
+
+	* nsopenssl.c: BIO_free'd conPtr->ssl_bio in
+	NsSSLCreateConn. Should I be using SSL_free() here instead???
+	Nope, that makes it crash. Ok.
+
+2000-10-13  Scott S. Goodwin  <scott@scottg.net>
+
+	* sock.c: Added protocol parameter parsing in NsModuleInit. You
+	specify protocols thusly: "SSLv2, SSLv3, TLSv1, ALL". Case doesn't
+	matter, order doesn't matter. Commas are necessary. When the
+	protocol parser sees 'ALL', none of the others are parsed (unlike
+	Apache -- see the comments in the code).
+
+	* sock.c: Ns_ModuleInit was changing the config file ciphersuite
+	parameter in memory -- that's probably a no-no. Now it mallocs if
+	the ciphersuite paramater doesn't exist, and strdup's if it does.
+	
+2000-10-02  Scott S. Goodwin  <scott@scottg.net>
+
+	* .c, .h: replaced all ConfigGet calls with ConfigGetValue;
+	ConfigGet is obsolete.
+
+	* debug: Why were we using our own debug variable? I took out all
+	of the 'if (debug)' statements so Debug to the log file works like
+	the rest of aolserver's debug statements.
+
+2000-09-30  Scott S. Goodwin  <scott@scottg.net>
+
+	* Split Files: I've split the code into four files: nsopenssl.h,
+	nsopenssl.c, sock.c and cache.c. Fewer pages to print when all I
+	really want to see right now is the SSL portion of the code :)
+
+2000-21-12  Scott S. Goodwin  <scott@scottg.net>
+
+	* logging: Added more debug log statements
+
 2000-09-12  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsopenssl.c: Integrated changes made by Freddie Mendoza
