@@ -87,12 +87,7 @@ endif
 #
 # Extra libraries required by your module (-L and -l go here)
 #
-ifdef BSAFE
-    MODLIBS  =  -L$(OPENSSL)/lib -L$(BSAFE)/lib -lssl -lcrypto \
-                -lBSAFEglue -lcrypto -lbsafe -lBSAFEglue
-else
-    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
-endif
+MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
 
 # Add static compilation ability, per grax3272
 #MODLIBS  =  -L$(OPENSSL)/lib ../openssl-0.9.6g/libssl.a ../openssl-0.9.6g/libcrypto.a#-lssl -lcrypto
@@ -101,11 +96,6 @@ endif
 # Compiler flags required by your module (-I for external headers goes here)
 #
 CFLAGS   += -I$(OPENSSL)/include
-
-#
-# Tcl modules to install
-#
-TCLMOD   =  https.tcl
 
 #
 # The common Makefile defined by AOLserver for making modules
@@ -178,9 +168,6 @@ check-env:
 install: all
 	$(RM) $(INSTBIN)/$(MOD)
 	$(CP) $(MOD) $(INSTBIN)
-	$(MKDIR) $(INSTTCL)
-	$(CP) $(TCLMOD) $(INSTTCL)
-
 
 ## NOTES #################################################################################
 
