@@ -18,6 +18,29 @@ Feature Highlights
  * Support for client certificate verification
  * Clean, reviewable ANSI C source code
 
+Troubleshooting nsopenssl
+-------------------------
+If the key for your certificate won't load, it may be protected by
+a passphrase. You can tell by looking at it. If you see something
+like:
+
+  -----BEGIN RSA PRIVATE KEY-----
+  Proc-Type: 4,ENCRYPTED
+  DEK-Info: DES-CBC,C19C9EF4C9122A23
+
+  D3kU+2NbhHs+BYG8vEljim0aoqYjGbbcSR1i+1KM4753FTLfJBCNWSBha+m18pLO
+  U2erWwNLLyAWH2bxVKJDedKE3Hpr2TAq1R43s5heSP4YqGITAWMiknRHJm9f86ZA
+  ...
+
+then the key is passphrase-protected.
+
+An unprotected key will begin like this:
+
+  -----BEGIN RSA PRIVATE KEY-----
+  MIICXQIBAAKBgQCdLzpBdFeAuOadJbWBkWob1GOwGl0BQhub2zucE9qXjzpCFcjK
+  Z6gOO6rsj1DiHmSHxlGY3jWK7FFiGuTFHW1BxsAi7IBjAPdqm/g52WgP0g3JQBpE
+  ...
+
 
 Compiling the code
 ------------------
@@ -332,5 +355,25 @@ You tag by doing:
 cvs -q tag nsopenssl-2_2_beta_1
 
 Make sure you know what the latest tag is and increment accordingly.
+
+
+Design
+------
+
+The nsopenssl 3.x series is designed to be more modular. The three main
+data types of the module (SSL contexts, Drivers and Connections) are
+decoupled. SSL contexts can be created and initialized at any time
+and then used with Drivers and Connections. See nsopenssl.h for details.
+
+The process flow is as follows:
+
+     - initialize OpenSSL and 'global' items from nsd.tcl
+     - for each virtual server:
+        - initialize SSL contexts defined in nsd.tcl
+        - create drivers that are defined in nsd.tcl, tying them to an
+          SSL context
+     - Wait for incoming connections for core HTTP processing, and make
+       available a C and Tcl API for creating new SSL contexts, initiating
+       SSL listeners and initiating outgoing SSL connections
 
 

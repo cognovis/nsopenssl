@@ -91,7 +91,6 @@ static int SessionCacheIdGetNext (void);
  
 static NsOpenSSLDriver *NsOpenSSLDriverCreate (char *server, char *module);
 static void NsOpenSSLDriverFree (NsOpenSSLDriver *driver);
-static void DriverStructClear (NsOpenSSLDriver *driver);
 
 /*
  * SSL Operations on active connections
@@ -127,25 +126,6 @@ Ns_ModuleInit (char *server, char *module)
     NsOpenSSLDriver *driver;
     static int loaded = 0;
     static int globalInit = 0;
-
-#ifdef NSOPENSSL_DEBUG
-    Ns_Log(Debug, "%s: Compile-time NSOPENSSL_DEBUG is set", MODULE);
-#endif
-
-    /*
-     * Loading nsopenssl more than once is a fatal error. Previous versions
-     * could be loaded under different module names, but this was never
-     * supported. This and future versions of nsopenssl have been improved to
-     * handle multiple drivers and SSL contexts.  If you really think you need
-     * to load more than one copy of this module, let me know and we'll figure
-     * out what you're attempting to do.
-     */
-
-    if (loaded) {
-	    Ns_Log(Error, MODULE, ": Loading multiple times not allowed");
-	    return NS_ERROR;
-    }
-    loaded = 1;
 
     /*
      * Some things are initialized once and affect all virtual servers, so we
@@ -251,27 +231,13 @@ NsOpenSSLDriverCreate (char *server, char *module)
 	    return NULL;
     }
 
-    DriverStructClear (driver);
+    /* XXX need to initialize some items? */
 
     driver->server     = server;
     driver->module     = module;
     driver->configPath = Ns_ConfigGetPath(server, module, NULL);
 
     Ns_MutexSetName(&driver->lock, module);
-
-    driver->timeout = ConfigGetIntDefault (module, driver->configPath,
-				       CONFIG_SERVER_SOCKTIMEOUT,
-				       DEFAULT_SERVER_SOCKTIMEOUT);
-    if (driver->timeout < 1) {
-	driver->timeout = DEFAULT_SERVER_SOCKTIMEOUT;
-    }
-
-    driver->bufsize = ConfigGetIntDefault (module, driver->configPath,
-				       CONFIG_SERVER_BUFFERSIZE,
-				       DEFAULT_SERVER_BUFFERSIZE);
-    if (driver->bufsize < 1) {
-	driver->bufsize = DEFAULT_SERVER_BUFFERSIZE;
-    }
 
     if (SetModuleDir (driver) == NS_ERROR || InitLocation (driver) == NS_ERROR) {
 	NsOpenSSLDriverFree (driver);
@@ -301,60 +267,29 @@ NsOpenSSLDriverCreate (char *server, char *module)
 static void
 NsOpenSSLDriverFree (NsOpenSSLDriver *driver)
 {
+    Ns_OpenSSLConn *conn;
+
     if (driver == NULL)
 	    return;
 
     Ns_Log (Debug, "%s: freeing(%p)",
 	    driver == NULL ? MODULE : driver->module, driver);
 
-    DriverStructClear (driver);
-
-    Ns_Free (driver);
-}
-
-
-
-/*
- *----------------------------------------------------------------------
- *
- * DriverStructClear --
- *
- *      Initialize all values for an NsOpenSSLDriver struct. Called both when
- *      creating a new driver to clear it, and just before freeing a driver, to
- *      clear it.
- *
- * Results:
- *      None.
- *
- * Side effects:
- *      Memory may be freed.
- *
- *----------------------------------------------------------------------
- */
-
-static void
-DriverStructClear (NsOpenSSLDriver *driver)
-{
-    Ns_OpenSSLConn *conn;
-
-    if (driver == NULL)
-	    return;
-    
     /* 
      * Free all of the conn structures associated with this driver, if any.
      */
 
-    while ((conn = driver->firstFree) != NULL) {
-	    driver->firstFree = conn->next;
+    while ((conn = driver->firstFreeConn) != NULL) {
+	    driver->firstFreeConn = conn->next;
 	    /* XXX doesn't this need to have it's contents free'd? */
 	    Ns_Free (conn);
     }
 
     Ns_MutexDestroy (&driver->lock);
     
-    if (driver->sslContext != NULL) {
-	    Ns_OpenSSLContextFree(driver->sslContext);
-	    driver->sslContext = NULL;
+    if (driver->context != NULL) {
+	    Ns_OpenSSLContextFree(driver->context);
+	    driver->context = NULL;
     }
     
     if (driver->dir != NULL)
@@ -385,6 +320,8 @@ DriverStructClear (NsOpenSSLDriver *driver)
     driver->refcnt            = 1;
     driver->bufsize           = DEFAULT_SERVER_BUFFERSIZE;
     driver->timeout           = DEFAULT_SERVER_SOCKTIMEOUT;
+
+    Ns_Free (driver);
 
     return;
 }
@@ -419,9 +356,7 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
     Ns_OpenSSLConn *conn;
     SOCKET sock;
 
-#ifdef NSOPENSSL_DEBUG
     Ns_Log (Debug, "%s: NsOpenSSLSockConnect -- enter", MODULE);
-#endif
 
     if (timeout < 0) {
 	sock = Ns_SockConnect (host, port);
@@ -447,9 +382,7 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
 
     SSL_set_app_data (conn->ssl, conn);
 
-#ifdef NSOPENSSL_DEBUG
     Ns_Log (Debug, "%s: NsOpenSSLSockConnect -- leave", MODULE);
-#endif
 
     return conn;
 }
@@ -995,7 +928,7 @@ SeedPRNG (void)
     RAND_add (buf_ptr, seedBytes, (long) seedBytes);
     Ns_Free (buf_ptr);
 
-    if (RAND_status ())
+    if (RAND_status ()) {
         Ns_Log (Notice, MODULE, ": Successfully seeded PRNG with %d bytes from Ns_DRand",
 	    seedBytes);
     } else {
@@ -1068,34 +1001,94 @@ IssueTmpRSAKey (SSL * ssl, int export, int keylen)
 static int
 ConfigGetSSLContexts(char *server, char *module)
 {
-	Ns_Set *servers;
-	Ns_Set *sockservers;
+	Ns_Set *contexts;
 	Ns_Set *sockclients;
-	int i = 0;
 	char *key = NULL;
-	char *configPath = Ns_ConfigGetPath(server, module, NULL);
+	int i = 0;
 
 	/*
-	 * Load server contexts
+	 * Each virtual server can have multiple named SSL contexts. Each
+	 * context defines the characteristics for SSL connections that use the
+	 * context.
 	 */
 
-	servers = Ns_ConfigGetSection("servers");
+	contexts = Ns_ConfigGetSection(
+			Ns_ConfigGetPath(server, module, "contexts", NULL));
+
+	if (contexts != NULL) {
+	    for (i = 0; i < Ns_SetSize(contexts); ++i) {
+		/*
+		 * The "key" is the name of the context. The value is the text
+		 * description of that named "context"
+		 */
+		key = Ns_SetKey(contexts, i);
+		ConfigGetSSLContext(server, module, key, 
+				Ns_SetGet(contexts, key), "server");
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	}
+
+	return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ConfigGetSSLContexts --
+ *
+ *      Load SSL Contexts that are defined in the configuration file
+ *      for a given virtual server.
+ *
+ * Results:
+ *      NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *      NsOpenSSLContext structures are created
+ *
+ *----------------------------------------------------------------------
+ */
+ 
+static int
+BLOWConfigGetSSLContexts(char *server, char *module)
+{
+	Ns_Set *drivers;
+	Ns_Set *sockservers;
+	Ns_Set *sockclients;
+	char *key = NULL;
+	int i = 0;
+
+	/*
+	 * Load server contexts. Each virtual server can have multiple named "drivers". Each
+	 * "driver" defines a port to listen on and an SSL context to use. We loop through
+	 * the list of defined "drivers" and load each of the SSL contexts individually.
+	 */
+
+	servers = Ns_ConfigGetSection(
+			Ns_ConfigGetPath(server, module, "drivers", NULL));
 
 	if (servers != NULL) {
 	    for (i = 0; i < Ns_SetSize(servers); ++i) {
+		/*
+		 * The key is the named "server". The value is the text
+		 * description of that named "server"
+		 */
 		key = Ns_SetKey(servers, i);
 		ConfigGetSSLContext(server, module, key, 
 				Ns_SetGet(servers, key), "server");
 	    }
 	} else {
 	    Ns_Log (Notice, MODULE, ": No SSL servers defined for server %s", server);
+	    Ns_Log (Notice, MODULE, ": This server will not be able to accept incoming HTTPS requests");
 	}
 
 	/*
 	 * Load sockserver contexts
 	 */
 
-	sockservers = Ns_ConfigGetSection("sockservers");
+	sockservers = Ns_ConfigGetSection(
+			Ns_ConfigGetPath(server, module, "sockservers", NULL));
 
 	if (servers != NULL) {
 	    for (i = 0; i < Ns_SetSize(sockservers); ++i) {
@@ -1105,13 +1098,15 @@ ConfigGetSSLContexts(char *server, char *module)
 	    }
 	} else {
 	    Ns_Log (Notice, MODULE, ": No SSL sockservers defined for server %s", server);
+	    Ns_Log (Notice, MODULE, ": Tcl sockserver API will not be available for this server");
 	}
 
 	/*
 	 * Load sockclient contexts
 	 */
 
-	sockclients = Ns_ConfigGetSection("sockclients");
+	sockclients = Ns_ConfigGetSection(
+			Ns_ConfigGetPath(server, module, "sockclients", NULL));
 
 	if (sockclients != NULL) {
 	    for (i = 0; i < Ns_SetSize(sockclients); ++i) {
@@ -1121,10 +1116,426 @@ ConfigGetSSLContexts(char *server, char *module)
 	    }
 	} else {
 	    Ns_Log (Notice, MODULE, ": No SSL sockclients defined for server %s", server);
+	    Ns_Log (Notice, MODULE, ": Tcl sockclient API will not be available for this server");
 	}
 
 	return NS_OK;
 }
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextModuleDirGet --
+ *
+ *       Get the module directory for a particular SSL context
+ *
+ * Results:
+ *       String pointer; might be NULL
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextModuleDirSet --
+ *
+ *       Set the module directory for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCertFileSet --
+ *
+ *       Set the certificate pathname for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCertFileGet --
+ *
+ *       Get the certificate pathname for a particular SSL context
+ *
+ * Results:
+ *       String pointer; might be NULL
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextKeyFileSet --
+ *
+ *       Set the key pathname for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextKeyFileGet --
+ *
+ *       Get the key pathname for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextProtocolsSet --
+ *
+ *       Set the protocols for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextProtocolsGet --
+ *
+ *       Get the protocols for a particular SSL context
+ *
+ * Results:
+ *       ????
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCAFileSet --
+ *
+ *       Set the CA file for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCAFileGet --
+ *
+ *       Get the CA file for a particular SSL context
+ *
+ * Results:
+ *       String pointer; might be NULL
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCADirSet --
+ *
+ *       Set the CA directory for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCADirGet --
+ *
+ *       Get the CA directory for a particular SSL context
+ *
+ * Results:
+ *       String pointer, might be NULL
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifySet --
+ *
+ *       Set whether peer verify is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifyGet --
+ *
+ *       Get whether peer verify is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_TRUE or NS_FALSE
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifyDepthSet --
+ *
+ *       Set the depth that a peer certificate can be chained for
+ *       validation purposes for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifyDepthGet --
+ *
+ *       Get the depth that a peer certificate can be chained for
+ *       validation purposes for a particular SSL context
+ *
+ * Results:
+ *       Integer
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheSet --
+ *
+ *       Set whether session caching is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheGet --
+ *
+ *       Get whether session caching is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_TRUE or NS_FALSE
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheSizeSet --
+ *
+ *       Set the size of a session cache for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheSizeGet --
+ *
+ *       Get the size of a session cache for a particular SSL context
+ *
+ * Results:
+ *       Integer
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheTimeoutSet --
+ *
+ *       Set the timeout for cache entries for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheTimeoutGet --
+ *
+ *       Get the timeout for cache entries for a particular SSL context
+ *
+ * Results:
+ *       Integer
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextTraceSet --
+ *
+ *       Set SSL handshake tracing for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextTraceGet --
+ *
+ *       Get SSL handshake tracing for a particular SSL context
+ *
+ * Results:
+ *       NS_TRUE or NS_FALSE
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
 
 
 /*
@@ -1138,26 +1549,28 @@ ConfigGetSSLContexts(char *server, char *module)
  *       Pointer to resulting struct or NULL on error
  *
  * Side effects:
- *       Memory may be allocated
+ *       Memory is allocated
  *
  *----------------------------------------------------------------------
  */
 
 Ns_OpenSSLContext *
-Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, char *type)
+Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, char *role)
 {
     Ns_OpenSSLContext *context = NULL;
-    int connType = -1;
 
     /*
      * The name of an SSL context must be unique within a virtual server.
      */
 
-    if (OpenSSLContextNameCheck (server, module, name)) {
+#if 0
+    /* XXX turn this on */
+    if (SSLContextNameCheck (server, module, name)) {
 	    Ns_Log(Error, "%s: SSL context with name %s already defined",
 			    MODULE, name);
 	    return NULL;
     }
+#endif
 
     /*
      * Set the connection type: "server" is driven by the core nsd HTTP
@@ -1165,57 +1578,51 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
      * Tcl APIs.
      */
 
-    if (STREQ(type, "server")) {
-	    conntype = CONNTYPE_SERVER;
-    } else if (STREQ(type, "sockserver")) {
-	    conntype = CONNTYPE_SOCKSERVER;
-    } else if (STREQ(type, "sockclient")) {
-	    conntype = CONNTYPE_SOCKCLIENT;
+    if (STREQ(role, "server")) {
+        context->role = SERVER_ROLE;
+    } else if (STREQ(role, "client")) {
+        context->role = CLIENT_ROLE;
     } else {
-	    Ns_Log (Error, "%s: SSL context type %s is invalid",
-			    MODULE, type);
-	    return NULL;
+        Ns_Log(Error, MODULE, ": SSL context %s has an invalid role", name);
+	/* XXX need to ditch here: use goto? */
     }
 
-    /*
-     * Allocate the SSL context.
-     */
+    Ns_Log(Debug, MODULE, ": %s: %s: %s: %s", type, name, desc, role);
 
     context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof *context);
 
     if (context == NULL) {
-	    Ns_Log(Error, "%s: Failed to create SSL context named %s", 
-			    MODULE, name);
-	    return NULL;
+        Ns_Log(Error, MODULE, ": Failed to create SSL context named %s", name);
+        return NULL;
     }
 
+    /*
+     * Lock around the structure while changing it
+     */
+
     Ns_MutexLock(&context->lock);
+
     /* XXX make mutex name unique to this struct instance */
     Ns_MutexSetName2(&context->lock, MODULE, "context");
 
-    /*
-     * Set most important fields here
-     */
-
     context->server     = server;
     context->module     = module;
-    context->name       = strdup (key);
-    context->desc       = strdup (desc);
-    context->conntype   = conntype;
+    context->name       = strdup(key);
+    context->desc       = strdup(desc);
 
     /*
-     * All contexts get a session cache id even if they don't turn on session caching.
+     * Each SSL context needs a unique integer session id. We assign an id even
+     * if session caching is turned off.
      */
 
-    context->sessioncacheid = SessionCacheIdGetNext();
+    context->sessioncacheid = NsSessionIdGenerate();
 
     /*
      * Insert the context into the linked list. Instead of wasting time looking
      * for the end of the list, we'll insert it at the front.
      */
 
-    /* XXX should there be locking of firstSSLContext? */
-
+    /* XXX lock firstSSLContext before modifying. SSL Contexts can be created at any time */
     if (firstSSLContext != NULL) {
 	    /* There are already other contexts */
 	    context->next = firstSSLContext;
@@ -1235,7 +1642,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
 /*
  *----------------------------------------------------------------------
  *
- * ConfigLoadSSLContext --
+ * ConfigGetSSLContext --
  *
  *       Load values for a given SSL context from the configuration file.
  *
@@ -1249,113 +1656,183 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
  */
 
 static Ns_OpenSSLContext *
-ConfigLoadSSLContext (char *server, char *module, char *name, char *desc, char *type)
+ConfigGetSSLContext (char *server, char *module, char *name, char *desc)
 {
     Ns_OpenSSLContext *context = NULL;
-    char *configPath = Ns_ConfigGetPath(server, module, name, NULL);
+    char *path = NULL;
+    char *role = NULL;
     char *moduleDir = NULL;
-    int conntype = -1;
+    char *certFile = NULL;
+    char *keyFile = NULL;
+    char *protocols = NULL;
+    char *cipherSuite = NULL;
+    char *caFile = NULL;
+    char *caDir = NULL;
+    int   peerVerify;
+    int   peerVerifyDepth;
+    int   sessionCache;
+    int   sessionCacheSize;
+    int   sessionCacheTimeout;
+    int   trace;
     Ns_DString ds;
 
-    context = Ns_OpenSSLContextCreate (server, module, name, desc, type);
-
-    if (context == NULL)
-	    return NULL;
+    path = Ns_ConfigGetPath(server, module, name, NULL);
 
     /*
-     * Create a default directory path in which to find certs, keys and such.
+     * An SSL instance must be defined as either "server" or "client"
      */
 
-    Ns_DStringInit (&ds);
-    Ns_HomePath (&ds, "servers", server, "modules", module, NULL);
-    moduleDir = Ns_DStringExport (&ds);
-    Ns_DStringFree (&ds);
+    role = Ns_ConfigGetValue(path, "role");
 
-    /*
-     * See if a module directory path is set in the config file; if not, then
-     * use default
-     */
+    context = Ns_OpenSSLContextCreate(server, module, name, desc, role);
 
-    context->moduledir = ConfigGetPathDefault (configPath, "moduledir", 
-		    NULL, moduleDir);
-
-    /*
-     * SSL clients don't require certificates, but SSL servers do.
-     */
-
-    if (context->conntype == CONNTYPE_SOCKCLIENT) {
-	    context->certfile = ConfigGetPathValue (configPath, 
-			    "certfile", moduleDir);
-	    context->keyfile = ConfigGetPathValue (configPath, 
-			    "keyfile",  moduleDir);
-    } else {
-	    context->certfile = ConfigGetPathValueRequired (configPath, 
-			    "certfile", moduleDir);
-	    context->keyfile = ConfigGetPathValueRequired (configPath, 
-			    "keyfile",  moduleDir);
+    if (context == NULL) {
+        Ns_Log(Error, MODULE, ": SSL context came back NULL in ConfigGetSSLContext");
+	return NULL;
     }
 
     /*
-     * Protocols and CipherSuite will default
+     * The module directory is normally where the certificates are stored. If
+     * not specified, create a default directory path to find the certs and
+     * keys.
      */
 
-    context->protocols = Ns_ConfigGetValue (path, "protocols");
-    if (context->protocols == NULL)
-        context->protocols = DEFAULT_PROTOCOLS;
-
-    context->ciphersuite = Ns_ConfigGetValue (path, "ciphersuite");
-    if (context->ciphersuite == NULL)
-    	context->ciphersuite = DEFAULT_CIPHERSUITE;
-
+    moduleDir = Ns_ConfigGetValue(path, "moduledir");
+    /* XXX handle the DEFAULT case in the Set function */
+    if (moduleDir == NULL) {
+        Ns_DStringInit (&ds);
+        Ns_HomePath (&ds, "servers", server, "modules", module, NULL);
+        moduledir = Ns_DStringExport (&ds);
+        Ns_DStringFree (&ds);
+    }
+    Ns_OpenSSLContextModuleDirSet(server, module, context, moduleDir);
 
     /*
-     * The CA file/dir isn't really necessary unless you actually intend use
-     * cert verification.
+     * SSL clients don't require certificates, but SSL servers do. If certfile
+     * or keyfile are NULL, are not found, are not accessible, we'll fail
+     * later when we try to instantiate the SSL Context. Probably ought to do
+     * the checks here and fail here.
      */
 
-    context->cafile = ConfigGetPathValue (configPath, 
-		    "cafile",  moduleDir, DEFAULT_CAFILE);
+    /* XXX need to prepend path if not absolute */
+    /* XXX use AOLserver core Ns_Path* functions */
+    /* XXX handle the DEFAULT case in the Set function */
+    certFile = Ns_ConfigGetValue(path, "certfile");
+    Ns_OpenSSLContextCertFileSet(server, module, context, certFile);
 
-    context->cadir = ConfigGetPathDefault (configPath, 
-		    "cadir",  moduleDir, DEFAULT_CADIR);
+    /* XXX handle the DEFAULT case in the Set function */
+    keyFile  = Ns_ConfigGetValue(path, "keyfile");
+    Ns_OpenSSLContextKeyFileSet(server, module, context, keyFile);
 
-    context->crlfile = NULL;
+    /*
+     * The default protocols and ciphersuites are good for general use.
+     */
 
-    context->crldir  = NULL;
+    protocols = Ns_ConfigGetValue(path, "protocols");
+    /* XXX handle the DEFAULT case in the Set function */
+    if (protocols == NULL)
+        protocols = DEFAULT_PROTOCOLS;
 
-    if (!Ns_ConfigGetBool(configPath, "peerverifyon", &context->peerverifyon)) {
-        context->peerverifyon = DEFAULT_PEERVERIFYON;
-    }
+    Ns_OpenSSLContextProtocolsSet(server, module, context, protocols);
 
-    if (Ns_ConfigGetInt(path, "peerverifydepth", &context->peerverifydepth) == NS_FALSE) {
-        context->peerverifydepth = DEFAULT_PEERVERIFYDEPTH;
-    }
+    /* XXX handle the DEFAULT case in the Set function */
+    cipherSuite = Ns_ConfigGetValue(path, "ciphersuite");
+    if (cipherSuite == NULL)
+    	cipherSuite = SSL_DEFAULT_CIPHER_LIST;
+    Ns_OpenSSLContextCipherSuiteSet(server, module, context, cipherSuite);
 
-    context->peerabortoninvalid = 0;
+    /*
+     * The CA file/dir isn't necessary unless you actually use cert
+     * verification. The CA file is simply a bunch of PEM-format CA
+     * certificates concatenated together.
+     */
 
-    context->peerabortproc = NULL;
+    caFile = Ns_ConfigGetValue(path, "cafile");
+    /* XXX need to build the path as it's now virtual server specific */
+    /* XXX handle the DEFAULT case in the Set function */
+    if (caFile == NULL)
+        caFile == DEFAULT_CAFILE;
+    Ns_OpenSSLContextCAFileSet(server, module, context, caFile);
 
-    if (!Ns_ConfigGetBool(configPath, "sessioncacheon", &context->sessioncacheon)) {
-        context->sessioncacheon = DEFAULT_SESSIONCACHEON;
-    }
+    caDir = Ns_ConfigGetPathValue(path, "cadir");
+    /* XXX need to build the path as it's now virtual server specific */
+    /* XXX handle the DEFAULT case in the Set function */
+    if (caDir == NULL)
+        caDir == DEFAULT_CADIR;
+    Ns_OpenSSLContextCADirSet(server, module, context, caDir);
 
-    context->sessioncacheid = NsSessionIdGenerate();
+    /*
+     * CRLs
+     */
 
-    if (Ns_ConfigGetInt(path, "sessioncachesize", &context->sessionscachesize) == NS_FALSE) {
-        context->sessioncachesize = DEFAULT_SESSIONCACHESIZE;
-    }
+#if 0
+    /* XXX currently unsupported */
+    crlFile = NULL;
+    crlDir  = NULL;
+#endif
 
-    if (Ns_ConfigGetInt(path, "sessioncachetimeout", context->sessioncachetimeout) == NS_FALSE) {
-        context->sessioncachetimeout = DEFAULT_SESSIONCACHETIMEOUT;
-    }
+    /*
+     * Peer verification will cause the server to request a client certificate.
+     * It defaults to being off. Only turn it on if you want to verify client
+     * certificates.
+     */
 
-    if (!Ns_ConfigGetBool(configPath, "trace", &context->trace)) {
-        context->trace = DEFAULT_TRACE;
-    }
+    /* XXX handle the DEFAULT case in the Set function */
+    if (! Ns_ConfigGetBool(path, "peerverify", &peerVerify))
+        peerVerify = DEFAULT_PEERVERIFYON;
+    Ns_OpenSSLContextPeerVerifySet(server, module, context, peerVerify);
 
-    context->sslctx = NULL;
+    /*
+     * A certificate may be at the bottom of a chain. The verify depth
+     * determines how many levels from the root cert you're willing to allow.
+     */
 
-    Ns_Free (defaultDir);
+    /* XXX handle the DEFAULT case in the Set function */
+    if (Ns_ConfigGetInt(path, "peerverifydepth", &peerVerifyDepth) == NS_FALSE)
+        peerVerifyDepth = DEFAULT_PEERVERIFYDEPTH;
+    Ns_OpenSSLContextPeerVerifyDepthSet(server, module, context, peerVerifyDepth);
+
+    /*
+     * If set to 1, the connection will be aborted. You can define a Tcl proc to run in that case.
+     */
+
+#if 0
+    /* XXX currently unsupported */
+    peerAbortonInvalid = 0;
+    peerAbortProc = NULL;
+#endif
+
+    /*
+     * Session caching defaults to on, and should always be on if you
+     * have web browsers connecting. Some versions of MSIE and Netscape will
+     * fail if you don't have session caching on. You can turn it off if you're
+     * doing your own special aolserver-to-aolserver connections.
+     */
+
+    /* XXX handle the DEFAULT case in the Set function */
+    if (! Ns_ConfigGetBool(path, "sessioncache", &sessionCache))
+        sessionCache = DEFAULT_SESSIONCACHE;
+    Ns_OpenSSLContextSessionCacheSet(server, module, context, sessionCache);
+
+    /* XXX handle the DEFAULT case in the Set function */
+    if (Ns_ConfigGetInt(path, "sessioncachesize", &sessionsCacheSize) == NS_FALSE)
+        sessionCacheSize = DEFAULT_SESSIONCACHESIZE;
+    Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize);
+
+    /* XXX handle the DEFAULT case in the Set function */
+    if (Ns_ConfigGetInt(path, "sessioncachetimeout", sessionCacheTimeout) == NS_FALSE)
+        sessionCacheTimeout = DEFAULT_SESSIONCACHETIMEOUT;
+    Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTimeout);
+
+    /*
+     * Trace defaults to off. Will trace SSL handshaking in the log file. You
+     * really don't want this turned on in a production server.
+     */
+
+    /* XXX handle the DEFAULT case in the Set function */
+    if (! Ns_ConfigGetBool(path, "trace", &trace))
+        trace = DEFAULT_TRACE;
+    Ns_OpenSSLContextTraceSet(server, module, context, trace);
 
     return context;
 }

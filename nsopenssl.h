@@ -78,12 +78,6 @@
  * endif
  */
 
-#ifdef NS_MAJOR_VERSION
-#define AOLSERVER_4
-#else
-#define AOLSERVER_3
-#endif
-
 #define MODULE                   "nsopenssl"
 
 /*
@@ -153,42 +147,42 @@ typedef struct Ns_OpenSSLContext {
 } Ns_OpenSSLContext;
 
 typedef struct NsOpenSSLDriver {
-    Ns_Mutex           lock;
-    int                refcnt;
-    char              *server;      
-    char              *module;      
-    struct NsOpenSSLDriver   *next;       
-    struct Ns_OpenSSLConn    *firstFree;  
-    struct Ns_OpenSSLContext *context; 
-    struct Ns_Driver         *driver;
-    char              *configPath;
-    char              *dir;
-    char              *location;
-    char              *address;	
-    char              *bindaddr;
-    char              *randomFile;
-    SOCKET             lsock;
-    int                port;
-    int                bufsize;
-    int                timeout;
+    Ns_Mutex                  lock;
+    int                       refcnt;
+    char                     *server;      
+    char                     *module;      
+    struct NsOpenSSLDriver   *next;          /* pointer to next driver */
+    struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
+    struct Ns_OpenSSLContext *context;       /* SSL context assoc with driver */ 
+    struct Ns_Driver         *driver;        /* Huh? */
+    char                     *configPath;
+    char                     *dir;
+    char                     *location;
+    char                     *address;	
+    char                     *bindaddr;
+    char                     *randomFile;    /* XXX should be global */
+    SOCKET                    lsock;
+    int                       port;
+    int                       bufsize;
+    int                       timeout;
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
-    Ns_Mutex         lock;
-    int              refcnt;
-    char            *server;
-    char            *module;
-    struct Ns_OpenSSLConn  *next;
-    struct NsOpenSSLDriver *driver;
-    int              conntype;
-    int              peerport;
-    char             peer[16];
-    SOCKET           sock;
-    SOCKET           wsock;
-    SSL_CTX         *context;
-    SSL             *ssl;
-    BIO             *io;
-    X509            *peercert;
+    Ns_Mutex                lock;
+    int                     refcnt;
+    char                   *server;
+    char                   *module;
+    struct Ns_OpenSSLConn  *next;      /* next conn */
+    struct NsOpenSSLDriver *driver;    /* the driver this conn belongs to */
+    int                     conntype;  /* server, sockserver or sockclient */
+    int                     peerport;  /* port number of remote side */
+    char                    peer[16];  /* peer's name */
+    SOCKET                  sock;
+    SOCKET                  wsock;
+    SSL_CTX                *context;   /* XXX SSL context associated with conn */
+    SSL                    *ssl;       /* initialized SSL instance itself */
+    BIO                    *io;        /* block i/o */
+    X509                   *peercert;  /* peer's cert in PEM format */
 } Ns_OpenSSLConn;
 
 /*
@@ -237,14 +231,13 @@ typedef struct SSLTclCmd {
 #define CONNTYPE_SOCKSERVER            1
 #define CONNTYPE_SOCKCLIENT            2
 
-#define DEFAULT_CIPHERSUITE            SSL_DEFAULT_CIPHER_LIST
 #define DEFAULT_PROTOCOLS              "All"
 #define DEFAULT_CERTFILE               "certificate.pem"
 #define DEFAULT_KEYFILE                "key.pem"
 #define DEFAULT_CAFILE                 "ca.pem"
 #define DEFAULT_CADIR                  "ca"
 #define DEFAULT_PEERVERIFYON           NS_FALSE
-#define DEFAULT_PEERVERIFYDEPTH        10
+#define DEFAULT_PEERVERIFYDEPTH        6
 #define DEFAULT_SESSIONCACHEON         NS_TRUE
 #define DEFAULT_SESSIONCACHESIZE       128
 #define DEFAULT_SESSIONTIMEOUT         300
@@ -257,7 +250,7 @@ typedef struct SSLTclCmd {
 #define CONFIG_RANDOMFILE              "RandomFile"
 
 /*
- * If PRNG fails to seed, increase this number in the
+ * If PRNG fails to seed, increase value of SeedBytes in the
  * nsd.tcl file.
  */
 
