@@ -255,7 +255,7 @@ AddCmds(Tcl_Interp *interp, void *arg)
  */
 
 int
-NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj **objv)
+NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 {
     // XXX Server *thisServer      = (Server *) arg;
     NsOpenSSLConn *sslconn  = NULL;
@@ -690,7 +690,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
 
 extern int
 NsTclOpenSSLSockListenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
-        Tcl_Obj **objv)
+        Tcl_Obj *CONST objv[])
 {
     Server *thisServer = (Server *) arg;
     SOCKET  socket     = INVALID_SOCKET;
@@ -745,7 +745,7 @@ NsTclOpenSSLSockListenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
 
 extern int
 NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
-        Tcl_Obj **objv)
+        Tcl_Obj *CONST objv[])
 {
     Server           *thisServer = (Server *) arg;
     NsOpenSSLConn    *sslconn    = NULL;
@@ -834,7 +834,7 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
 /* XXX restructure this function to not use the 'done' label */
 
 extern int
-NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj **objv)
+NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 {
     Server           *thisServer = (Server *) arg;
     NsOpenSSLContext *sslcontext = NULL;
@@ -929,7 +929,7 @@ done:
 
 extern int
 NsTclOpenSSLSockNReadCmd(ClientData arg, Tcl_Interp *interp, 
-        int argc, char **argv)
+        int argc, CONST char **argv)
 { 
     Server      *thisServer = (Server *) arg;
     Tcl_Channel  chan       = NULL;
@@ -986,7 +986,7 @@ done:
 /* XXX do I need this wrapper? Can't I use ns_sockcheck directly? */
 
 extern int
-NsTclOpenSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc, char **argv)
+NsTclOpenSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc, CONST char **argv)
 {
     Server *thisServer = (Server *) arg;
     SOCKET  socket     = INVALID_SOCKET;
@@ -1041,7 +1041,7 @@ done:
 
 extern int
 NsTclOpenSSLSockSelectCmd(ClientData arg, Tcl_Interp *interp, 
-        int argc, char **argv) 
+        int argc, CONST char *argv[]) 
 {
     Server         *thisServer = (Server *) arg;
     /* XXX not initialized */
@@ -1217,7 +1217,7 @@ done:
 
 extern int
 NsTclOpenSSLSockCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
-        Tcl_Obj **objv)
+        Tcl_Obj *CONST objv[])
 {
     Server       *thisServer = (Server *) arg;
     SockCallback *cbPtr      = NULL;
