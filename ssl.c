@@ -251,7 +251,7 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
      */
 
     if (sslconn->ssl != NULL) {
-	SSL_set_shutdown(sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
+	// SSL_set_shutdown(sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
 	for (i = rc = 0; rc == 0 && i < 4; i++) {
 	    rc = SSL_shutdown(sslconn->ssl);
 	}
@@ -631,97 +631,114 @@ done:
 extern int
 NsOpenSSLConnOp(SSL *ssl, void *buffer, int bytes, int type)
 {
-    int            rc      = 0;
-    int            total   = 0;
     NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
     SOCKET         socket  = SSL_get_fd(ssl);
-
+    int n, err;
+    char *dir;
+    
     /*
-     * OpenSSL man page for SSL_read() states that if SSL_read() generates an
-     * SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE, you *must* call SSL_read()
-     * again with the same arguments. This means we don't do any buffer
-     * management ourselves, so we don't use an offset into the buffer for
-     * multiple calls to SSL_read().
+     * Perhaps we should enable SSL_MODE_AUTO_RETRY to avoid having to
+     * handle retries in the case of SSL re-negotiation.
      */
 
-    do {
-        switch(type) {
-            case NSOPENSSL_RECV:
-                rc = SSL_read(ssl, (char *) buffer, bytes);
-                if (rc > 0) {
-                    total += rc;
-                }
-                if (rc == 0 && SSL_pending(ssl) == 0) {
-                    return total;
-                }
-                break;
-            case NSOPENSSL_SEND:
-                rc = SSL_write(ssl, (char *) buffer, bytes);
-                if (rc > 0) {
-                    total += rc;
-                }
-                if (total >= bytes) {
-                    return total;
-                }
-                break;
-            default:
-                Ns_Log(Error, "%s (%s): Invalid command", MODULE, sslconn->server); 
-                break;
-        }
+retry:
+    switch (type) {
+        case NSOPENSSL_RECV:
+            dir = "read";
+            n = SSL_read(ssl, (char *) buffer, bytes);
+            break;
 
-        switch(SSL_get_error(ssl, rc)) {
-            case SSL_ERROR_NONE:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_NONE: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                break;
-            case SSL_ERROR_WANT_WRITE:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_WANT_WRITE: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                if (rc < 0 
-                    && ns_sockerrno == EWOULDBLOCK 
-                    && Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait) != NS_OK) 
-                {
-                    return -1;
-                }
-                break;
-            case SSL_ERROR_WANT_READ:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_WANT_READ: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                if (rc < 0 
-                        && ns_sockerrno == EWOULDBLOCK 
-                        && Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait) != NS_OK) 
-                {
-                    return -1;
-                }
-                break;
-            case SSL_ERROR_WANT_X509_LOOKUP:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_WANT_X509_LOOKUP: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                Ns_Log(Warning, "%s (%s): SSL wants X509 Lookup", MODULE, sslconn->server);
-                break;
-            case SSL_ERROR_SYSCALL:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_SYSCALL: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                Ns_Log(Warning, "%s (%s): SSL interrupted, perhaps by client", MODULE, sslconn->server);
-                return -1;
-                break;
-            case SSL_ERROR_SSL:
-                Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_SSL: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                if (type == NSOPENSSL_SEND) {
-                    Ns_Log(Error, "%s (%s): SSL error on writing data", MODULE, sslconn->server);
-                } else {
-                    Ns_Log(Error, "%s (%s): SSL error on reading data", MODULE, sslconn->server);
-                }
-                return -1;
-                break;
-            case SSL_ERROR_ZERO_RETURN:
-                //Ns_Log(Debug, "SSLOp(%d-%d): SSL_ERROR_ZERO_RETURN: bytes = %d; total = %d; rc = %d", socket, type, bytes, total, rc);
-                Ns_Log(Notice, "%s (%s): SSL socket gone; disconnected by client?", MODULE, sslconn->server);
-                return -1;
-                break;
-            default:
-                Ns_Log(Error, "%s (%s): Unknown SSL error code in ssl.c (%d)", MODULE, sslconn->server, rc);
-                return -1;
-                break;
-        }
-    } while (SSL_get_error(ssl, rc) != SSL_ERROR_NONE);
+        case NSOPENSSL_SEND:
+            /*
+             * Unless the SSL_MODE_ENABLE_PARTIAL_WRITE option is
+             * set via SSL_CTX_set_mode(), then SSL_write() returns
+             * successful only when the entire buffer is written.
+             */
 
-    return total;
+            dir = "write";
+            n = SSL_write(ssl, (char *) buffer, bytes);
+            break;
+
+        default:
+            Ns_Log(Error, "%s (%s): Invalid command '%d'",
+                    MODULE, sslconn->server, type); 
+            return -1;
+    }
+
+    switch (SSL_get_error(ssl, n)) {
+        case SSL_ERROR_NONE:
+            /* Success: n > 0 */
+            break;
+
+        case SSL_ERROR_ZERO_RETURN:
+            /* Transport close alert received. */
+            Ns_Log(Warning, "%s (%s): SSL %s: socket gone; disconnected by client?",
+                    MODULE, sslconn->server, dir);
+            n = -1;
+            break;
+
+        case SSL_ERROR_WANT_WRITE:
+            if (Ns_SockWait(sslconn->socket, NS_SOCK_WRITE, sslconn->sendwait)
+                    != NS_OK) {
+                n = -1;
+                break;
+            }
+            goto retry;
+
+        case SSL_ERROR_WANT_READ:
+            if (Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait)
+                    != NS_OK) {
+                n = -1;
+                break;
+            }
+            goto retry;
+
+        case SSL_ERROR_WANT_X509_LOOKUP:
+            Ns_Log(Warning, "%s (%s): SSL %s wants X509 Lookup; unsupported?",
+                    MODULE, sslconn->server, dir);
+            n = -1;
+            break;
+
+        case SSL_ERROR_SYSCALL:
+            err = ERR_get_error();
+            if (err) {
+                Ns_Log(Warning, "%s (%s): SSL %s interrupted: %s",
+                    MODULE, sslconn->server, dir, ERR_reason_error_string(err));
+            } else if (n == 0) {
+                Ns_Log(Warning, "%s (%s): SSL %s interrupted: unexpected eof",
+                    MODULE, sslconn->server, dir);
+            } else {
+                Ns_Log(Warning, "%s (%s): SSL %s interrupted: %s",
+                    MODULE, sslconn->server, dir, ns_sockstrerror(ns_sockerrno));
+            }
+            n = -1;
+            break;
+
+        case SSL_ERROR_SSL:
+            Ns_Log(Error, "%s (%s): SSL %s error: %s",
+                    MODULE, sslconn->server, dir,
+                    ERR_reason_error_string(ERR_get_error()));
+            n = -1;
+            break;
+
+        default:
+            Ns_Log(Error, "%s (%s): Unknown SSL %s error code in ssl.c (%d)",
+                    MODULE, sslconn->server, dir, n);
+            n = -1;
+            break;
+    }
+
+    /*
+     * On error, we mark the SSL conn as received shutdown so that later
+     * on, when we try to flush, we can detect that the conn has been
+     * shut down.
+     */
+
+    if (n < 0) {
+        SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
+    }
+
+    return n;
 }
 
 
@@ -744,19 +761,25 @@ NsOpenSSLConnOp(SSL *ssl, void *buffer, int bytes, int type)
 int
 NsOpenSSLConnFlush(NsOpenSSLConn *sslconn)
 {
-    return NS_OK;
+    SSL *ssl = sslconn->ssl;
+    BIO *bio;
 
-#if 0
-    if (sslconn->ssl != NULL) {
-        if (BIO_flush(SSL_get_wbio(sslconn->ssl)) < 1) {
+    if (ssl != NULL) {
+        if (SSL_get_shutdown(ssl) != 0) {
+            return NS_ERROR;
+        }
+        bio = SSL_get_wbio(ssl);
+        if (bio == NULL) {
+            return NS_ERROR;
+        }
+        if (BIO_flush(bio) < 1) {
             Ns_Log(Error, "%s (%s): BIO returned error on flushing buffer",
                     MODULE, sslconn->server);
+            return NS_ERROR;
         }
-        return NS_OK;
     }
 
-    return NS_ERROR;
-#endif
+    return NS_OK;
 }
 
 

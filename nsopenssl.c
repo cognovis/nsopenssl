@@ -1064,87 +1064,68 @@ DestroySSLDriver(NsOpenSSLDriver *ssldriver)
 static int
 OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 {
-    NsOpenSSLDriver *ssldriver = (NsOpenSSLDriver *) sock->driver->arg;
-    NsOpenSSLConn   *sslconn   = (NsOpenSSLConn *)   sock->arg;
-    int              n         = 0;
-    int              total     = 0;
+    NsOpenSSLDriver *driver = (NsOpenSSLDriver *) sock->driver->arg;
+    NsOpenSSLConn   *conn   = (NsOpenSSLConn *)   sock->arg;
+    int n = -1, total, op;
 
     switch (cmd) {
         case DriverRecv:
         case DriverSend:
+            if (conn == NULL) {
+                /* 
+                 * If first connection, wrap SSL around the socket.
+                 */
 
-            /* 
-             * If first connection, wrap SSL around the socket.
-             */
-
-            if (sslconn == NULL) {
-
-#if 0
-                if (setsockopt(sock->sock, IPPROTO_TCP, TCP_NODELAY, (void *) 1, sizeof(int)) == -1) {
-                    Ns_Log(Warning, "%s (%s): unable to turn off Nagle algorithm");
-                }
-#endif
-
-#if 0
-                /* XXX core driver socket handles this, no? */
-                /* XXX look at interaction issues - when driver sock dies, how do I handle it? */
-                n = sock->driver->recvwait;
-                if (n > sock->driver->sendwait) 
-                    n = sock->driver->sendwait;
-#endif
-
-                sslconn = NsOpenSSLConnCreate(sock->sock, ssldriver->sslcontext);
-                sslconn->refcnt++;
-                sslconn->peerport  = ssldriver->port;
-                sslconn->recvwait  = sock->driver->recvwait;
-                sslconn->sendwait  = sock->driver->sendwait;
-                sock->arg          = (void *) sslconn;
+                conn = NsOpenSSLConnCreate(sock->sock, driver->sslcontext);
+                conn->refcnt++;
+                conn->peerport  = driver->port;
+                conn->recvwait  = sock->driver->recvwait;
+                conn->sendwait  = sock->driver->sendwait;
+                sock->arg       = (void *) conn;
             }
 
             /* 
-             * Process each buffer one at a time 
+             * Process each buffer one at a time.
              */
 
+            op = (cmd == DriverSend) ? NSOPENSSL_SEND : NSOPENSSL_RECV;
             total = 0;
             do {
-                if (cmd == DriverSend) {
-                  //  n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
-                    n = NsOpenSSLConnOp(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len, NSOPENSSL_SEND);
-                } else {
-                  //  n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
-                    n = NsOpenSSLConnOp(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len, NSOPENSSL_RECV);
-                }
-                if (n < 0 && total > 0) {
-                    /* NB: Mask error if some bytes were read. */
-                    n = 0;
+                n = NsOpenSSLConnOp(conn->ssl, bufs->iov_base,
+                        (int) bufs->iov_len, op);
+                if (n > 0) {
+                    total += n;
                 }
                 ++bufs;
-                total += n;
             } while (n > 0 && --nbufs > 0);
-            n = total;
+            if (n > 0) {
+                n = total;
+            }
             break;
+
         case DriverKeep:
-            if (sslconn != NULL && NsOpenSSLConnFlush(sslconn) == NS_OK) {
+            if (conn != NULL && NsOpenSSLConnFlush(conn) == NS_OK) {
                 n = 0;
             } else {
                 n = -1;
             }
             break;
+
         case DriverClose:
-            if (sslconn != NULL) {
-                (void) NsOpenSSLConnFlush(sslconn);
-                NsOpenSSLConnDestroy(sslconn);
+            if (conn != NULL) {
+                (void) NsOpenSSLConnFlush(conn);
+                NsOpenSSLConnDestroy(conn);
                 sock->arg = NULL;
             }
             n = 0;
             break;
+
         default:
-            Ns_Log(Error, "%s (%s): Unsupported driver command encountered", 
-                    MODULE, ssldriver->server);
+            Ns_Log(Error, "%s (%s): Unsupported driver command '%d'", 
+                    MODULE, driver->server, cmd);
             n = -1;
             break;
     }
-
     return n;
 }
 
