@@ -112,7 +112,7 @@ static char *ConfigPathDefault (char *module, char *path, char *name,
  */
 
 extern NsOpenSSLDriver *
-#ifndef NS_MAJOR_VERSION
+#ifdef AOLSERVER_3
 NsOpenSSLCreateDriver (char *server, char *module, Ns_DrvProc * procs)
 #else
 NsOpenSSLCreateDriver (char *server, char *module)
@@ -174,7 +174,7 @@ NsOpenSSLCreateDriver (char *server, char *module)
 	sdPtr->bufsize = DEFAULT_SERVER_BUFFERSIZE;
     }
 
-#ifndef NS_MAJOR_VERSION
+#ifdef AOLSERVER_3
     sdPtr->driver = Ns_RegisterDriver (server, module, procs, sdPtr);
     if (sdPtr->driver == NULL) {
 	NsOpenSSLFreeDriver (sdPtr);

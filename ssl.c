@@ -165,7 +165,7 @@ NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr)
 	    SSL_free (ccPtr->ssl);
 	    ccPtr->ssl = NULL;
 	}
-#ifndef NS_MAJOR_VERSION
+#ifdef AOLSERVER_3
 	if (ccPtr->sock != INVALID_SOCKET) {
 	    ns_sockclose (ccPtr->sock);
 	    ccPtr->sock = INVALID_SOCKET;
@@ -220,7 +220,8 @@ NsOpenSSLRecv (Ns_OpenSSLConn * ccPtr, void *buffer, int toread)
 		ccPtr->module, ccPtr->type);
 	return NS_ERROR;
     }
-#ifndef NS_MAJOR_VERSION
+
+#ifdef AOLSERVER_3
     do {
 	rc = BIO_read (ccPtr->io, buffer, toread);
     } while (rc < 0 && BIO_should_retry (ccPtr->io));

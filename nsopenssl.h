@@ -51,6 +51,14 @@
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
+#ifdef NS_MAJOR_VERSION
+#define AOLSERVER_4
+#else
+#define AOLSERVER_3
+#endif
+
+
+
 #define DRIVER_NAME                   "nsopenssl"
 
 /*
@@ -85,20 +93,24 @@
 struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
-    struct NsOpenSSLDriver *nextPtr;
-    struct Ns_OpenSSLConn *firstFreePtr;
-    Ns_Driver driver;
-    Ns_Mutex lock;
-    int      refcnt;
-
+    struct NsOpenSSLDriver *nextPtr;/* Next in driver list */
+    Ns_Driver driver;               /* Ns_RegisterDriver handle */
     char    *server;		/* Server name */
-    char    *module;		/* Module name */
-    char    *configPath;	/* E.g. ns/server/s1/module/nsopenssl */
-    char    *dir;		/* Module directory (on disk) */
+    char    *module;		/* Module config name */
     char    *location;		/* E.g. https://example.com:8443 */
     char    *address;		/* Advertised address */
-    char    *bindaddr;		/* Bind address - might be 0.0.0.0 */
     int      port;		/* Bind port */
+    char    *bindaddr;		/* Bind address - might be 0.0.0.0 */
+#if 0
+    char backlog;               /* listen() backlog */
+#endif
+    SOCKET   lsock;             /* Listening socket */
+    struct Ns_OpenSSLConn *firstFreePtr; /* First free conn (per-driver) */
+
+    Ns_Mutex lock;
+    int      refcnt;
+    char    *configPath;	/* E.g. ns/server/s1/module/nsopenssl */
+    char    *dir;		/* Module directory (on disk) */
     int      bufsize;
     int      timeout;
 
@@ -106,11 +118,13 @@ typedef struct NsOpenSSLDriver {
     SSL_CTX *sockClientContext;
     SSL_CTX *sockServerContext;
     
-    SOCKET   lsock;
     char    *randomFile;	/* Used to seed PRNG */
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
+    struct Ns_OpenSSLConn *nextPtr; /* Next conn in the list */
+    struct NsOpenSSLDriver *sdPtr;  /* Pointer to the driver */
+
 	/* These are NOT to be freed by NsOpenSSLDestroyConn */
     char    *server;		/* Server name */
     char    *module;		/* Module name (e.g. 'nsopenssl') */
@@ -140,8 +154,6 @@ typedef struct Ns_OpenSSLConn {
 
     /* XXX These two used to be ifdef'd out of AOLserver 4.x compiles
        need to reevaluate. */
-    struct Ns_OpenSSLConn *nextPtr;
-    struct NsOpenSSLDriver *sdPtr;
 
 } Ns_OpenSSLConn;
 
@@ -161,7 +173,6 @@ typedef struct SSLTclCmd {
 
 #define DEFAULT_PORT                          443
 #define DEFAULT_PROTOCOL                      "https"
-#define DEFAULT_NAME                          "nsopenssl"
 
 /*
  * Used to determine whether NSD is handling the

@@ -48,30 +48,21 @@ static const char *RCSID =
 
 #include "nsopenssl.h"
 
-/*
- * Global symbols
- */
-
-NS_EXPORT int Ns_ModuleVersion = 1;
-
-NS_EXPORT int Ns_ModuleInit (char *server, char *module);
-
-/*
- * Private symbols
- */
+#ifdef AOLSERVER_4
 
 /*
- * Common between AOLserver 3.x and 4.x
+ * AOLserver 4.x Comm API
  */
 
-/* Linked list of all configured nsopenssl instances */
-static NsOpenSSLDriver *firstSSLDriverPtr;
+static Ns_DriverProc OpenSSLProc;
 
-#ifndef NS_MAJOR_VERSION
+#else
 
 /*
  * AOLserver 3.x Comm API
  */
+
+static NsOpenSSLDriver *firstSSLDriverPtr;
 
 static Ns_ThreadProc SockThread;
 static void SockFreeConn (NsOpenSSLDriver * sdPtr, Ns_OpenSSLConn * scPtr);
@@ -112,25 +103,20 @@ static Ns_DrvProc sockProcs[] = {
     {0, NULL}
 };
 
-#else
-
-/*
- * AOLserver 4.x Comm API
- */
-
-static Ns_DriverProc OpenSSLProc;
-
 #endif
+
+NS_EXPORT int Ns_ModuleVersion = 1;
+
 
 /*
  *----------------------------------------------------------------------
  *
  * Ns_ModuleInit --
  *
- *     Sock module init routine.
+ *     nsopenssl module initialization.
  *
  * Results:
- *     NS_OK if initialized ok, NS_ERROR otherwise.
+ *     NS_OK or NS_ERROR
  *
  * Side effects:
  *     Calls Ns_RegisterLocation as specified by this instance
@@ -144,28 +130,45 @@ Ns_ModuleInit (char *server, char *module)
 {
     NsOpenSSLDriver *sdPtr;
 
+    /*
+     * Create nsopenssl Tcl API commands
+     */
+
     if (Ns_TclInitInterps (server, NsOpenSSLCreateCmds, NULL)
 	!= NS_OK) {
 	return NS_ERROR;
     }
-#ifndef NS_MAJOR_VERSION
-    sdPtr = NsOpenSSLCreateDriver (server, module, sockProcs);
-#else
-    sdPtr = NsOpenSSLCreateDriver (server, module);
-#endif
 
-    if (sdPtr == NULL) {
+#ifdef AOLSERVER_4
+
+    /*
+     * Create and register the driver
+     */
+
+    if ((sdPtr = NsOpenSSLCreateDriver (server, module)) == NULL) {
 	return NS_ERROR;
     }
-#ifndef NS_MAJOR_VERSION
+
+    return Ns_DriverInit (server, module, DRIVER_NAME, OpenSSLProc, sdPtr,
+			  NS_DRIVER_SSL);
+
+#else /* AOLserver_3 */
+
+    /*
+     * Create and register the driver
+     */
+
+    if ((sdPtr = NsOpenSSLCreateDriver (server, module, sockProcs)) == NULL) {
+	return NS_ERROR;
+    }
+
     sdPtr->nextPtr = firstSSLDriverPtr;
     firstSSLDriverPtr = sdPtr;
 
     return NS_OK;
-#else
-    return Ns_DriverInit (server, module, DEFAULT_NAME, OpenSSLProc, sdPtr,
-			  NS_DRIVER_SSL);
+
 #endif
+
 }
 
 /*
@@ -186,13 +189,13 @@ Ns_ModuleInit (char *server, char *module)
 extern char *
 NsOpenSSLGetModuleName (void)
 {
-#ifndef NS_MAJOR_VERSION
+    return DRIVER_NAME;
+
+#if 0 /* XXX revisit */
     NsOpenSSLDriver *sdPtr;
 
     sdPtr = firstSSLDriverPtr;
     return sdPtr->module;
-#else
-    return "nsopenssl";
 #endif
 }
 
@@ -249,7 +252,9 @@ NsOpenSSLGetSockClientSSLContext (void)
     return sdPtr->sockClientContext;
 }
 
-#ifndef NS_MAJOR_VERSION
+
+#ifdef AOLSERVER_3
+
 
 /*
  *----------------------------------------------------------------------
@@ -496,14 +501,14 @@ static void
 SockStop (void *arg)
 {
     if (sockThread != NULL) {
-	Ns_Log (Notice, DEFAULT_NAME ":  exiting: triggering shutdown");
+	Ns_Log (Notice, DRIVER_NAME ":  exiting: triggering shutdown");
 	if (send (trigPipe[1], "", 1, 0) != 1) {
 	    Ns_Fatal ("trigger send() failed: %s",
 		      ns_sockstrerror (ns_sockerrno));
 	}
 	Ns_ThreadJoin (&sockThread, NULL);
 	sockThread = NULL;
-	Ns_Log (Notice, DEFAULT_NAME ":  exiting: shutdown complete");
+	Ns_Log (Notice, DRIVER_NAME ":  exiting: shutdown complete");
     }
 }
 
@@ -812,7 +817,8 @@ SockInit (void *arg)
     }
 }
 
-#else /* use the new comm model in 4.x */
+#else /* AOLSERVER_4 */
+
 
 /*            
  *----------------------------------------------------------------------
