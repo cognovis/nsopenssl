@@ -1049,7 +1049,7 @@ NsTclSSLSockCallbackCmd (ClientData dummy, Tcl_Interp * interp, int argc,
 			 (int *) &sock) != TCL_OK) {
 	return TCL_ERROR;
     }
-    sock = ns_sockdup (sock);
+    sock = dup(sock);
     if (sock == INVALID_SOCKET) {
 	Tcl_AppendResult (interp, "dup failed: ", SockError (interp), NULL);
 	return TCL_ERROR;
@@ -1342,7 +1342,7 @@ CreateTclChannel (Ns_OpenSSLConn * ccPtr, Tcl_Interp * interp)
     Tcl_DStringAppendElement (&ds, Tcl_GetChannelName (chan));
 
     /* channel for writing */
-    ccPtr->wsock = ns_sockdup (ccPtr->sock);
+    ccPtr->wsock = dup(ccPtr->sock);
 
     sprintf (channelName, "openssl%d", ccPtr->wsock);
 
@@ -1714,7 +1714,7 @@ EnterSock (Tcl_Interp * interp, SOCKET sock)
 static int
 EnterDup (Tcl_Interp * interp, SOCKET sock)
 {
-    sock = ns_sockdup (sock);
+    sock = dup(sock);
     if (sock == INVALID_SOCKET) {
 	Tcl_AppendResult (interp, "could not dup socket: ",
 			  ns_sockstrerror (ns_sockerrno), NULL);

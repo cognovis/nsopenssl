@@ -1,5 +1,8 @@
 2002-11-21  Scott Goodwin  <scott@scottg.net>
 
+	* tclcmds.c: ns_sockdup has gone away in AOLserver 4.x. Changed
+	all ns_sockdup calls to plain dup for both 3.x and 4.x compiles.
+
 	* Makefile: Add a definition for $(CP). AOLserver 4.x uses the
 	install program instead of CP like AOLserver 3.x. Need to update
 	nsopenssl to compile using the appropriate method for 3.x and 4.x.
