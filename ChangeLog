@@ -1,3 +1,9 @@
+2001-08-21  Scott S. Goodwin  <scott@scottg.net>
+
+	* https.tcl: fixed a bug that was fixed once before but apparently
+	I got my files mixed up. rqset wasn't being passed from
+	ns_httpsget to ns_httpsopen.
+
 2001-08-20  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: changed ns_httpsopen such that when it's passed a url

@@ -129,10 +129,12 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 
 	    # XXX should check to see if req'd Accept and User-Agent headers are there */
 
+            ns_log notice "*** RQSET is being sent..."
 	    for {set i 0} {$i < [ns_set size $rqset]} {incr i} {
 		set key [ns_set key $rqset $i]
 		set val [ns_set value $rqset $i]
 		_ns_https_puts $timeout $wfd "$key: $val\r"
+                ns_log notice "*** RQSET: $key: $value"
 	    }
 	} else {
 	    #
@@ -140,6 +142,7 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 	    # required headers.
 	    #
 
+            ns_log notice "*** RQSET is NOT being sent..."
 	    _ns_https_puts $timeout $wfd "Accept: */*\r"
 	    _ns_https_puts $timeout $wfd \
 		    "User-Agent: [ns_info name]-Tcl/[ns_info version]\r"
@@ -174,11 +177,8 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 	# the server. Then read headers into the set.
 	#
 	
-#	set rpset [ns_set new [gets $rfd]]
 	set rpset [ns_set new [_ns_https_gets $timeout $rfd]]
 	while 1 {
-#	    set line [gets $rfd]
-#	    set line [string trimright $line]
 	    set line [_ns_https_gets $timeout $rfd]
 	    if ![string length $line] {
 		break
@@ -229,7 +229,7 @@ proc ns_httpsget {url {timeout 30} {depth 0} {rqset ""} {module ""}} {
     # Perform the actual request.
     #
     
-    set https [ns_httpsopen GET $url "" $timeout $module]
+    set https [ns_httpsopen GET $url $rqset $timeout "" $module]
     set rfd [lindex $https 0]
     close [lindex $https 1]
     set headers [lindex $https 2]
@@ -244,8 +244,7 @@ proc ns_httpsget {url {timeout 30} {depth 0} {rqset ""} {module ""}} {
 	if {$location != ""} {
 	    ns_set free $headers
 	    close $rfd
-	    # XXX have to put check for https:// here...
-	    # XXX maybe I need to merge http.tcl and https.tcl???
+	    # XXX should put check for https:// here...
 	    if {[string first https:// $location] != 0} {
 		set url2 [split $url /]
 		set hp [split [lindex $url2 2] :]
