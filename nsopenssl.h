@@ -35,6 +35,9 @@
 
 /* XXX remove from production */
 #define NSOPENSSL_DEBUG
+#define where() __FUNCTION__, __FILE__, __LINE__
+extern void DEBUG(char *func, char *file, int line);
+
 
 /* Required for Tcl channels to work */
 #ifndef USE_TCL8X

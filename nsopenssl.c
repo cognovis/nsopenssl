@@ -46,15 +46,9 @@ static const char *RCSID =
 #include "nsopenssl.h"
 
 /* XXX merge these into the Ns_OpenSSLContext* equivalents ... */
-static int SetProtocols (Ns_OpenSSLContext *context);
-static int SetCipherSuite (Ns_OpenSSLContext *context);
-static int LoadCertificate (char *module, SSL_CTX *context, char *certFile);
-static int LoadKey (char *module, SSL_CTX *context, char *keyFile);
-static int CheckKey (char *module, SSL_CTX *context);
-static int LoadCACerts (char *module, SSL_CTX *context, char *caFile, char *caDir);
 static int InitLocation (NsOpenSSLDriver *driver);
-static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static char *GetModuleDir (char *server, char *module);
+static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int SessionCacheIdGetNext (void);
 
 /*
@@ -92,6 +86,8 @@ typedef struct OpenSSLStructs {
     NsOpenSSLDriver    *firstSSLDriverPtr  = NULL;
 } OpenSSLStructs;
 
+#define where() __FUNCTION__, __FILE__, __LINE__
+
 NS_EXPORT int Ns_ModuleVersion = 1;
 
 
@@ -115,8 +111,23 @@ NS_EXPORT int Ns_ModuleVersion = 1;
 NS_EXPORT int
 Ns_ModuleInit (char *server, char *module)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
+    DEBUG(where());
     NsOpenSSLModuleInit(server, module);
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DEBUG --
+ *
+ *     XXX Temporary debug logging function
+ *
+ *----------------------------------------------------------------------
+ */
+void
+DEBUG(char *func, char *file, int line)
+{
+    Ns_Log(Debug, "%s, %s (%d)", func, file, line);
 }
 
 /*
@@ -135,9 +146,9 @@ Ns_ModuleInit (char *server, char *module)
  */
 
 int
-NsOpenSSLDriverInit (server, module, driver)
+NsOpenSSLDriverInit (char *server, char *module, NsOpenSSLDriver *driver)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
+    DEBUG(where());
 
     /*
      * Maintain the drivers in a single linked-list. You can find out what
@@ -179,13 +190,10 @@ NsOpenSSLDriverInit (server, module, driver)
  *----------------------------------------------------------------------
  */
 
-static NsOpenSSLDriver *
+NsOpenSSLDriver *
 NsOpenSSLDriverCreate (char *server, char *module)
 {
     NsOpenSSLDriver *driver = NULL;
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
-
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
 
     driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof *driver);
 
@@ -228,17 +236,13 @@ NsOpenSSLDriverCreate (char *server, char *module)
  *----------------------------------------------------------------------
  */
 
-static void
+void
 NsOpenSSLDriverFree (NsOpenSSLDriver *driver)
 {
     Ns_OpenSSLConn *conn;
 
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     if (driver == NULL)
 	    return;
-
-    Ns_Log (Debug, "%s: freeing(%p)",
-	    driver == NULL ? MODULE : driver->module, driver);
 
     /* 
      * Free all of the conn structures associated with this driver, if any.
@@ -321,9 +325,6 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
     Ns_OpenSSLConn *conn;
     SOCKET sock;
 
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter");
-
     if (timeout < 0) {
 	sock = Ns_SockConnect (host, port);
     } else {
@@ -347,8 +348,6 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
 	Ns_SockSetNonBlocking (conn->sock);
 
     SSL_set_app_data (conn->ssl, conn);
-
-    Ns_Log (Debug, "%s: NsOpenSSLSockConnect -- leave", MODULE);
 
     return conn;
 }
@@ -378,7 +377,6 @@ Ns_OpenSSLSockAccept (char *name, SOCKET sock)
 {
     Ns_OpenSSLConn *conn = NULL;
 
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     if (sock == INVALID_SOCKET)
         return NULL;
 
@@ -417,10 +415,9 @@ Ns_OpenSSLSockAccept (char *name, SOCKET sock)
  *----------------------------------------------------------------------
  */
 
-extern SOCKET
+SOCKET
 Ns_OpenSSLSockListen (char *name, char *addr, int port)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     return Ns_SockListen (addr, port);
 }
 
@@ -458,7 +455,6 @@ Ns_OpenSSLSockListen (char *name, char *addr, int port)
 int
 Ns_OpenSSLSockCallback (char *name, SOCKET sock, Ns_SockProc *proc, void *arg, int when)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
 	/* XXX need to handle SSL wrapping here somehow... */
 	return Ns_SockCallback (sock, proc, arg, when);
 }
@@ -494,11 +490,10 @@ Ns_OpenSSLSockCallback (char *name, SOCKET sock, Ns_SockProc *proc, void *arg, i
 /* XXX but we'll see. I may be able to create a generic way to do this */
 /* XXX so the developer using the API won't have to */
 
-extern int
+int
 Ns_OpenSSLSockListenCallback (char *name, char *addr, int port, Ns_SockProc *proc,
 			      void *arg)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     return Ns_SockListenCallback (addr, port, proc, arg);
 }
 
@@ -517,10 +512,9 @@ Ns_OpenSSLSockListenCallback (char *name, char *addr, int port, Ns_SockProc *pro
  *----------------------------------------------------------------------
  */
 
-extern Ns_OpenSSLContext *
+Ns_OpenSSLContext *
 NsOpenSSLContextSockServerDefault (void)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     return sockServerContext;
 }
 
@@ -539,10 +533,9 @@ NsOpenSSLContextSockServerDefault (void)
  *----------------------------------------------------------------------
  */
 
-extern Ns_OpenSSLContext *
+Ns_OpenSSLContext *
 NsOpenSSLContextSockClientDefault (void)
 {
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
     return sockClientContext;
 }
 
@@ -566,7 +559,6 @@ static int
 SessionCacheIdGetNext (void)
 {
     int id;
-    Ns_Log (Debug, MODULE, ": NsOpenSSLSockConnect -- enter __FILE__ __LINE__");
 
     Ns_MutexLock(&nextSessionCacheId->lock);
     id = nextSessionCacheId->id;
@@ -593,7 +585,8 @@ SessionCacheIdGetNext (void)
  */
 
 int
-Ns_OpenSSLContextModuleDirSet(server, module, context, moduleDir)
+Ns_OpenSSLContextModuleDirSet(char *server, char *module, Ns_OpenSSLContext *context, 
+        char *moduleDir)
 {
     /* XXX lock struct */
     /* XXX validate that directory exists and is readable */
@@ -619,7 +612,7 @@ Ns_OpenSSLContextModuleDirSet(server, module, context, moduleDir)
  */
 
 char *
-Ns_OpenSSLContextModuleDirGet(server, module, context) {
+Ns_OpenSSLContextModuleDirGet(char *server, char *module, Ns_OpenSSLContext *context) {
     return context->moduledir;
 }
 
@@ -629,7 +622,14 @@ Ns_OpenSSLContextModuleDirGet(server, module, context) {
  *
  * Ns_OpenSSLContextCertFileSet --
  *
- *       Set the certificate pathname for a particular SSL context
+ *       Sets and loads the specified certificate for the given SSL context.
+ *       You MUST load the certificate before you attempt to load the private
+ *       key.  The certificate must be in PEM format.  You can put the
+ *       certificate chain in the same file: simply append the CA certs to the
+ *       end of your certificate file and they'll be passed to the client at
+ *       connection time. If no certs are appended, no cert chain will be
+ *       passed to the client.
+ *       (XXX I need to validate the above statements)
  *
  * Results:
  *       NS_OK or NS_ERROR
@@ -641,11 +641,30 @@ Ns_OpenSSLContextModuleDirGet(server, module, context) {
  */
 
 int
-Ns_OpenSSLContextCertFileSet(server, module, context, certFile)
+Ns_OpenSSLContextCertFileSet(char *server, char *module, Ns_OpenSSLContext *context, 
+        char *certFile)
 {
-    /* XXX lock struct */
-    /* XXX validate file exists and is readable */
-    context->certfile = certFile;
+    int rc;
+
+    context->certFile = certFile;
+
+    if (access(certFile, F_OK) != 0) {
+        Ns_Log(Error, MODULE, ": %s: certificate file does not exist: %s", server, certFile);
+        return NS_ERROR;
+    }
+
+    if (access(certFile, R_OK) != 0) {
+        Ns_Log(Error, MODULE, ": %s: certificate file is not readable: %s", server, certFile);
+        return NS_ERROR;
+    }
+
+    rc = SSL_CTX_use_certificate_chain_file (context, certFile);
+
+    if (rc == 0) {
+	    Ns_Log (Error, MODULE, ": %s: error loading certificate \"%s\"", 
+                server, certFile);
+        return NS_ERROR;
+    }
 
     return NS_OK;
 }
@@ -668,7 +687,8 @@ Ns_OpenSSLContextCertFileSet(server, module, context, certFile)
  */
 
 char *
-Ns_OpenSSLContextCertFileGet(server, module, context) {
+Ns_OpenSSLContextCertFileGet(char *server, char *module, Ns_OpenSSLContext *context)
+{
     return context->certFile;
 }
 
@@ -678,7 +698,9 @@ Ns_OpenSSLContextCertFileGet(server, module, context) {
  *
  * Ns_OpenSSLContextKeyFileSet --
  *
- *       Set the key pathname for a particular SSL context
+ *       Set the private key pathname for a particular SSL context, 
+ *       load the key and validate that it works with the certificate.
+ *       The key MUST NOT be passphrase-protected.
  *
  * Results:
  *       NS_OK or NS_ERROR
@@ -690,14 +712,42 @@ Ns_OpenSSLContextCertFileGet(server, module, context) {
  */
 
 int
-Ns_OpenSSLContextKeyFileSet(server, module, context, keyFile)
+Ns_OpenSSLContextKeyFileSet(char *server, char *module, Ns_OpenSSLContext *context,
+        char *keyFile)
 {
-    /* XXX lock struct */
-    /* XXX validate key file exists and is readable */
+    int rc;
+
     context->keyFile = keyFile;
+
+    if (access(keyFile, F_OK) != 0) {
+        Ns_Log(Error, MODULE, ": %s: key file does not exist: %s", server, keyFile);
+        return NS_ERROR;
+    }
+
+    if (access(keyFile, R_OK) != 0) {
+        Ns_Log(Error, MODULE, ": %s: key file is not readable: %s", server, keyFile);
+        return NS_ERROR;
+    }
+
+    rc = SSL_CTX_use_PrivateKey_file(context->sslctx, keyFile, SSL_FILETYPE_PEM);
+
+    if (rc == 0) {
+	    Ns_Log (Error, MODULE, ": %s: error loading private key \"%s\"", 
+                server, keyFile);
+        return NS_ERROR;
+    }
+
+    /*
+     * See if the key matches the certificate
+     */
+
+    if (SSL_CTX_check_private_key(context->sslctx) == 0) {
+	    Ns_Log (Error, MODULE, ": %s: private key does not match certificate", server);
+	    return NS_ERROR;
+    }
+
     return NS_OK;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -716,10 +766,66 @@ Ns_OpenSSLContextKeyFileSet(server, module, context, keyFile)
  */
 
 char *
-Ns_OpenSSLContextKeyFileGet(server, module, context) {
+Ns_OpenSSLContextKeyFileGet(char *server, char *module, Ns_OpenSSLContext *context) 
+{
     return context->keyFile;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCipherSuiteSet --
+ *
+ *       Set the cipher suite for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
 
+int
+Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, Ns_OpenSSLContext *context,
+        char *cipherSuite)
+{
+    int rc;
+
+    context->cipherSuite = cipherSuite;
+
+    rc = SSL_CTX_set_cipher_list(context->sslctx, cipherSuite);
+
+    if (rc == 0) {
+	    Ns_Log(Error, MODULE, ": %s: error setting cipher suite to \"%s\"", server, cipherSuite);
+	    return NS_ERROR;
+    }
+
+    return NS_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCipherSuiteGet --
+ *
+ *       Get the cipher suite string for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+char *
+Ns_OpenSSLContextCipherSuiteGet(char *server, char *module, Ns_OpenSSLContext *context) 
+{
+    return context->cipherSuite;
+}
 
 /*
  *----------------------------------------------------------------------
@@ -738,14 +844,56 @@ Ns_OpenSSLContextKeyFileGet(server, module, context) {
  */
 
 int
-Ns_OpenSSLContextProtocolsSet(server, module, context, protocols)
+Ns_OpenSSLContextProtocolsSet(char *server, char *module, Ns_OpenSSLContext *context,
+        char *protocols)
 {
-    /* XXX validate protocols? */
+    int bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
+    int flag = 1;
+    char *lprotocols = NULL;
+
+    /* XXX Need to ifdef out the protocols and ciphers that aren't compiled*/
+    /* XXX a particular instance of an OpenSSL library */
+
     context->protocols = protocols;
+
+    if (protocols == NULL) {
+    	Ns_Log (Notice, MODULE, ": %s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
+                server);
+	    bits = 1;
+    } else {
+	    lprotocols = Ns_StrDup(protocols);
+	    lprotocols = Ns_StrToLower(lprotocols);
+
+	    if (strstr (lprotocols, "all") != NULL) {
+	        bits = 1;
+	        Ns_Log (Notice, MODULE, ": %s: using all protocols: SSLv2, SSLv3 and TLSv1",
+                    server);
+	    } else {
+	        if (strstr (protocols, "sslv2") != NULL) {
+		        bits &= ~SSL_OP_NO_SSLv2;
+		        Ns_Log (Notice, MODULE, ": %s: Using SSLv2 protocol",
+                        server);
+	        }
+	        if (strstr (protocols, "sslv3") != NULL) {
+		        bits &= ~SSL_OP_NO_SSLv3;
+		        Ns_Log (Notice, MODULE, ": %s: Using SSLv3 protocol",
+                        server);
+	        }
+	        if (strstr (protocols, "tlsv1") != NULL) {
+		        bits &= ~SSL_OP_NO_TLSv1;
+		        Ns_Log (Notice, MODULE, ": %s: Using TLSv1 protocol",
+                        server);
+	        }
+        }
+
+    	Ns_Free(lprotocols);
+    }
+
+    /* XXX see if there's a simpler way to do this whole function */
+    SSL_CTX_set_options(context->sslctx, bits);
 
     return NS_OK;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -764,7 +912,7 @@ Ns_OpenSSLContextProtocolsSet(server, module, context, protocols)
  */
 
 char *
-Ns_OpenSSLContextProtocolsGet(server, module, context)
+Ns_OpenSSLContextProtocolsGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->protocols;
 }
@@ -775,7 +923,7 @@ Ns_OpenSSLContextProtocolsGet(server, module, context)
  *
  * Ns_OpenSSLContextCAFileSet --
  *
- *       Set the CA file for a particular SSL context
+ *       Set the CA file for a particular SSL context and load it.
  *
  * Results:
  *       NS_OK or NS_ERROR
@@ -787,13 +935,36 @@ Ns_OpenSSLContextProtocolsGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextCAFileSet(server, module, context, CAFile)
+Ns_OpenSSLContextCAFileSet(char *server, char *module, Ns_OpenSSLContext *context,
+        char *caFile)
 {
-    /* XXX validate file exists and is readable */
-    /* XXX lock struct */
-    context->CAFile = CAFile;
+    int rc;
+
+    context->caFile = caFile;
+
+    if (access(caFile, F_OK) != 0) { 
+        Ns_Log(Error, MODULE, ": %s: certificate authority file does not exist: %s",
+                server, caFile);
+        return NS_ERROR;
+    }
+
+    
+    if (access(caFile, R_OK) != 0) { 
+        Ns_Log(Error, MODULE, ": %s: certificate authority file is not readable: %s", 
+                server, caFile);
+        return NS_ERROR;
+    }
+
+	rc = SSL_CTX_load_verify_locations(context->sslctx, caFile, NULL);
+
+	if (rc == 0) {
+	    Ns_Log(Error, MODULE, ": %s: error loading CA certificate file %s", 
+                server, caFile);
+	    return NS_ERROR;
+    }
 
     return NS_OK;
+}
 
 /*
  *----------------------------------------------------------------------
@@ -812,9 +983,9 @@ Ns_OpenSSLContextCAFileSet(server, module, context, CAFile)
  */
 
 char *
-Ns_OpenSSLContextCAFileGet(server, module, context)
+Ns_OpenSSLContextCAFileGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
-    return context->CAFile;
+    return context->caFile;
 }
 
 
@@ -835,11 +1006,29 @@ Ns_OpenSSLContextCAFileGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextCADirSet(server, module, context, CADir)
+Ns_OpenSSLContextCADirSet(char *server, char *module, Ns_OpenSSLContext *context,
+        char *caDir)
 {
-    /* XXX validate dir exists and is readable */
-    /* XXX lock struct */
+    DIR *dirfp;
+    int rc;
+
     context->CADir = CADir;
+
+    dirfp = opendir(caDir);
+    if (dirfp == NULL) {
+	    Ns_Log (Notice, MODULE, ": %s: Cannot open CA certificate directory %s",
+		    server, caDir);
+        return NS_ERROR;
+    }
+    closedir(dirfp);
+
+	rc = SSL_CTX_load_verify_locations (context->sslctx, NULL, caDir);
+
+	if (rc == 0) {
+	    Ns_Log (Error, MODULE, ": %s: error using CA directory: %s", 
+                server, caDir);
+	    return NS_ERROR;
+    }
 
     return NS_OK;
 }
@@ -862,9 +1051,9 @@ Ns_OpenSSLContextCADirSet(server, module, context, CADir)
  */
 
 char *
-Ns_OpenSSLContextCADirGet(server, module, context)
+Ns_OpenSSLContextCADirGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
-    return context->CADir;
+    return context->caDir;
 }
 
 
@@ -886,7 +1075,8 @@ Ns_OpenSSLContextCADirGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextPeerVerifySet(server, module, context, peerVerify)
+Ns_OpenSSLContextPeerVerifySet(char *server, char *module, Ns_OpenSSLContext *context,
+        int peerVerify)
 {
     /* XXX lock struct */
     /* XXX handle default case where peerVerify is NULL */
@@ -914,7 +1104,7 @@ Ns_OpenSSLContextPeerVerifySet(server, module, context, peerVerify)
  */
 
 int
-Ns_OpenSSLContextPeerVerifyGet(server, module, context)
+Ns_OpenSSLContextPeerVerifyGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->peerVerify;
 }
@@ -938,7 +1128,8 @@ Ns_OpenSSLContextPeerVerifyGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextPeerVerifyDepthSet(server, module, context, peerVerifyDepth)
+Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, Ns_OpenSSLContext *context,
+        int peerVerifyDepth)
 {
     /* XXX lock struct */
     /* XXX how do I handle the default case? with varargs in func call? */
@@ -967,7 +1158,7 @@ Ns_OpenSSLContextPeerVerifyDepthSet(server, module, context, peerVerifyDepth)
  */
 
 int
-Ns_OpenSSLContextPeerVerifyDepthGet(server, module, context)
+Ns_OpenSSLContextPeerVerifyDepthGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->peerVerifyDepth;
 }
@@ -991,7 +1182,8 @@ Ns_OpenSSLContextPeerVerifyDepthGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextSessionCacheSet(server, module, context, sessionCache)
+Ns_OpenSSLContextSessionCacheSet(char *server, char *module, Ns_OpenSSLContext *context, 
+        int sessionCache)
 {
     /* XXX lock struct */
     context->sessionCache = sessionCache;
@@ -1020,7 +1212,7 @@ Ns_OpenSSLContextSessionCacheSet(server, module, context, sessionCache)
 /* XXX should I be managing these function calls by passing the name */
 /* XXX of the context rather than a pointer to the context itself? */
 int
-Ns_OpenSSLContextSessionCacheGet(server, module, context)
+Ns_OpenSSLContextSessionCacheGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->sessionCache;
 }
@@ -1043,7 +1235,8 @@ Ns_OpenSSLContextSessionCacheGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
+Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, Ns_OpenSSLContext *context,
+        int sessionCacheSize)
 {
     /* XXX lock struct */
     context->sessionCacheSize = sessionCacheSize;
@@ -1070,7 +1263,7 @@ Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
 
 /* XXX should session cache size be limited to size int? */
 int
-Ns_OpenSSLContextSessionCacheSizeGet(server, module, context)
+Ns_OpenSSLContextSessionCacheSizeGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->sessionCacheSize;
 }
@@ -1093,7 +1286,8 @@ Ns_OpenSSLContextSessionCacheSizeGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTimeout)
+Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, Ns_OpenSSLContext *context,
+        int sessionCacheTimeout)
 {
     /* XXX lock struct */
     context->sessionCacheTimeout = sessionCacheTimeout;
@@ -1119,7 +1313,7 @@ Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTim
  */
 
 int
-Ns_OpenSSLContextSessionCacheTimeoutGet(server, module, context)
+Ns_OpenSSLContextSessionCacheTimeoutGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     /* XXX lock struct */
     return context->sessionCacheTimeout;
@@ -1143,7 +1337,8 @@ Ns_OpenSSLContextSessionCacheTimeoutGet(server, module, context)
  */
 
 int
-Ns_OpenSSLContextTraceSet(server, module, context, trace)
+Ns_OpenSSLContextTraceSet(char *server, char *module, Ns_OpenSSLContext *context,
+        int trace)
 {
     /* XXX lock struct */
     context->trace = trace;
@@ -1169,7 +1364,7 @@ Ns_OpenSSLContextTraceSet(server, module, context, trace)
  */
 
 int
-Ns_OpenSSLContextTraceGet(server, module, context)
+Ns_OpenSSLContextTraceGet(char *server, char *module, Ns_OpenSSLContext *context)
 {
     return context->trace;
 }
@@ -1211,8 +1406,6 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
 	    return NULL;
     }
 #endif
-
-    Ns_Log(Debug, MODULE, ": Ns_OpenSSLCreateContext: %s, %s, %s", server, name, role);
 
     context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof *context);
     if (context == NULL) {
@@ -1326,6 +1519,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
  *----------------------------------------------------------------------
  */
 
+/* XXX bogus. Ns_OpenSSLContextInit should do most of this, so merge it */
 static int
 InitSSLContext (Ns_OpenSSLContext *context)
 {
@@ -1470,324 +1664,6 @@ InitSSLContext (Ns_OpenSSLContext *context)
 /*
  *----------------------------------------------------------------------
  *
- * SetProtocols --
- *
- *       Set the protocols for given SSL context as requested.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SetProtocols (Ns_OpenSSLContext *context)
-{
-    int bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
-    char *protocols = NULL;
-
-    if (context->protocols == NULL) {
-    	Ns_Log (Notice, "%s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
-		    MODULE);
-	    bits = 1;
-    } else {
-	    protocols = ns_strdup (context->protocols);
-	    protocols = Ns_StrToLower (protocols);
-
-	    if (strstr (protocols, "all") != NULL) {
-		    bits = 1;
-		    Ns_Log (Notice, "%s: using all protocols: SSLv2, SSLv3 and TLSv1",
-				    MODULE);
-	    } else {
-		    if (strstr (protocols, "sslv2") != NULL) {
-			    bits &= ~SSL_OP_NO_SSLv2;
-			    Ns_Log (Notice, "%s: Using SSLv2 protocol", MODULE);
-		    }
-		    if (strstr (protocols, "sslv3") != NULL) {
-			    bits &= ~SSL_OP_NO_SSLv3;
-			    Ns_Log (Notice, "%s: Using SSLv3 protocol", MODULE);
-		    }
-		    if (strstr (protocols, "tlsv1") != NULL) {
-			    bits &= ~SSL_OP_NO_TLSv1;
-			    Ns_Log (Notice, "%s: Using TLSv1 protocol", MODULE);
-		    }
-	    }
-
-	    Ns_Free (protocols);
-    }
-
-    /* 
-     * XXX add check to see if bits is meaningless, indicating that the
-     * protocol config param exists but is garbage 
-     */
-
-    SSL_CTX_set_options (context->sslctx, bits);
-
-    return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * SetCipherSuite --
- *
- *       Set the cipher suite to be used by the SSL server according
- *       to the config file.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SetCipherSuite (char *module, SSL_CTX * context, char *cipherSuite)
-{
-    int rc;
-
-    rc = SSL_CTX_set_cipher_list (context, cipherSuite);
-
-    if (rc == 0) {
-	Ns_Log (Error, "%s: error configuring cipher suite to \"%s\"",
-		module, cipherSuite);
-	return NS_ERROR;
-    }
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * LoadCertificate --
- *
- *       Load the certificate for the SSL server and SSL sock server
- *       from the file specified in the server config. Also loads a
- *       certificate chain that follows the certificate in the same
- *       file. To use a cert chain, simply append the CA certs to the
- *       end of your certificate file and they'll be passed to the
- *       client at connection time. If no certs are appended, no cert
- *       chain will be passed to the client.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       Frees *file.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-LoadCertificate (char *module, SSL_CTX * context, char *certFile)
-{
-    int rc;
-
-    /*
-     * This allows the server to pass the entire certificate
-     * chain to the client. It can simply hold just the server's
-     * certificate if there is no chain.
-     */
-
-    rc = SSL_CTX_use_certificate_chain_file (context, certFile);
-
-    if (rc == 0) {
-	Ns_Log (Error, "%s: error loading certificate file \"%s\"",
-		module, certFile);
-    }
-
-    Ns_Free (certFile);
-
-    return (rc == 0) ? NS_ERROR : NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * LoadKey --
- *
- *       Load the private key for the SSL server and SSL sock server
- *       from the file specified in the server config.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-LoadKey (char *module, SSL_CTX * context, char *keyFile)
-{
-    int rc;
-    int fd;
-
-    /*
-     * We should check for a passphrase to try on the key file if it fails to
-     * load, but we don't yet.
-     */
-
-    rc = SSL_CTX_use_PrivateKey_file (context, keyFile, SSL_FILETYPE_PEM);
-
-    if (rc == 0) {
-
-	Ns_Log (Error, "%s: error loading private key file \"%s\"",
-		module, keyFile);
-
-	/*
-	 * Try to give the user some idea of why the key file wasn't
-	 * loadable...
-	 */
-
-	fd = open (keyFile, O_RDONLY);
-	if (fd < 0) {
-	    if (errno == ENOENT) {
-		Ns_Log (Notice, "%s: the private key file does not exist", module);
-	    } else if (errno == EACCES) {
-		Ns_Log (Error, "%s: permission denied trying to open the private key file for read", module);
-	    } else {
-		Ns_Log (Error, "%s: errno %d reported opening the private key file", module, errno);
-	    }
-	} else {
-	    Ns_Log (Error, "%s: the private key file *is* readable; make sure it is not passphrase-protected", module, keyFile);
-	    close (fd);
-	}
-
-    }
-
-    Ns_Free (keyFile);
-
-    return (rc == 0) ? NS_ERROR : NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * CheckKey --
- *
- *       Make sure that the private key for the SSL server and SSL sock server
- *       matches the certificate.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-CheckKey (char *module, SSL_CTX * context)
-{
-    if (SSL_CTX_check_private_key (context) == 0) {
-	Ns_Log (Error, "%s: private key does not match certificate", module);
-	return NS_ERROR;
-    }
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * LoadCACerts --
- *
- *       Load the CA certificates for the SSL server from the file
- *       specified in the server config.  Not an error if there
- *       are no CA certificates.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-LoadCACerts (char *module, SSL_CTX * context, char *caFile, char *caDir)
-{
-    int status;
-    int rc;
-    int fd;
-    DIR *dd;
-
-    status = NS_OK;
-
-    /*
-     * Load CAs from a file
-     */
-
-    fd = open (caFile, O_RDONLY);
-    if (fd < 0) {
-	if (errno == ENOENT) {
-	    Ns_Log (Notice, "%s: CA certificate file does not exist", module);
-	} else {
-	    Ns_Log (Error, "%s: error opening CA certificate file", module);
-	    status = NS_ERROR;
-	}
-	Ns_Free (caFile);
-	caFile = NULL;
-    }
-
-    else {
-	close (fd);
-    }
-
-    /*
-     * Load CAs from directory
-     */
-
-    dd = opendir (caDir);
-    if (dd == NULL) {
-	if (errno == ENOENT) {
-	    Ns_Log (Notice, "%s: CA certificate directory does not exist",
-		    module);
-	} else {
-	    Ns_Log (Error, "%s: error opening CA certificate directory",
-		    module);
-	    status = NS_ERROR;
-	}
-
-	Ns_Free (caDir);
-	caDir = NULL;
-    }
-
-    else {
-	closedir (dd);
-    }
-
-    if (status == NS_OK && (caFile != NULL || caDir != NULL)) {
-	rc = SSL_CTX_load_verify_locations (context, caFile, caDir);
-
-	if (rc == 0) {
-	    Ns_Log (Error, "%s: error loading CA certificates", module);
-	    status = NS_ERROR;
-	}
-    }
-
-    if (caFile != NULL)
-	Ns_Free (caFile);
-    if (caDir != NULL)
-	Ns_Free (caDir);
-
-    return status;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * InitLocation --
  *
  *       Set the location, hostname, advertised address, bind address,
@@ -1803,7 +1679,7 @@ LoadCACerts (char *module, SSL_CTX * context, char *caFile, char *caDir)
  */
 
 static int
-InitLocation (NsOpenSSLDriver * driver)
+InitLocation (NsOpenSSLDriver *driver)
 {
     char *hostname;
     char *lookupHostname;
