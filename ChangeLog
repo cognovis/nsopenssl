@@ -1,3 +1,15 @@
+2002-02-08  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: reverted NsOpenSSLSend back to the way nsopenssl 1.1c
+	worked to try and resolve a problem on Solaris where images and
+	possibly pages of certain sizes fail to download
+	correctly. Haven't tested yet.
+
+2002-02-08  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: added some debugging code to log errors when
+	NsOpenSSLSend fails. This is to try and debug a Solaris issue.
+
 2001-12-27  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: cleaned up the ns_httpspost proc and got rid of the

@@ -246,15 +246,97 @@ NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer, int toread)
 int
 NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 {
+
+    return SSL_write(ccPtr->ssl, buffer, towrite);
+
+/* XXX this part doesn't seem to work right on Solaris */
+#if 0
     int rc;
 
     do {
 	rc = SSL_write(ccPtr->ssl, buffer, towrite);
+	if (rc <= 0) {
+	    switch (SSL_get_error(ccPtr->ssl, rc))
+		{
+		case SSL_ERROR_NONE:
+		    /* Perform operations */
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_NONE", rc);
+		    break;
+		case SSL_ERROR_SSL:
+		    /* Perform operations */
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_SSL", rc);
+		    break;
+		    /*
+		     * The next four options are used with
+		     * non-blocking semantics. This may not be
+		     * applicable, depending on the underlying
+		     * socket/BIO 
+		     */
+		case SSL_ERROR_WANT_READ:
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_READ", rc);
+		    /*
+		     * Read failed because there was no data to read
+		     * and the process/thread was blocked waiting for
+		     * input. Recall SSL_read when data is
+		     * available. The select(2) system call is
+		     * normally used.
+		     */
+		    break;
+		case SSL_ERROR_WANT_WRITE:
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_WRITE", rc);
+		    /*
+		     * Same as above for write. Because an SSL_read
+		     * occurs does not mean a .WANT_WRITE. error
+		     * will not appear as the SSL protocol involves
+		     * message exchange.
+		     */
+		    break;
+		case SSL_ERROR_WANT_CONNECT:
+		    Ns_Log(Error, "SSL_write failure(%d): SSL_ERROR_WANT_CONNECT", rc);
+		    /*
+		     * If the application is using a connect BIO 
+		     * eg. BIO_new_connect(), this error can be
+		     * returned. Under Win32, it is possible to
+		     * detect a completing connection. This is not
+		     * as applicable under Unix.
+		     */
+		    break;
+		case SSL_ERROR_WANT_X509_LOOKUP:
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_X509_LOOKUP", rc);
+		    /*
+		     * This option is only returned if an application
+		     * callback (used to retrieve a certificate)
+		     * sets this condition for failure. The
+		     * application must recall SSL_read() when the
+		     * callback is able to find a certificate.
+		     */
+		    break;
+		case SSL_ERROR_SYSCALL:
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_SYSCALL", rc);
+		    /*
+		     * Call failed because an operating system
+		     * dependent function failed. This is normally
+		     * fatal.  Use SSL_get_error for further
+		     * information.
+		     */
+		    break;
+		case SSL_ERROR_ZERO_RETURN:
+		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_ZERO_RETURN", rc);
+		    /*
+		     * Low level operating system call to read/write data
+		     * returned 0. For most operating systems, when using
+		     * sockets, this implies the other end of the socket
+		     * was closed.
+		     */
+		    break;
+		}
+	}
 	towrite -= rc;
     } while (BIO_should_retry(ccPtr->ssl->wbio) &&
 	     BIO_should_write(ccPtr->ssl->wbio));
 
     return rc;
+#endif
 }
 
 
