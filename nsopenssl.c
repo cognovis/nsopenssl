@@ -50,16 +50,6 @@ static int SessionCacheIdGetNext (void);
 static SessionCacheId *nextSessionCacheId;
 
 /*
- * Driver initialization/destruction
- */
-
-/* XXX determine whether or not to make these static */
-#if 0
-static NsOpenSSLDriver *NsOpenSSLDriverCreate (char *server, char *module);
-static void NsOpenSSLDriverFree (NsOpenSSLDriver *driver);
-#endif
-
-/*
  * SSL Operations on active connections
  */
  
@@ -134,7 +124,7 @@ int
 NsOpenSSLDriverInit (char *server, char *module, char *name)
 {
     Ns_DriverInitData *init;
-    NsOpenSSLDriver *driver;
+    NsOpenSSLDriver *ssldriver;
 #if 0
     Ns_DString ds;
     char *lookupHostname;
@@ -150,94 +140,21 @@ NsOpenSSLDriverInit (char *server, char *module, char *name)
         return NULL;
     }
  
-    driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(*driver));
-    if (driver == NULL) {
-	Ns_Log(Error, "%s: %s: Failed to create driver '%s'", 
+    ssldriver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(NsOpenSSLDriver));
+    if (ssldriver == NULL) {
+	Ns_Log(Error, "%s: %s: Failed to create ssldriver '%s'", 
                 MODULE, server, name);
 	return NULL;
     }
 
-    driver->server = server;
-    driver->module = module;
-    driver->name = name;
-    driver->path = path;
+    ssldriver->server = server;
+    ssldriver->module = module;
+    ssldriver->name = name;
+    ssldriver->path = path;
 
 #if 0
     /* XXX mutex names can't be name of module anymore */
-    Ns_MutexSetName(&driver->lock, module);
-#endif
-
-#if 0
-
-    /* XXX ALL TAKEN CARE OF IN Ns_DriverInit -- no need to duplicate it here */
-
-    /*
-     * The port number is mandatory
-     */
-
-    if (Ns_ConfigGetInt(path, "port", &driver->port) != NS_TRUE) {
-        Ns_Log(Error, "%s: %s: Port not set for driver %s", MODULE, server, name);
-        Ns_Free(driver);
-        return NULL;
-    }
-    Ns_Log(Notice, "%s: %s: port = %d", MODULE, server, driver->port);
-
-    driver->address  = Ns_ConfigGetValue(path, "address");
-    driver->hostname = Ns_ConfigGetValue(path, "hostname");
-    driver->location = Ns_ConfigGetValue(path, "location");
-
-    /*
-     * Set driver's address
-     */
-
-    if (driver->address == NULL) {
-        Ns_DStringInit (&ds);
-        lookupHostname = (driver->hostname != NULL) ? driver->hostname : Ns_InfoHostname ();
-        if (Ns_GetAddrByHost (&ds, lookupHostname) == NS_ERROR) {
-            Ns_Log (Error, "%s: %s: failed to resolve '%s': %s",
-                    MODULE, server, lookupHostname, strerror (errno));
-            /* XXX failure mode here ??? */
-            return NULL;
-        }
-        driver->address = Ns_DStringExport (&ds);
-    } else {
-        driver->address = Ns_StrDup(driver->address);
-    }
-    Ns_Log(Notice, "%s: %s: address = %s", MODULE, server, driver->address);
-
-    /*
-     * Set driver's hostname
-     */
-
-    if (driver->hostname == NULL) {
-        Ns_DStringInit (&ds);
-        if (Ns_GetHostByAddr (&ds, driver->address) == NS_ERROR) {
-            Ns_Log (Warning, "%s: %s: failed to reverse resolve address '%s': %s",
-                    MODULE, driver->server, driver->address, strerror (errno));
-            driver->hostname = (Ns_InfoHostname() != NULL) ? Ns_InfoHostname() : driver->address;
-        } else {
-            driver->hostname = Ns_DStringExport (&ds);
-        }
-    } else {
-        driver->hostname = Ns_StrDup(driver->hostname);
-    }
-    Ns_Log(Notice, "%s: %s: hostname = %s", MODULE, server, driver->hostname);
-
-    /*
-     * Set driver's location string
-     */
-
-    if (driver->location == NULL) {
-        Ns_DStringInit (&ds);
-        Ns_DStringVarAppend (&ds, DEFAULT_PROTOCOL "://", driver->hostname, NULL);
-        if (driver->port != DEFAULT_PORT) {
-            Ns_DStringPrintf (&ds, ":%d", driver->port);
-        }
-        driver->location = Ns_DStringExport (&ds);
-    } else {
-        driver->location = Ns_StrDup(driver->location);
-    }
-    Ns_Log (Notice, "%s: %s: location %s", MODULE, server, driver->location);
+    Ns_MutexSetName(&ssldriver->lock, module);
 #endif
 
     /*
@@ -248,7 +165,7 @@ NsOpenSSLDriverInit (char *server, char *module, char *name)
     if (init == NULL) {
         Ns_Log(Error, "%s: Memory allocation failure in Ns_ModuleInit",
                 module);
-        Ns_Free(driver);
+        Ns_Free(ssldriver);
         return NS_ERROR;
     }
 
@@ -257,14 +174,14 @@ NsOpenSSLDriverInit (char *server, char *module, char *name)
     init->name = MODULE;
     init->proc = OpenSSLProc;
     init->opts = NS_DRIVER_SSL;
-    init->arg  = driver;
+    init->arg  = ssldriver;
     /* XXX NEED TO SET THIS PATH */
-    init->path = driver->path;
+    init->path = ssldriver->path;
 
     if (Ns_DriverInit(server, module, init) == NS_ERROR) {
         /* XXX validate these */
         Ns_Free(init);
-        Ns_Free(driver);
+        Ns_Free(ssldriver);
         return NS_ERROR;
     }
 
@@ -273,8 +190,8 @@ NsOpenSSLDriverInit (char *server, char *module, char *name)
      */
 
 #if 0
-    driver->next = OpenSSLStructs->firstSSLDriver;
-    OpenSSLStructs->firstSSLDriver = driver;
+    ssldriver->next = OpenSSLStructs->firstSSLDriver;
+    OpenSSLStructs->firstSSLDriver = ssldriver;
 #endif
 
     /* XXX create per-virtual-server driver linked lists */
@@ -282,15 +199,15 @@ NsOpenSSLDriverInit (char *server, char *module, char *name)
 
     if (firstSSLDriver != NULL) {
             /* There are already other drivers */
-            driver->next = firstSSLDriver;
-            firstSSLDriver = driver;
+            ssldriver->next = firstSSLDriver;
+            firstSSLDriver = ssldriver;
     } else {
             /* We're the first driver created */
-            driver->next = NULL;
-            firstSSLDriver = driver;
+            ssldriver->next = NULL;
+            firstSSLDriver = ssldriver;
     }
 
-    driver->refcnt = 0;
+    ssldriver->refcnt = 0;
 
     return NS_OK;
 }
@@ -342,14 +259,14 @@ NsOpenSSLDriversDestroy (void)
  */
 
 void
-NsOpenSSLDriverDestroy (NsOpenSSLDriver *driver)
+NsOpenSSLDriverDestroy (NsOpenSSLDriver *ssldriver)
 {
-    Ns_OpenSSLConn *conn;
+    Ns_OpenSSLConn *sslconn;
 
     Ns_Log(Debug, "%s: %s: shutting down driver '%s'", MODULE, 
-            driver->server, driver->name);
+            ssldriver->server, ssldriver->name);
 
-    if (driver == NULL)
+    if (ssldriver == NULL)
         return;
 
     /*
@@ -364,26 +281,21 @@ NsOpenSSLDriverDestroy (NsOpenSSLDriver *driver)
 
     /* XXX need to lock around refcnt and firstFreeConn here */
     /* XXX race condition if new conn comes in while we're doing this part ??? */
-    if (driver->refcnt > 0) {
-        while ((conn = driver->firstFreeConn) != NULL) {
-            driver->firstFreeConn = conn->next;
+    if (ssldriver->refcnt > 0) {
+        while ((sslconn = ssldriver->firstFreeConn) != NULL) {
+            ssldriver->firstFreeConn = sslconn->next;
             /* XXX doesn't this need to have it's contents free'd? */
-            Ns_Free (conn);
+            Ns_Free (sslconn);
         }
     }
 
-#if 0
-    Ns_Free(driver->address);
-    Ns_Free(driver->hostname);
-    Ns_Free(driver->location);
-#endif
-    Ns_MutexDestroy (&driver->lock);
+    Ns_MutexDestroy (&ssldriver->lock);
 
     /* XXX should an SSL context be deallocated when it's refcnt reaches 0 ??? */
-    if (driver->context != NULL) 
-        driver->context->refcnt--;
+    if (ssldriver->context != NULL) 
+        ssldriver->context->refcnt--;
   
-    Ns_Free (driver);
+    Ns_Free (ssldriver);
 
     return;
 }
@@ -415,7 +327,7 @@ NsOpenSSLDriverDestroy (NsOpenSSLDriver *driver)
 Ns_OpenSSLConn *
 Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
 {
-    Ns_OpenSSLConn *conn;
+    Ns_OpenSSLConn *sslconn;
     SOCKET sock;
 
     if (timeout < 0) {
@@ -427,7 +339,7 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
     if (sock == INVALID_SOCKET)
 	    return NULL;
 
-    if ((conn = NsOpenSSLConnCreate(sock, NULL, ROLE_CLIENT)) == NULL) {
+    if ((sslconn = NsOpenSSLConnCreate(sock, NULL, ROLE_CLIENT)) == NULL) {
 	    return NULL;
     }
 
@@ -436,11 +348,11 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
      */
 
     if (async)
-	Ns_SockSetNonBlocking (conn->sock);
+	Ns_SockSetNonBlocking (sslconn->sock);
 
-    SSL_set_app_data (conn->ssl, conn);
+    SSL_set_app_data (sslconn->ssl, sslconn);
 
-    return conn;
+    return sslconn;
 }
 
 
@@ -467,20 +379,20 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
 Ns_OpenSSLConn *
 Ns_OpenSSLSockAccept (SOCKET sock)
 {
-    Ns_OpenSSLConn *conn = NULL;
+    Ns_OpenSSLConn *sslconn;
 
-    if (sock == INVALID_SOCKET)
+    if (sock == INVALID_SOCKET) {
         return NULL;
-
-    if ((conn = NsOpenSSLConnCreate(sock, NULL, ROLE_SERVER)) == NULL) {
-	    return NULL;
     }
 
-    Ns_SockSetNonBlocking (conn->sock);
+    if ((sslconn = NsOpenSSLConnCreate(sock, NULL, ROLE_SERVER)) == NULL) {
+        return NULL;
+    }
 
-    SSL_set_app_data (conn->ssl, conn);
+    Ns_SockSetNonBlocking (sslconn->sock);
+    SSL_set_app_data (sslconn->ssl, sslconn);
 
-    return conn;
+    return sslconn;
 }
 
 
@@ -1777,7 +1689,7 @@ Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *context)
  */
 
 static int
-PeerVerifyCallback (int preverify_ok, X509_STORE_CTX * x509_ctx)
+PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx)
 {
     return 1;
 }
@@ -1801,22 +1713,20 @@ PeerVerifyCallback (int preverify_ok, X509_STORE_CTX * x509_ctx)
  */
 
 static RSA *
-IssueTmpRSAKey (SSL * ssl, int export, int keylen)
+IssueTmpRSAKey (SSL *ssl, int export, int keylen)
 {
-    Ns_OpenSSLConn *conn;
-    NsOpenSSLDriver *driver;
-    static RSA *rsa_tmp = NULL;
+    Ns_OpenSSLConn *sslconn;
+    static RSA *rsa_tmp;
 
-    conn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
-    driver = conn->driver;
+    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
 
     rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
     if (rsa_tmp == NULL) {
         Ns_Log(Error, "%s: %s: Temporary RSA key generation failed",
-                MODULE, conn->driver->server);
+                MODULE, sslconn->ssldriver->server);
     } else {
         Ns_Log (Notice, "%s: %s: Generated %d-bit temporary RSA key",
-                MODULE, conn->driver->server, keylen);
+                MODULE, sslconn->ssldriver->server, keylen);
     }
 
     return rsa_tmp;
@@ -1927,22 +1837,22 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
     }
 
 #if 0 /* XXX */
-	conn = sock->arg;
-	if (conn == NULL) {
-	    conn = ns_calloc (1, sizeof (*conn));
+	sslconn = sock->arg;
+	if (sslconn == NULL) {
+	    sslconn = ns_calloc (1, sizeof (*sslconn));
 
-	    if (conn == NULL) {
+	    if (sslconn == NULL) {
 	       Ns_Log(Error, ":unable to allocate memory", MODULE);
 	       return NS_ERROR;
 	    }
 	    
-	    conn->driver   = driver->arg;
-	    conn->conntype = CONNTYPE_SERVER;
-	    conn->refcnt   = 0;	/* always 0 for nsdserver conns */
-	    conn->sock     = sock->sock;
-	    sock->arg      = conn;
+	    sslconn->driver   = driver->arg;
+	    sslconn->conntype = CONNTYPE_SERVER;
+	    sslconn->refcnt   = 0;	/* always 0 for nsdserver conns */
+	    sslconn->sock     = sock->sock;
+	    sock->arg      = sslconn;
 
-	    if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) conn) != NS_OK) {
+	    if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) sslconn) != NS_OK) {
 		return NS_ERROR;
 	    }
 	}

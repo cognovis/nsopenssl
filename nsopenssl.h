@@ -187,7 +187,7 @@ typedef struct Ns_OpenSSLConn {
     char                   *server;
     char                   *module;
     int                     role;
-    struct NsOpenSSLDriver *driver;    /* the driver this conn belongs to */
+    struct NsOpenSSLDriver *ssldriver;    /* the driver this conn belongs to */
     struct Ns_OpenSSLConn  *next;      /* next conn */
     int                     type;      /* server = 0; client = 1 */
     int                     peerport;  /* port number of remote side */
@@ -266,21 +266,21 @@ typedef struct SSLTclCmd {
  * ssl.c
  */
 
-extern Ns_OpenSSLConn *NsOpenSSLConnCreate (SOCKET sock, NsOpenSSLDriver *driver,
+extern Ns_OpenSSLConn *NsOpenSSLConnCreate (SOCKET sock, NsOpenSSLDriver *ssldriver,
         int role);
-extern void NsOpenSSLConnDestroy (Ns_OpenSSLConn *conn);
+extern void NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn);
 
-extern int NsOpenSSLFlush (Ns_OpenSSLConn *conn);
+extern int NsOpenSSLFlush (Ns_OpenSSLConn *sslconn);
 
-extern int NsOpenSSLRecv (Ns_OpenSSLConn *conn, void *buffer, int toread);
-extern int NsOpenSSLSend (Ns_OpenSSLConn *conn, void *buffer, int towrite);
+extern int NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread);
+extern int NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite);
 
-extern int Ns_OpenSSLFetchPage (Ns_DString *dsPtr, char *url, char *server);
-extern int Ns_OpenSSLFetchURL (Ns_DString *dsPtr, char *url,
+extern int Ns_OpenSSLFetchPage (Ns_DString *page, char *url, char *server);
+extern int Ns_OpenSSLFetchURL (Ns_DString *page, char *url,
 		Ns_Set *headers);
 extern void NsOpenSSLTrace (SSL *ssl, int where, int rc);
 extern int NsOpenSSLShutdown (SSL *ssl);
-extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *conn);
+extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn);
 
 /*
  * tclcmds.c
@@ -406,7 +406,7 @@ extern int Ns_OpenSSLContextTraceGet(char *server, char *module,
         Ns_OpenSSLContext *context);
 
 extern int NsOpenSSLDriverInit(char *server, char *module, char *name);
-extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *driver);
+extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver);
 
 
 

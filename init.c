@@ -94,7 +94,7 @@ static void ConfigSSLContextLoad (char *server, char *module, char *name);
 extern int
 NsOpenSSLModuleInit (char *server, char *module)
 {
-    NsOpenSSLDriver *driver;
+    NsOpenSSLDriver *ssldriver;
     static int globalInit = 0;
     Ns_Set *drivers;
     Ns_Set *contexts;
@@ -148,24 +148,6 @@ NsOpenSSLModuleInit (char *server, char *module)
         Ns_Log (Notice, "%s: %s: No SSL drivers defined", MODULE, server);
     }
               
-#if 0
-    /* XXX test: destroy all drivers immediately */
-    NsOpenSSLDriversDestroy();
-#endif
-
-#if 0
-    /* XXX loop through defined drivers and initialize them */
-    if drivers exist
-        foreach driver:
-            NsOpenSSLDriverCreate;
-            NsOpenSSLDriverInit;
-            if error
-                NsOpenSSLDriverDestroy;
-
-    if ((driver = NsOpenSSLDriverCreate (server, module)) == NULL)
-        return NS_ERROR;
-#endif
-
     /*
      * Create the Tcl commands for this virtual server's interps
      */
@@ -175,6 +157,7 @@ NsOpenSSLModuleInit (char *server, char *module)
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -413,6 +396,7 @@ InitOpenSSL (void)
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -510,6 +494,7 @@ SeedPRNG (void)
 
     return NS_TRUE;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -536,6 +521,7 @@ ThreadLockCallback (int mode, int n, const char *file, int line)
 	    Ns_MutexUnlock (locks + n);
     }
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -558,6 +544,7 @@ ThreadIdCallback (void)
 {
     return (unsigned long) Ns_ThreadId ();
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -591,6 +578,7 @@ ThreadDynlockCreateCallback (char *file, int line)
 
     return (struct CRYPTO_dynlock_value *) lock;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -618,6 +606,7 @@ ThreadDynlockLockCallback (int mode, struct CRYPTO_dynlock_value *dynlock,
 	Ns_MutexUnlock ((Ns_Mutex *) dynlock);
     }
 }
+
 
 /*
  *----------------------------------------------------------------------
