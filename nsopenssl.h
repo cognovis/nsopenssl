@@ -94,6 +94,7 @@ typedef struct NsOpenSSLDriver {
     int              refcnt;
     Ns_Driver        driver;
 
+    char            *server;       /* Server name */
     char            *module;       /* Module name */
     char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
     char            *dir;          /* Module directory (on disk) */
@@ -117,6 +118,7 @@ typedef struct NsOpenSSLDriver {
 
 typedef struct Ns_OpenSSLConn {
 
+    char        *server;     /* Server name */
     char        *module;     /* Module name (e.g. 'nsopenssl') */
     char        *configPath; /* Path to the configuration file */
     char        *dir;        /* Module directory (on disk) */

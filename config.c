@@ -161,7 +161,10 @@ ConfigPathDefault(char *module, char *path, char *name, char *dir, char *def)
 	value = ns_strdup(value);
     } else {
 	Ns_DStringInit(&ds);
+	Ns_MakePath(&ds, dir, value, NULL);
+#if 0
 	Ns_DStringVarAppend(&ds, dir, value, NULL);
+#endif
 	value = Ns_DStringExport(&ds);
 	Ns_DStringFree(&ds);
     }

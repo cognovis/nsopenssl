@@ -47,7 +47,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 
 static int InitializeOpenSSL(void);
-static int MakeModuleDir(char *server, char *module, char **dirp);
+static int CheckModuleDir(NsOpenSSLDriver *sdPtr);
 static int MakeDriverSSLContext(NsOpenSSLDriver *sdPtr);
 
 static int MakeSockServerSSLContext(NsOpenSSLDriver *sdPtr);
@@ -103,6 +103,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
     sdPtr = (NsOpenSSLDriver *) ns_calloc(1, sizeof *sdPtr);
 
     Ns_MutexSetName(&sdPtr->lock, module);
+    sdPtr->server = server;
     sdPtr->module = module;
     sdPtr->refcnt = 1;
     sdPtr->lsock = INVALID_SOCKET;
@@ -111,7 +112,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
     if (
 	   NsOpenSSLInitThreads()                      == NS_ERROR
 	|| InitializeOpenSSL()                         == NS_ERROR
-	|| MakeModuleDir(server, module, &sdPtr->dir)  == NS_ERROR
+	|| CheckModuleDir(sdPtr)                       == NS_ERROR
 	|| MakeDriverSSLContext(sdPtr)                 == NS_ERROR
         || MakeSockServerSSLContext(sdPtr)             == NS_ERROR
         || MakeSockClientSSLContext(sdPtr)             == NS_ERROR
@@ -125,8 +126,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
         CONFIG_RANDOMFILE, sdPtr->dir, NULL);
 
     /*
-     * If the OpenSSL's PRNG is not seeded,
-     * do so now.
+     * If the OpenSSL's PRNG is not seeded, seed it now.
      */
 
     if (PRNGIsSeeded(sdPtr) != NS_TRUE) {
@@ -236,9 +236,9 @@ InitializeOpenSSL(void)
 /*
  *----------------------------------------------------------------------
  *
- * MakeModuleDir --
+ * CheckModuleDir --
  *
- *       Set *dirp to the absolute path of the module's directory.
+ *       Set sdPtr->dir to the absolute path of the module's directory.
  *
  * Results:
  *       NS_OK or NS_ERROR.
@@ -250,19 +250,42 @@ InitializeOpenSSL(void)
  */
 
 static int
-MakeModuleDir(char *server, char *module, char **dirp)
+CheckModuleDir(NsOpenSSLDriver *sdPtr)
 {
+    char       *value;
     Ns_DString ds;
 
-    Ns_DStringInit(&ds);
-    Ns_ModulePath(&ds, server, module, NULL, NULL);
-    *dirp = Ns_DStringExport(&ds);
+    value = Ns_ConfigGetValue(sdPtr->configPath, CONFIG_MODULE_DIR);
 
-    if (mkdir(*dirp, 0755) != 0 && errno != EEXIST) {
-	Ns_Log(Error, "mkdir(%s) failed: %s", *dirp, strerror(errno));
-	ns_free(*dirp);
-	*dirp = NULL;
-	return NS_ERROR;
+    if (value == NULL) {
+	Ns_DStringInit(&ds);
+	Ns_ModulePath(&ds, sdPtr->server, sdPtr->module, NULL);
+
+	sdPtr->dir = Ns_DStringExport(&ds);
+	
+	Ns_Log(Notice, "Module directory defaults to %s", sdPtr->dir);
+
+	if (mkdir(sdPtr->dir, 0755) != 0 && errno != EEXIST) {
+	    Ns_Log(Error, "mkdir(%s) failed: %s", sdPtr->dir, strerror(errno));
+	    ns_free(sdPtr->dir);
+	    sdPtr->dir = NULL;
+	    return NS_ERROR;
+	}
+    } else {
+	if (Ns_PathIsAbsolute(value)) {
+
+	    sdPtr->dir = ns_strdup(value);  
+
+	} else {
+	    Ns_DStringInit(&ds);
+	    Ns_DStringVarAppend(&ds, sdPtr->dir, value, NULL);
+
+	    sdPtr->dir = Ns_DStringExport(&ds);             
+
+	    Ns_DStringFree(&ds);          
+	}
+
+	Ns_Log(Notice, "Module directory set by ModuleDir to %s", sdPtr->dir);
     }
 
     return NS_OK;

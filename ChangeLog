@@ -1,3 +1,22 @@
+2001-12-02  Scott S. Goodwin  <scott@scottg.net>
+
+	* config.h: Added the CONFIG_MODULEDIR to create the ModuleDir
+	parameter name.
+
+	* init.c: Altered CheckModuleDir so that the config parameter
+	ModuleDir can be used to point to somewhere outside of the
+	AOLserver directory area. If ModuleDir is specified, the
+	CheckModuleDir does *not* try and create the directory for you but
+	assumes if you've already got it set up.
+
+	* config.c: Used Ns_MakePath in place of Ns_DStringVarAppend to
+	ensure that slashes always appear between path elements when
+	ConfigPathDefault constructs a path.
+
+	* init.c: Renamed MakeModuleDir to CheckModuleDir, and instead of
+	passing in *server, *module and **dirp, now only *sdPtr is passed
+	in.
+
 2001-11-29  Scott S. Goodwin  <scott@scottg.net>
 	
 	* https.tcl: Added '--' to prepend the boundary markers in

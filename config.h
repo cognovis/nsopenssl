@@ -241,6 +241,7 @@
 
 
 
+#define CONFIG_MODULE_DIR           "ModuleDir"
 
 
 #define CONFIG_RANDOMFILE           "RandomFile"
