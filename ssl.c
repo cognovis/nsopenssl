@@ -98,6 +98,8 @@ NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr)
 	|| CreateBIOStack(ccPtr)   == NS_ERROR
 	|| RunSSLHandshake(ccPtr)  == NS_ERROR
     ) {
+	Ns_Log(Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
+	    ccPtr->type);
 	SSL_set_shutdown(ccPtr->ssl,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
 	NsOpenSSLShutdown(ccPtr->ssl);
 	NsOpenSSLDestroyConn(ccPtr);
@@ -472,8 +474,6 @@ Ns_OpenSSLSockAccept(SOCKET sock)
     ccPtr->sock = sock;
 
     if (NsOpenSSLCreateConn(ccPtr) == NS_ERROR) {
-	Ns_Log(Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
-            ccPtr->type);
 	return NULL;
     }
 
@@ -1108,6 +1108,13 @@ RunSSLHandshake(Ns_OpenSSLConn *ccPtr)
 
     ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
+    /* Test cert validity in log file */
+    if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
+        Ns_Log(Notice, "%s: %s: SERVER's CERT is VALID", ccPtr->module, ccPtr->type);
+    } else {
+        Ns_Log(Notice, "%s: %s: SERVER's CERT is NOT VALID", ccPtr->module, ccPtr->type);
+    }
+
     return NS_OK;
 }
 
@@ -1200,14 +1207,12 @@ RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
 
     ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
-#if 0
     /* Test cert validity in log file */
     if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
-        Ns_Log(Notice, "%s: PEER CERT is VALID", ccPtr->module);
+        Ns_Log(Notice, "%s: %s: CLIENT's CERT is VALID", ccPtr->module, ccPtr->type);
     } else {
-        Ns_Log(Notice, "%s: PEER CERT is NOT VALID", ccPtr->module);
+        Ns_Log(Notice, "%s: %s: CLIENT's CERT is NOT VALID", ccPtr->module, ccPtr->type);
     }
-#endif
 
     return NS_OK;
 

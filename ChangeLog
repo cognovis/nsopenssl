@@ -1,4 +1,13 @@
+2001-08-20  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: bug fix: trying to use module and type from ccPtr after
+	ccPtr had been destroyed.
+
 2001-08-17  Scott S. Goodwin  <scott@scottg.net>
+
+	* ssl.c: tested the sock client and sockserver's ability to
+	validate their peer's certificate. Tested nsdserver's ability to
+	validate client's certificate.
 
 	* nsopenssl.h: defined version for OpenSSL 0.9.6b.
 
