@@ -46,8 +46,8 @@ check-env:
 install: all
 	$(RM) $(INSTBIN)/$(MOD)
 	$(CP) $(MOD) $(INSTBIN)
-	$(MKDIR) $(INSTTCL)/$(MODDIR)
-	$(CP) $(TCLMOD) $(INSTTCL)/$(MODDIR)
+	$(MKDIR) $(INSTTCL)
+	$(CP) $(TCLMOD) $(INSTTCL)
 
 #################################################################
 # NOTE!!! Solaris users *might* need the following, 
