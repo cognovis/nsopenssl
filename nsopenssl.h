@@ -149,28 +149,34 @@ typedef struct Ns_OpenSSLContext {
 } Ns_OpenSSLContext;
 
 /*
- * Used to manage SSL drivers on top of the AOLserver comm drivers.
+ * Used to manage SSL drivers on top of the AOLserver comm driver.
  */
 
 typedef struct NsOpenSSLDriver {
     char                     *server;      
     char                     *module;      
     char                     *name;      
-    struct Ns_Driver         *driver;        /* the aolserver conn driver */
+    char                     *path;
+    struct Ns_Driver         *driver;        /* Driver that this SSL driver is tied to */
     struct NsOpenSSLDriver   *next;          /* pointer to next driver */
     struct Ns_OpenSSLContext *context;       /* SSL context assoc with this driver */ 
     struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
-    char                     *configPath;
     char                     *dir;
+    /* XXX nsd core driver has location, hostname etc. get rid of them here */
+#if 0
     char                     *location;
     char                     *hostname;
     char                     *address;	
+#endif
     SOCKET                    lsock;
-    int                       port;          /* The port this driver listens on */
-    int                       refcnt;        /* Don't ns_free() unless this is 0 */
     Ns_Mutex                  lock;
+    int                       refcnt;        /* Number of conns tied to this driver */
+    /* XXX these are read by Ns_DriverInit directly from config - don't need them here */
+#if 0
+    int                       port;          /* The port this driver listens on */
     int                       bufsize;
     int                       timeout;
+#endif
 } NsOpenSSLDriver;
 
 /*
@@ -399,8 +405,7 @@ extern int Ns_OpenSSLContextTraceSet(char *server, char *module,
 extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
 
-extern NsOpenSSLDriver *NsOpenSSLDriverCreate(char *server, char *module, 
-        char *name);
+extern int NsOpenSSLDriverInit(char *server, char *module, char *name);
 extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *driver);
 
 

@@ -72,8 +72,6 @@ static void ThreadDynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
  */
  
 static void ConfigSSLContextLoad (char *server, char *module, char *name);
-static NsOpenSSLDriver *ConfigSSLDriverLoad (char *server, char *module,
-        char *name);
 
 
 /*
@@ -96,6 +94,7 @@ static NsOpenSSLDriver *ConfigSSLDriverLoad (char *server, char *module,
 extern int
 NsOpenSSLModuleInit (char *server, char *module)
 {
+    NsOpenSSLDriver *driver;
     static int globalInit = 0;
     Ns_Set *drivers;
     Ns_Set *contexts;
@@ -140,11 +139,19 @@ NsOpenSSLModuleInit (char *server, char *module)
     drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
     if (drivers != NULL) {
         for (i = 0; i < Ns_SetSize(drivers); ++i) {
-               ConfigSSLDriverLoad(server, module, Ns_SetKey(drivers, i));
+            if (NsOpenSSLDriverInit(server, module, Ns_SetKey(drivers, i)) != NS_OK) {
+                Ns_Log(Error, "%s: %s: driver initialization failed",
+                        MODULE, server);
+            }
         }
     } else {
-        Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
+        Ns_Log (Notice, "%s: %s: No SSL drivers defined", MODULE, server);
     }
+              
+#if 0
+    /* XXX test: destroy all drivers immediately */
+    NsOpenSSLDriversDestroy();
+#endif
 
 #if 0
     /* XXX loop through defined drivers and initialize them */
@@ -324,39 +331,7 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
 
     return;
 }
-
-/*
- *----------------------------------------------------------------------
- *
- * ConfigSSLDriverLoad --
- *
- *       Load values for a given SSL context from the configuration file.
- *
- * Results:
- *       Pointer to SSL Driver or NULL
- *
- * Side effects:
- *       Memory is allocated
- *
- *----------------------------------------------------------------------
- */
 
-static NsOpenSSLDriver *
-ConfigSSLDriverLoad (char *server, char *module, char *name)
-{
-    NsOpenSSLDriver *driver = NULL;
-
-    Ns_Log(Debug, "%s: %s: *** ConfigSSLDriverLoad", MODULE, server);
-
-    driver = NsOpenSSLDriverCreate(server, module, name);
-    if (driver == NULL) {
-        Ns_Log(Error, "%s: %s: SSL driver came back NULL in ConfigSSLDriverLoad",
-             MODULE, server);
-        return NULL;
-    }
-
-    return driver;
-}
 
 /*
  *----------------------------------------------------------------------

@@ -231,7 +231,10 @@ NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
 
 	} else if (STREQ (argv[2], "port")) {
 
-	    sprintf (interp->result, "%d", conn->driver->port);
+            /* XXX broken */
+#if 0
+	    sprintf (interp->result, "%d", conn->driver->driver->port);
+#endif
 
 	}
 

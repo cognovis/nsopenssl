@@ -934,7 +934,8 @@ CreateBIOStack (Ns_OpenSSLConn *conn)
     /* Create buffering BIO */
 
     conn->io = BIO_new (BIO_f_buffer ());
-    if (!BIO_set_write_buffer_size (conn->io, conn->driver->bufsize)) {
+    /* XXX using core driver's value for bufsize here */
+    if (!BIO_set_write_buffer_size (conn->io, conn->driver->driver->bufsize)) {
         Ns_Log(Error, "%s: BIO_set_write_buffer_size failed", MODULE);
 	return NS_ERROR;
     }
@@ -1072,7 +1073,8 @@ RunServerSSLHandshake (Ns_OpenSSLConn * conn)
 		MODULE, conn->server, ns_sockstrerror (errno));
     }
 
-    endtime = time (NULL) + conn->driver->timeout + 1;
+    /* XXX using core driver's value for sendwait */
+    endtime = time (NULL) + conn->driver->driver->sendwait + 1;
     FD_ZERO (&fds);
 
     while (1) {
