@@ -65,9 +65,6 @@ static int
 SSLContextCertFileInit(NsOpenSSLContext *sslcontext);
 
 static int
-SSLContextKeyFileInit(NsOpenSSLContext *sslcontext);
-
-static int
 SSLContextValidateCertKey(NsOpenSSLContext *sslcontext);
 
 static void
@@ -293,7 +290,6 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
 
     if ( SSLContextCiphersInit(sslcontext)           == NS_ERROR
             || SSLContextProtocolsInit(sslcontext)   == NS_ERROR
-            || SSLContextKeyFileInit(sslcontext)     == NS_ERROR
             || SSLContextCertFileInit(sslcontext)    == NS_ERROR
             || SSLContextValidateCertKey(sslcontext) == NS_ERROR
        ) {
@@ -1443,7 +1439,7 @@ SSLContextSessionCacheIdNew(char *server)
  *
  * SSLContextCertFileInit --
  *
- *       Load SSL context's certificate
+ *       Load SSL context's key and certificate files.
  *
  * Results:
  *       NS_OK or NS_ERROR
@@ -1456,53 +1452,58 @@ SSLContextSessionCacheIdNew(char *server)
 static int
 SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
 {
-    if (sslcontext->certFile == NULL ||
-            SSL_CTX_use_certificate_chain_file(sslcontext->sslctx, sslcontext->certFile) == 0
-       ) {
-        Ns_Log(Error, "%s (%s): error loading certificate '%s'",
-                MODULE, sslcontext->server, sslcontext->certFile);
-        if ((access(sslcontext->certFile, F_OK) != 0) || (access(sslcontext->certFile, R_OK) != 0))
-            Ns_Log(Error, "%s (%s): '%s' certificate file is not readable or does not exist", 
-                    MODULE, sslcontext->server, sslcontext->name);
+    /*
+     * Certificate is optional for clients as long as the server's they connect
+     * to don't request and require them to provide one.  Certificates are
+     * required for SSL servers.
+     */
+
+    if (sslcontext->keyFile == NULL || sslcontext->certFile == NULL) {
+        if (sslcontext->role == CLIENT_ROLE) {
+            Ns_Log(Notice, "%s (%s): no cert or key defined for client SSL context %s (this may be ok)"
+                MODULE, sslcontext->server, sslcontext->name);
+            return NS_OK;
+        } else {
+            Ns_Log(Error, "%s (%s): certificate and key files must both be defined for server SSL context %s",
+                MODULE, sslcontext->server, sslcontext->name);
+            return NS_ERROR;
+        }
+    }
+
+    /*
+     * Make sure we can get to the certificate and key files.
+     */
+
+    if ((access(sslcontext->certFile, F_OK) != 0) || (access(sslcontext->certFile, R_OK) != 0)) {
+        Ns_Log(Error, "%s (%s): '%s' certificate file is not readable or does not exist", 
+            MODULE, sslcontext->server, sslcontext->name);
         return NS_ERROR;
     }
-    Ns_Log(Notice, "%s (%s): '%s' certificate loaded successfully", 
+
+    if ((access(sslcontext->keyFile, F_OK) != 0) || (access(sslcontext->keyFile, R_OK) != 0)) {
+        Ns_Log(Error, "%s (%s): '%s' key file is not readable or does not exist", 
             MODULE, sslcontext->server, sslcontext->name);
+        return NS_ERROR;
+    }
 
-    return NS_OK;
-}
+    /*
+     * Load the certificate into the SSL context
+     */
 
-
-/*
- *----------------------------------------------------------------------
- *
- * SSLContextKeyFileInit --
- *
- *       Load SSL context's key file
- *
- * Results:
- *       NS_OK or NS_ERROR
- *
- * Side effects:
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SSLContextKeyFileInit(NsOpenSSLContext *sslcontext)
-{
-    if (sslcontext->keyFile == NULL ||
-            SSL_CTX_use_PrivateKey_file(sslcontext->sslctx, sslcontext->keyFile,
-                SSL_FILETYPE_PEM) == 0) {
+    if (SSL_CTX_use_PrivateKey_file(sslcontext->sslctx, sslcontext->keyFile, SSL_FILETYPE_PEM) == 0) {
         Ns_Log(Error, "%s (%s): error loading key file '%s'",
-                MODULE, sslcontext->server, sslcontext->keyFile);
-        if ((access(sslcontext->keyFile, F_OK) != 0) || (access(sslcontext->keyFile, R_OK) != 0))
-            Ns_Log(Error, "%s (%s): '%s' key file is not readable or does not exist", 
-                    MODULE, sslcontext->server, sslcontext->name);
+            MODULE, sslcontext->server, sslcontext->keyFile);
         return NS_ERROR;
     }
-    Ns_Log(Notice, "%s (%s): '%s' key loaded successfully", 
-            MODULE, sslcontext->server, sslcontext->name);
+
+    if (SSL_CTX_use_certificate_chain_file(sslcontext->sslctx, sslcontext->certFile) == 0) {
+        Ns_Log(Error, "%s (%s): error loading certificate file '%s'",
+            MODULE, sslcontext->server, sslcontext->certFile);
+        return NS_ERROR;
+    }
+
+    Ns_Log(Notice, "%s (%s): '%s' certificate and key loaded successfully", 
+        MODULE, sslcontext->server, sslcontext->name);
 
     return NS_OK;
 }
