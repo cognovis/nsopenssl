@@ -1,3 +1,27 @@
+2001-11-19  Scott S. Goodwin  <scott@scottg.net>
+
+	* https.tcl: Fixed boundary problem when doing multpart form data
+	with ns_httpspost. This code:
+
+	    set qsset [ns_set new qsset]
+	    ns_set put $qsset user goodwin
+	    ns_set put $qsset pass blahblah
+	    set page [ns_httpspost \
+	       "https://192.168.0.1:8001/test.cgi" "" \
+	       $qsset "multipart/form-data"]
+
+	Posts this content:
+	
+	-----------------------------16931435195472910531915358310
+	Content-Disposition: form-data; name="user"
+
+	goodwin
+	-----------------------------16931435195472910531915358310
+	Content-Disposition: form-data; name="pass"
+
+	blahblah
+	-----------------------------16931435195472910531915358310--
+
 2001-10-13  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: Added ability for ns_httpspost to do

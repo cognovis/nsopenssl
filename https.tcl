@@ -222,7 +222,7 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     #
 
     ns_log warning "TYPE=$type"
-    set boundary "----------------------------173856392039582"
+    set boundary "-----------------------------16931435195472910531915358310"
 
     if {[string match "" $rqset]} { 
 	set rqset [ns_set new rqset]
@@ -249,7 +249,7 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
 		set key [ns_set key $qsset $i]
 		set value [ns_set value $qsset $i]
-		append querystring "--${boundary}\n"
+		append querystring "${boundary}\n"
 		append querystring "Content-Disposition: form-data; name=\"$key\"\n\n"
 		append querystring "$value\n"
 	    }
