@@ -266,7 +266,6 @@ extern void NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn);
 extern int NsOpenSSLFlush (Ns_OpenSSLConn *sslconn);
 extern int NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread);
 extern int NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite);
-extern void NsOpenSSLTrace (SSL *ssl, int where, int rc);
 extern int NsOpenSSLShutdown (SSL *ssl);
 
 /*

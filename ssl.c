@@ -420,51 +420,6 @@ NsOpenSSLShutdown (SSL *ssl)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLTrace --
- *
- *	Log the progress of an SSL connection.
- *
- * Results:
- *      None.
- *
- * Side effects:
- *      Server log output.
- *
- *----------------------------------------------------------------------
- */
-
-void
-NsOpenSSLTrace (SSL *ssl, int where, int rc)
-{
-    Ns_OpenSSLConn *sslconn;
-    char *alertTypePrefix;
-    char *alertType;
-    char *alertDescPrefix;
-    char *alertDesc;
-
-    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
-
-    if (where & SSL_CB_ALERT) {
-	alertTypePrefix = "; alert type = ";
-	alertType = SSL_alert_type_string_long (rc);
-	alertDescPrefix = "; alert desc = ";
-	alertDesc = SSL_alert_desc_string_long (rc);
-    } else {
-	alertTypePrefix = alertType = "";
-	alertDescPrefix = alertDesc = "";
-    }
-
-    Ns_Log (Notice, "%s: trace: %s: %s%s%s%s%s",
-	    MODULE,
-            sslconn->type,
-	    SSL_state_string_long (ssl),
-	    alertTypePrefix, alertType, alertDescPrefix, alertDesc);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
  * Ns_OpenSSLIsPeerCertValid --
  *
  *      Determine if the peer's certificate is valid.

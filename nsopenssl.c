@@ -50,6 +50,8 @@ NsOpenSSLSessionCacheId *nextSessionCacheId;
 
 static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static RSA *IssueTmpRSAKey (SSL *ssl, int export, int keylen);
+static void OpenSSLTrace (SSL *ssl, int where, int rc);
+
 
 /* XXX put into NsOpenSSLVirtualServerTable->server */
 static Ns_OpenSSLContext  *firstSSLContext;
@@ -1158,8 +1160,14 @@ Ns_OpenSSLContextTraceSet(char *server, char *module, Ns_OpenSSLContext *sslcont
         int trace)
 {
     /* XXX lock struct */
-    Ns_Log(Debug, "%s: %s: trace set to %d", MODULE, server, trace);
     sslcontext->trace = trace;
+    if (trace) {
+        Ns_Log(Debug, "****  %s: %s: Turning trace ON", MODULE, server);
+        SSL_CTX_set_info_callback(sslcontext->sslctx, OpenSSLTrace);
+    } else {
+        Ns_Log(Debug, "****  %s: %s: Turning trace OFF", MODULE, server);
+        SSL_CTX_set_info_callback(sslcontext->sslctx, NULL);
+    }
 
     return NS_OK;
 }
@@ -1302,8 +1310,11 @@ Ns_OpenSSLContextCreate (char *server, char *module)
         return NULL;
     }
 
+#if 0
+    /* XXX this is always over-ridden by SSL_set_app_data */
     /* Allows us to get context struct from within OpenSSL callbacks */
     SSL_CTX_set_app_data (sslcontext->sslctx, sslcontext);
+#endif
 
     /* Enable SSL bug compatibility */
     SSL_CTX_set_options (sslcontext->sslctx, SSL_OP_ALL);
@@ -1420,5 +1431,52 @@ IssueTmpRSAKey (SSL *ssl, int export, int keylen)
     }
 
     return rsa_tmp;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * OpenSSLTrace --
+ *
+ *	Log the progress of an SSL connection.
+ *
+ * Results:
+ *      None.
+ *
+ * Side effects:
+ *      Server log output.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+OpenSSLTrace (SSL *ssl, int where, int rc)
+{
+    Ns_OpenSSLConn *sslconn;
+    char *alertTypePrefix;
+    char *alertType;
+    char *alertDescPrefix;
+    char *alertDesc;
+
+    Ns_Log(Debug, "*** HERE in TRACE");
+
+    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
+
+    if (where & SSL_CB_ALERT) {
+	alertTypePrefix = "; alert type = ";
+	alertType = SSL_alert_type_string_long (rc);
+	alertDescPrefix = "; alert desc = ";
+	alertDesc = SSL_alert_desc_string_long (rc);
+    } else {
+	alertTypePrefix = alertType = "";
+	alertDescPrefix = alertDesc = "";
+    }
+
+    Ns_Log (Notice, "%s: trace: %s: %s%s%s%s%s",
+	    MODULE,
+            sslconn->type,
+	    SSL_state_string_long (ssl),
+	    alertTypePrefix, alertType, alertDescPrefix, alertDesc);
 }
 

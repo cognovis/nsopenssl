@@ -117,7 +117,7 @@ NsOpenSSLModuleInit (char *server, char *module)
     path = Ns_ConfigGetPath(server, module, "sslcontexts", NULL);
     sslcontexts = Ns_ConfigGetSection(path);
 
-    /* It's ok if no SSL contexts are defined */
+    /* It's ok if no SSL contexts are defined, but no drivers will be started */
 
     if (sslcontexts == NULL) {
         Ns_Log (Notice, "%s: %s: no SSL contexts defined for this server", 
@@ -505,8 +505,11 @@ LoadSSLContext(char *server, char *module, char *name)
     if (Ns_ConfigGetInt(path, "sessioncachetimeout", &sessionCacheTimeout) == NS_TRUE)
         Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, sslcontext, sessionCacheTimeout);
 
-    if (Ns_ConfigGetBool(path, "trace", &trace) == NS_TRUE)
-        Ns_OpenSSLContextTraceSet(server, module, sslcontext, trace);
+    if (Ns_ConfigGetBool(path, "trace", &trace) == NS_TRUE) {
+        Ns_OpenSSLContextTraceSet(server, module, sslcontext, 1);
+    } else {
+        Ns_OpenSSLContextTraceSet(server, module, sslcontext, 0);
+    }
 
     return sslcontext;
 }
