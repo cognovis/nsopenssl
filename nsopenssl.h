@@ -144,6 +144,9 @@ typedef struct Ns_OpenSSLContext {
     Ns_Mutex           lock;
     SSL_CTX           *sslctx;
     struct Ns_OpenSSLContext *next;
+#if 0
+    struct Server     *serverPtr;            /* point to virtual server-specific data */ 
+#endif
 } Ns_OpenSSLContext;
 
 /*
@@ -195,20 +198,17 @@ typedef struct Ns_OpenSSLConn {
 
 typedef struct Server {
     char              *server;
-    /* XXX should use Ns_RWLock() instead ??? */
-    Ns_Mutex           lock;
     Tcl_HashTable      sslcontexts;
     Tcl_HashTable      ssldrivers;
-    NsOpenSSLDriver   *firstSSLDriverPtr; 
     Ns_OpenSSLConn    *firstOutgoingSSLConnPtr; /* Tcl API managed client conns */
     Ns_OpenSSLConn    *firstIncomingSSLConnPtr; /* Tcl API managed server conns */
+    Ns_Mutex          *lock;
 } Server;
 
 /*
  * Session cache id management. This is OpenSSL-library global.
- * XXX what happens when another module loads that wants to do openssl session caching???
  */
-
+/* XXX merge into per-virtual server struct above */
 typedef struct NsOpenSSLSessionCacheId {
     Ns_Mutex lock;
     int id;
@@ -379,5 +379,8 @@ extern int NsOpenSSLModuleInit(char *server, char *module);
 
 
 #ifdef TEST
-extern void NSOPENSSLDumpSSLDriverList (NsOpenSSLDriver *firstSSLDriver);
+extern void NSOPENSSLDumpSSLState(void);
+extern void NSOPENSSLDumpSSLServers(void);
+extern void NSOPENSSLDumpSSLDrivers(void);
+extern void NSOPENSSLDumpSSLContexts(void);
 #endif

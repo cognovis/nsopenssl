@@ -47,9 +47,9 @@ static const char *RCSID =
  * Local functions defined in this file
  */
 
-static int RunSSLHandshake (Ns_OpenSSLConn *sslconn);
-static int RunServerSSLHandshake (Ns_OpenSSLConn *sslconn);
-static void DestroySSLSockConn (Ns_OpenSSLConn *sslconn);
+static int RunSSLHandshake(Ns_OpenSSLConn *sslconn);
+static int RunServerSSLHandshake(Ns_OpenSSLConn *sslconn);
+static void DestroySSLSockConn(Ns_OpenSSLConn *sslconn);
 
 
 /*
@@ -104,19 +104,19 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
 
     /* Create the SSL struct for a connection */
 
-    sslconn->ssl = SSL_new (sslcontext->sslctx);
+    sslconn->ssl = SSL_new(sslcontext->sslctx);
     if (sslconn->ssl == NULL) {
-        Ns_Log (Error, ": %s: error creating sslconn->ssl structure",
+        Ns_Log(Error, ": %s: error creating sslconn->ssl structure",
             MODULE, sslconn->server);
         return NS_ERROR;
     }
-    SSL_clear (sslconn->ssl);
-    SSL_set_app_data (sslconn->ssl, sslconn);
+    SSL_clear(sslconn->ssl);
+    SSL_set_app_data(sslconn->ssl, sslconn);
 
     if (STRIEQ(sslconn->role, ROLE_SERVER)) {
-        SSL_set_accept_state (sslconn->ssl);
+        SSL_set_accept_state(sslconn->ssl);
     } else if (STRIEQ(sslconn->role, ROLE_CLIENT)) {
-        SSL_set_connect_state (sslconn->ssl);
+        SSL_set_connect_state(sslconn->ssl);
     } else {
         Ns_Log(Error, "%s: %s: SSL context '%s' role is wrong!",
                 sslconn->server, MODULE, sslconn->role);
@@ -125,29 +125,29 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
 
     /* Create socket BIO and attach it to the socket */
 
-    sock_bio = BIO_new_socket (sslconn->sock, BIO_NOCLOSE);
+    sock_bio = BIO_new_socket(sslconn->sock, BIO_NOCLOSE);
 
     /* Create SSL BIO */
 
-    ssl_bio = BIO_new (BIO_f_ssl ());
-    BIO_set_ssl (ssl_bio, sslconn->ssl, BIO_NOCLOSE);
-    BIO_push (ssl_bio, sock_bio);
+    ssl_bio = BIO_new(BIO_f_ssl());
+    BIO_set_ssl(ssl_bio, sslconn->ssl, BIO_NOCLOSE);
+    BIO_push(ssl_bio, sock_bio);
 
     /* Create buffering BIO */
 
-    sslconn->io = BIO_new (BIO_f_buffer ());
+    sslconn->io = BIO_new(BIO_f_buffer());
     /* XXX using core driver's value for bufsize here */
-    if (!BIO_set_write_buffer_size (sslconn->io, sslconn->sslcontext->bufsize)) {
+    if (!BIO_set_write_buffer_size(sslconn->io, sslconn->sslcontext->bufsize)) {
         Ns_Log(Error, "%s: %s: BIO_set_write_buffer_size failed", sslconn->server, MODULE);
 	return NS_ERROR;
     }
-    BIO_push (sslconn->io, ssl_bio);
+    BIO_push(sslconn->io, ssl_bio);
 
-    if (RunSSLHandshake (sslconn) == NS_ERROR) {
+    if (RunSSLHandshake(sslconn) == NS_ERROR) {
         /* XXX these steps happen often enough; put in NsOpenSSLConnDestroy */
-        SSL_set_shutdown (sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
-        NsOpenSSLShutdown (sslconn->ssl);
-        NsOpenSSLConnDestroy (sslconn);
+        SSL_set_shutdown(sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
+        NsOpenSSLShutdown(sslconn->ssl);
+        NsOpenSSLConnDestroy(sslconn);
         return NULL;
     }
 
@@ -173,7 +173,7 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
  */
 
 int
-NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn)
+NsOpenSSLConnDestroy(Ns_OpenSSLConn *sslconn)
 {
     if (sslconn->refcnt > 0) {
         Ns_Log(Warning, "%s: %s: attempt to destroy an active SSL connection",
@@ -196,15 +196,15 @@ NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn)
         }
 
 	if (sslconn->peercert != NULL) {
-	    X509_free (sslconn->peercert);
+	    X509_free(sslconn->peercert);
 	    sslconn->peercert = NULL;
 	}
 	if (sslconn->io != NULL) {
-	    BIO_free_all (sslconn->io);
+	    BIO_free_all(sslconn->io);
 	    sslconn->io = NULL;
 	}
 	if (sslconn->ssl != NULL) {
-	    SSL_free (sslconn->ssl);
+	    SSL_free(sslconn->ssl);
 	    sslconn->ssl = NULL;
 	}
 
@@ -217,16 +217,16 @@ NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn)
 	if (sslconn->ssldriver != NULL) {
 
 	    if (sslconn->sock != INVALID_SOCKET) {
-		ns_sockclose (sslconn->sock);
+		ns_sockclose(sslconn->sock);
 		sslconn->sock = INVALID_SOCKET;
 	    }
 	    
 	    if (sslconn->wsock != INVALID_SOCKET) {
-		ns_sockclose (sslconn->wsock);
+		ns_sockclose(sslconn->wsock);
 		sslconn->wsock = INVALID_SOCKET;
 	    }
 	    
-	    ns_free (sslconn);
+	    ns_free(sslconn);
 	    sslconn = NULL;
 	}
     }
@@ -253,7 +253,7 @@ NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn)
  */
 
 int
-NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread)
+NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread)
 {
     int rc;
 
@@ -265,18 +265,18 @@ NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread)
      * doesn't always work here.
      */
 
-    if (send (sslconn->sock, NULL, 0, 0) != 0) {
-	Ns_Log (Notice, "%s: %s: connection reset by peer",
+    if (send(sslconn->sock, NULL, 0, 0) != 0) {
+	Ns_Log(Notice, "%s: %s: connection reset by peer",
 		MODULE, sslconn->type);
 	return NS_ERROR;
     }
 
-    rc = BIO_read (sslconn->io, buffer, toread);
-    Ns_Log (Debug, "NsOpenSSLRecv: read(1): %d %d", toread, rc);
-    if (rc < 0 && BIO_should_retry (sslconn->io)
-	&& Ns_SockWait (sslconn->sock, NS_SOCK_READ, 2) == NS_OK) {
-	rc = BIO_read (sslconn->io, buffer, toread);
-        Ns_Log (Debug, "NsOpenSSLRecv: read(2): %d %d", toread, rc);
+    rc = BIO_read(sslconn->io, buffer, toread);
+    Ns_Log(Debug, "NsOpenSSLRecv: read(1): %d %d", toread, rc);
+    if (rc < 0 && BIO_should_retry(sslconn->io)
+	&& Ns_SockWait(sslconn->sock, NS_SOCK_READ, 2) == NS_OK) {
+	rc = BIO_read(sslconn->io, buffer, toread);
+        Ns_Log(Debug, "NsOpenSSLRecv: read(2): %d %d", toread, rc);
     }
 
     return rc;
@@ -301,11 +301,11 @@ NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread)
  */
 
 int
-NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
+NsOpenSSLSend(Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
 {
 #if 0
     /* XXX how it was done in nsopenssl 1.1c */
-    return SSL_write (sslconn->ssl, buffer, towrite);
+    return SSL_write(sslconn->ssl, buffer, towrite);
 #endif
 
     int rc;
@@ -314,11 +314,11 @@ NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
     total = towrite;
 
     do {
-	rc = SSL_write (sslconn->ssl, buffer, towrite);
+	rc = SSL_write(sslconn->ssl, buffer, towrite);
 	if (rc > 0)
 	    towrite -= rc;
-    } while (BIO_should_retry (sslconn->ssl->wbio) &&
-	     BIO_should_write (sslconn->ssl->wbio));
+    } while (BIO_should_retry(sslconn->ssl->wbio) &&
+	     BIO_should_write(sslconn->ssl->wbio));
 
     return rc;
 }
@@ -341,13 +341,13 @@ NsOpenSSLSend (Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
  */
 
 int
-NsOpenSSLFlush (Ns_OpenSSLConn *sslconn)
+NsOpenSSLFlush(Ns_OpenSSLConn *sslconn)
 {
     if (sslconn->ssl == NULL) {
 	return NS_ERROR;
     } else {
-	if (BIO_flush (SSL_get_wbio (sslconn->ssl)) < 1) {
-	    Ns_Log (Error, "%s: BIO returned error on flushing buffer",
+	if (BIO_flush(SSL_get_wbio(sslconn->ssl)) < 1) {
+	    Ns_Log(Error, "%s: BIO returned error on flushing buffer",
                     MODULE);
 	}
     }
@@ -376,7 +376,7 @@ NsOpenSSLFlush (Ns_OpenSSLConn *sslconn)
  */
 
 int
-NsOpenSSLShutdown (SSL *ssl)
+NsOpenSSLShutdown(SSL *ssl)
 {
     int i;
     int rc;
@@ -386,7 +386,7 @@ NsOpenSSLShutdown (SSL *ssl)
      */
 
     for (i = rc = 0; rc == 0 && i < 4; i++) {
-	rc = SSL_shutdown (ssl);
+	rc = SSL_shutdown(ssl);
     }
 
     return rc;
@@ -410,7 +410,7 @@ NsOpenSSLShutdown (SSL *ssl)
  */
 
 static void
-DestroySSLSockConn (Ns_OpenSSLConn *sslconn)
+DestroySSLSockConn(Ns_OpenSSLConn *sslconn)
 {
 }
 
@@ -432,7 +432,7 @@ DestroySSLSockConn (Ns_OpenSSLConn *sslconn)
  */
 
 static int
-RunSSLHandshake (Ns_OpenSSLConn *sslconn)
+RunSSLHandshake(Ns_OpenSSLConn *sslconn)
 {
     int rc;
     //char buffer[256];
@@ -440,31 +440,31 @@ RunSSLHandshake (Ns_OpenSSLConn *sslconn)
 
     /* XXX reverse these -- server handshakes happen more often */
     if (STREQ(sslconn->role, ROLE_SERVER)) {
-        return RunServerSSLHandshake (sslconn);
+        return RunServerSSLHandshake(sslconn);
     }
 
     do {
-        rc = BIO_do_handshake (sslconn->io);
+        rc = BIO_do_handshake(sslconn->io);
 #if 0
         if (rc < 0) {
-            ERR_error_string (ERR_get_error (), buf);
-            Ns_Log (Error, MODULE, ": %s", buf);
+            ERR_error_string(ERR_get_error(), buf);
+            Ns_Log(Error, MODULE, ": %s", buf);
         }
 #endif
-    } while (rc < 0 && BIO_should_retry (sslconn->io));
+    } while (rc < 0 && BIO_should_retry(sslconn->io));
 
     if (rc < 0) {
 	    return NS_ERROR;
     }
 
-    sslconn->peercert = SSL_get_peer_certificate (sslconn->ssl);
+    sslconn->peercert = SSL_get_peer_certificate(sslconn->ssl);
 
     /* Test cert validity in log file */
-    if (Ns_OpenSSLIsPeerCertValid (sslconn)) {
-	    Ns_Log (Notice, "%s: %s: SERVER's CERT is VALID",
+    if (Ns_OpenSSLIsPeerCertValid(sslconn)) {
+	    Ns_Log(Notice, "%s: %s: SERVER's CERT is VALID",
 		    MODULE, sslconn->type);
     } else {
-	    Ns_Log (Notice, "%s: %s: SERVER's CERT is NOT VALID",
+	    Ns_Log(Notice, "%s: %s: SERVER's CERT is NOT VALID",
 		    MODULE, sslconn->type);
     }
 
@@ -489,7 +489,7 @@ RunSSLHandshake (Ns_OpenSSLConn *sslconn)
  */
 
 static int
-RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
+RunServerSSLHandshake(Ns_OpenSSLConn *sslconn)
 {
     int rc, error, n;
     time_t endtime;
@@ -499,26 +499,26 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
 
     Ns_SockSetBlocking(sslconn->sock);
     /* XXX check this */
-    //BIO_set_nbio (sslconn->io, 0);
+    //BIO_set_nbio(sslconn->io, 0);
 
     /* XXX using core driver's value for sendwait */
-    endtime = time (NULL) + sslconn->ssldriver->driver->sendwait + 1;
-    FD_ZERO (&fds);
+    endtime = time(NULL) + sslconn->ssldriver->driver->sendwait + 1;
+    FD_ZERO(&fds);
 
     while (1) {
-	rc = SSL_accept (sslconn->ssl);
+	rc = SSL_accept(sslconn->ssl);
 
 	if (rc == 1)
 	    break;
 
-	error = SSL_get_error (sslconn->ssl, rc);
+	error = SSL_get_error(sslconn->ssl, rc);
 
 	if (error == SSL_ERROR_SYSCALL) {
 	    if (rc == 0) {
-	    	Ns_Log (Error, "%s: %s: EOF during SSL handshake", MODULE, sslconn->server);
+	    	Ns_Log(Error, "%s: %s: EOF during SSL handshake", MODULE, sslconn->server);
 	    } else {
-                Ns_Log (Error, "%s: %s: error during SSL handshake: %s",
-                        MODULE, sslconn->server, ns_sockstrerror (errno));
+                Ns_Log(Error, "%s: %s: error during SSL handshake: %s",
+                        MODULE, sslconn->server, ns_sockstrerror(errno));
 	    }
 	    return NS_ERROR;
 
@@ -531,57 +531,57 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
 	    wfds = &fds;
 
 	} else if (error == SSL_ERROR_ZERO_RETURN) {
-	    Ns_Log (Error, "%s: %s: SSL_ERROR_ZERO_RETURN", MODULE, sslconn->server);
+	    Ns_Log(Error, "%s: %s: SSL_ERROR_ZERO_RETURN", MODULE, sslconn->server);
 	} else if (error == SSL_ERROR_NONE) {
-	    Ns_Log (Error, "%s: %s: SSL_ERROR_NONE", MODULE, sslconn->server);
+	    Ns_Log(Error, "%s: %s: SSL_ERROR_NONE", MODULE, sslconn->server);
 	} else if (error == SSL_ERROR_WANT_CONNECT) {
-	    Ns_Log (Error, "%s: %s: SSL_ERROR_WANT_CONNECT", MODULE, sslconn->server);
+	    Ns_Log(Error, "%s: %s: SSL_ERROR_WANT_CONNECT", MODULE, sslconn->server);
 	} else if (error == SSL_ERROR_WANT_ACCEPT) {
-	    Ns_Log (Error, "%s: %s: SSL_ERROR_WANT_ACCEPT", MODULE, sslconn->server);
+	    Ns_Log(Error, "%s: %s: SSL_ERROR_WANT_ACCEPT", MODULE, sslconn->server);
 	} else if (error == SSL_ERROR_WANT_X509_LOOKUP) {
-	    Ns_Log (Error, "%s: %s: SSL_ERROR_X509_LOOKUP", MODULE, sslconn->server);
+	    Ns_Log(Error, "%s: %s: SSL_ERROR_X509_LOOKUP", MODULE, sslconn->server);
 
 	} else {
-	    Ns_Log (Error, "%s: %s: error %d/%d during SSL handshake",
+	    Ns_Log(Error, "%s: %s: error %d/%d during SSL handshake",
 		    MODULE, sslconn->server, rc, error);
 	    return NS_ERROR;
 	}
 
-	FD_SET (sslconn->sock, &fds);
+	FD_SET(sslconn->sock, &fds);
 
 	do {
-	    tv.tv_sec = endtime - time (NULL);
+	    tv.tv_sec = endtime - time(NULL);
 	    tv.tv_usec = 0;
-	    n = select (sslconn->sock + 1, rfds, wfds, NULL, &tv);
+	    n = select(sslconn->sock + 1, rfds, wfds, NULL, &tv);
 	} while (n < 0 && errno == EINTR);
 
 	if (n < 0) {
-	    Ns_Log (Error, "%s: %s: select failed: %s",
-		    MODULE, sslconn->server, ns_sockstrerror (errno));
+	    Ns_Log(Error, "%s: %s: select failed: %s",
+		    MODULE, sslconn->server, ns_sockstrerror(errno));
 	    return NS_ERROR;
 	}
 
 	if (n == 0) {
-	    Ns_Log (Notice, "%s: %s: SSL handshake timeout",
+	    Ns_Log(Notice, "%s: %s: SSL handshake timeout",
                     MODULE, sslconn->server);
 	    return NS_ERROR;
 	}
     }
 
-    sslconn->peercert = SSL_get_peer_certificate (sslconn->ssl);
+    sslconn->peercert = SSL_get_peer_certificate(sslconn->ssl);
 
     Ns_SockSetNonBlocking(sslconn->sock);
     /* XXX check this */
-    //BIO_set_nbio (sslconn->io, 1);
+    //BIO_set_nbio(sslconn->io, 1);
 
     /* XXX log if the cert is valid as a test */
 #if 0
     /* Test cert validity in log file */
-    if (Ns_OpenSSLIsPeerCertValid (sslconn)) {
-	Ns_Log (Notice, MODULE, ": %s: CLIENT's CERT is VALID",
+    if (Ns_OpenSSLIsPeerCertValid(sslconn)) {
+	Ns_Log(Notice, MODULE, ": %s: CLIENT's CERT is VALID",
 		sslconn->type);
     } else {
-	Ns_Log (Notice, MODULE, ": %s: CLIENT's CERT is NOT VALID",
+	Ns_Log(Notice, MODULE, ": %s: CLIENT's CERT is NOT VALID",
 		sslconn->type);
     }
 #endif

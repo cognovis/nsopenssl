@@ -81,6 +81,7 @@ CFLAGS += -g
 #
 ifdef TEST
     OBJS  +=  test.o
+    CFLAGS += -DTEST
 endif
 
 #

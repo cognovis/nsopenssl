@@ -48,9 +48,9 @@ static const char *RCSID =
 extern Tcl_HashTable NsOpenSSLServers;
 extern NsOpenSSLSessionCacheId *nextSessionCacheId;
 
-static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
-static RSA *IssueTmpRSAKey (SSL *ssl, int export, int keylen);
-static void OpenSSLTrace (SSL *ssl, int where, int rc);
+static int PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
+static RSA *IssueTmpRSAKey(SSL *ssl, int export, int keylen);
+static void OpenSSLTrace(SSL *ssl, int where, int rc);
 
 #define BUFSIZE 2048
 
@@ -62,12 +62,14 @@ typedef struct Stream {
     /* XXX analyze this */
     char buf[BUFSIZE + 1];
 } Stream; 
-static int GetLine (Stream *stream, Ns_DString *ds);
-static int FillBuf (Stream *stream);
+static int GetLine(Stream *stream, Ns_DString *ds);
+static int FillBuf(Stream *stream);
 
+#if 0
 /* XXX put into NsOpenSSLVirtualServerTable->server */
 static Ns_OpenSSLContext  *firstSSLContext;
 static Ns_OpenSSLConn     *firstSSLConn;
+#endif
 
 NS_EXPORT int Ns_ModuleVersion = 1;
 
@@ -90,7 +92,7 @@ NS_EXPORT int Ns_ModuleVersion = 1;
  */
 
 NS_EXPORT int
-Ns_ModuleInit (char *server, char *module)
+Ns_ModuleInit(char *server, char *module)
 {
     return NsOpenSSLModuleInit(server, module);
 }
@@ -120,16 +122,16 @@ Ns_ModuleInit (char *server, char *module)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
+Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout)
 {
     Ns_OpenSSLConn *sslconn;
     Ns_OpenSSLContext *sslcontext;
     SOCKET sock;
 
     if (timeout < 0) {
-        sock = Ns_SockConnect (host, port);
+        sock = Ns_SockConnect(host, port);
     } else {
-        sock = Ns_SockTimedConnect (host, port, timeout);
+        sock = Ns_SockTimedConnect(host, port, timeout);
     }
 
     if (sock == INVALID_SOCKET)
@@ -146,9 +148,9 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
      */
 
     if (async)
-	Ns_SockSetNonBlocking (sslconn->sock);
+	Ns_SockSetNonBlocking(sslconn->sock);
 
-    SSL_set_app_data (sslconn->ssl, sslconn);
+    SSL_set_app_data(sslconn->ssl, sslconn);
 
     return sslconn;
 }
@@ -175,7 +177,7 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockAccept (SOCKET sock)
+Ns_OpenSSLSockAccept(SOCKET sock)
 {
     Ns_OpenSSLConn *sslconn;
     Ns_OpenSSLContext *sslcontext;
@@ -186,8 +188,8 @@ Ns_OpenSSLSockAccept (SOCKET sock)
     if ((sslconn = NsOpenSSLConnCreate(sock, NULL, sslcontext)) == NULL)
         return NULL;
 
-    Ns_SockSetNonBlocking (sslconn->sock);
-    SSL_set_app_data (sslconn->ssl, sslconn);
+    Ns_SockSetNonBlocking(sslconn->sock);
+    SSL_set_app_data(sslconn->ssl, sslconn);
 
     return sslconn;
 }
@@ -216,9 +218,9 @@ Ns_OpenSSLSockAccept (SOCKET sock)
  */
 
 SOCKET
-Ns_OpenSSLSockListen (char *addr, int port)
+Ns_OpenSSLSockListen(char *addr, int port)
 {
-    return Ns_SockListen (addr, port);
+    return Ns_SockListen(addr, port);
 }
 
 
@@ -254,10 +256,10 @@ Ns_OpenSSLSockListen (char *addr, int port)
 /* XXX so the developer using the API won't have to */
 
 int
-Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc *proc, void *arg, int when)
+Ns_OpenSSLSockCallback(SOCKET sock, Ns_SockProc *proc, void *arg, int when)
 {
 	/* XXX need to handle SSL wrapping here somehow... */
-	return Ns_SockCallback (sock, proc, arg, when);
+	return Ns_SockCallback(sock, proc, arg, when);
 }
 
 
@@ -293,10 +295,10 @@ Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc *proc, void *arg, int when)
 /* XXX so the developer using the API won't have to */
 
 int
-Ns_OpenSSLSockListenCallback (char *addr, int port, Ns_SockProc *proc,
+Ns_OpenSSLSockListenCallback(char *addr, int port, Ns_SockProc *proc,
 			      void *arg)
 {
-    return Ns_SockListenCallback (addr, port, proc, arg);
+    return Ns_SockListenCallback(addr, port, proc, arg);
 }
 
 
@@ -320,9 +322,9 @@ int
 Ns_OpenSSLContextModuleDirSet(char *server, char *module, Ns_OpenSSLContext *sslcontext, 
         char *moduleDir)
 {
-    /* XXX lock */
+    //Ns_RWLockWrLock(&sslcontext->serverPtr->lock);
     sslcontext->moduleDir = moduleDir;
-    /* XXX unlock */
+    //Ns_RWLockUnlock(&sslcontext->serverPtr->lock);
 
     return NS_OK;
 }
@@ -625,10 +627,7 @@ int
 Ns_OpenSSLContextCADirSet(char *server, char *module, Ns_OpenSSLContext *sslcontext,
         char *caDir)
 {
-
     sslcontext->caDir = caDir;
-
-
     return NS_OK;
 }
 
@@ -986,7 +985,7 @@ Ns_OpenSSLContextTraceGet(char *server, char *module, Ns_OpenSSLContext *sslcont
  */
 
 Ns_OpenSSLContext *
-Ns_OpenSSLContextCreate (char *server, char *module)
+Ns_OpenSSLContextCreate(char *server, char *module)
 {
     Ns_OpenSSLContext *sslcontext;
     Ns_DString ds;
@@ -997,7 +996,7 @@ Ns_OpenSSLContextCreate (char *server, char *module)
      * The name of an SSL context must be unique within a virtual server.
      */
 
-    if (SSLContextNameCheck (server, module, name)) {
+    if (SSLContextNameCheck(server, module, name)) {
 	    Ns_Log(Error, "%s: SSL context with name %s already defined",
 			    MODULE, name);
 	    return NULL;
@@ -1027,7 +1026,7 @@ Ns_OpenSSLContextCreate (char *server, char *module)
      */
 
     /* XXX see if session cache ids can be alpha-numeric */
-    /* XXX answer is YES. Make it so.
+    /* XXX answer is YES. Make it so. */
     Ns_MutexLock(&nextSessionCacheId->lock);
     sslcontext->sessionCacheId = nextSessionCacheId->id;
     nextSessionCacheId->id++;
@@ -1038,31 +1037,33 @@ Ns_OpenSSLContextCreate (char *server, char *module)
      * C API and Tcl API.
      */
 
-    Ns_DStringInit (&ds);
+    Ns_DStringInit(&ds);
    
-    Ns_HomePath (&ds, "servers", server, "modules", module, NULL);
+    Ns_HomePath(&ds, "servers", server, "modules", module, NULL);
     sslcontext->moduleDir = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
 
-    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CERT_FILE, NULL);
+    Ns_HomePath(&ds, "servers", server, "modules", module, DEFAULT_CERT_FILE, NULL);
     sslcontext->certFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
 
-    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_KEY_FILE, NULL);
+    Ns_HomePath(&ds, "servers", server, "modules", module, DEFAULT_KEY_FILE, NULL);
     sslcontext->keyFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
 
-    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CA_FILE, NULL);
+    Ns_HomePath(&ds, "servers", server, "modules", module, DEFAULT_CA_FILE, NULL);
     sslcontext->caFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
 
-    Ns_HomePath (&ds, "servers", server, "modules", module, DEFAULT_CA_DIR, NULL);
+    Ns_HomePath(&ds, "servers", server, "modules", module, DEFAULT_CA_DIR, NULL);
     sslcontext->caDir = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
 
 
-    Ns_DStringFree (&ds);
+    Ns_DStringFree(&ds);
 
+    /* XXX DELETE */
+#if 0
     /* Insert the context into the linked list */
 
     /* XXX lock firstSSLContext before modifying */
@@ -1079,9 +1080,11 @@ Ns_OpenSSLContextCreate (char *server, char *module)
 
     /* XXX need locking at startup? */
     //Ns_MutexUnlock(&sslcontext->lock);
+#endif
 
     return sslcontext;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1101,28 +1104,29 @@ Ns_OpenSSLContextCreate (char *server, char *module)
  */
 
 int
-Ns_OpenSSLContextValidate (char *server, char *module, Ns_OpenSSLContext *sslcontext)
+Ns_OpenSSLContextValidate(char *server, char *module, Ns_OpenSSLContext *sslcontext)
 {
     if (sslcontext == NULL) {
-        Ns_Log (Error, "%s: %s: SSL context passed to Ns_OpenSSLContextValidate is NULL",
+        Ns_Log(Error, "%s: %s: SSL context passed to Ns_OpenSSLContextValidate is NULL",
                 server, MODULE);
         return NS_ERROR;
     }
 
-    if (!STREQ (server, sslcontext->server)) {
-        Ns_Log (Error, "%s: %s: SSL context server field (%s) does not match the virtual server name",
+    if (!STREQ(server, sslcontext->server)) {
+        Ns_Log(Error, "%s: %s: SSL context server field (%s) does not match the virtual server name",
                 server, MODULE, sslcontext->server);
         return NS_ERROR;
     }
 
-    if (!STREQ (sslcontext->role, ROLE_SERVER) && !STREQ (sslcontext->role, ROLE_CLIENT)) {
-        Ns_Log (Error, "%s: %s: SSL context role (%s) must be either %s or %s",
+    if (!STREQ(sslcontext->role, ROLE_SERVER) && !STREQ(sslcontext->role, ROLE_CLIENT)) {
+        Ns_Log(Error, "%s: %s: SSL context role (%s) must be either %s or %s",
                 server, MODULE, sslcontext->role, ROLE_SERVER, ROLE_CLIENT);
         return NS_ERROR;
     }
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1147,7 +1151,7 @@ Ns_OpenSSLContextValidate (char *server, char *module, Ns_OpenSSLContext *sslcon
 /* XXX move most critical stuff to top of this func (i.e. cert doesn't load,
  * XXX doesn't matter what else is done */
 int
-Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext)
+Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
 {
     int rc, bits;
     /* XXX merge certFile etc. into filePath; use filePath for all; free when done */
@@ -1155,13 +1159,16 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
     Ns_DString ds;
     DIR *dirfp;
 
+    Ns_Log(Notice, "%s: %s: initializing SSL context '%s'", server, MODULE,
+            sslcontext->name);
+
     /* 
      * Check for common errors and log them so the admin can sort it out.
      */
 
     if (Ns_OpenSSLContextValidate(server, module, sslcontext) == NS_ERROR) {
-        Ns_Log (Error, "%s: %s: failed to initialize SSL Context",
-                server, MODULE);
+        Ns_Log(Error, "%s: %s: failed to initialize SSL context '%s'",
+                server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
 
@@ -1172,7 +1179,6 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
 
     if (STRIEQ(sslcontext->role, ROLE_SERVER)) {
         sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
-        Ns_Log(Debug, "*** SSL_CTX_new for SERVER");
     } else if (STRIEQ(sslcontext->role, ROLE_CLIENT)) {
         sslcontext->sslctx = SSL_CTX_new(SSLv23_client_method());
         Ns_Log(Debug, "*** SSL_CTX_new for CLIENT");
@@ -1189,16 +1195,16 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
 
     /* XXX this is always over-ridden by SSL_set_app_data */
     /* Allows us to get context struct from within OpenSSL callbacks */
-    SSL_CTX_set_app_data (sslcontext->sslctx, sslcontext);
+    SSL_CTX_set_app_data(sslcontext->sslctx, sslcontext);
 
     /* Enable SSL bug compatibility */
-    SSL_CTX_set_options (sslcontext->sslctx, SSL_OP_ALL);
+    SSL_CTX_set_options(sslcontext->sslctx, SSL_OP_ALL);
 
     /* This apparently prevents some sort of DH attack */
-    SSL_CTX_set_options (sslcontext->sslctx, SSL_OP_SINGLE_DH_USE);
+    SSL_CTX_set_options(sslcontext->sslctx, SSL_OP_SINGLE_DH_USE);
 
     /* Temporary key callback required for 40-bit export browsers */
-    SSL_CTX_set_tmp_rsa_callback (sslcontext->sslctx, IssueTmpRSAKey);
+    SSL_CTX_set_tmp_rsa_callback(sslcontext->sslctx, IssueTmpRSAKey);
 
     /* 
      * Load the server's certificate. We have to first build the full path to
@@ -1206,8 +1212,8 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
      */
 
     if (sslcontext->certFile == NULL) {
-        Ns_Log(Error, "%s: %s: no server certificate file defined", 
-                server, MODULE);
+        Ns_Log(Error, "%s: %s: no server certificate file defined for '%s'", 
+                server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
 
@@ -1219,25 +1225,27 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
         Ns_DStringFree(&ds);
     }
 
-    rc = SSL_CTX_use_certificate_chain_file (sslcontext->sslctx, certFile);
+    rc = SSL_CTX_use_certificate_chain_file(sslcontext->sslctx, certFile);
     if (rc == 0) {
-        Ns_Log (Error, "%s: %s: error loading certificate '%s'",
+        Ns_Log(Error, "%s: %s: error loading certificate '%s'",
                server, MODULE, certFile);
         if ((access(certFile, F_OK) != 0) || (access(certFile, R_OK) != 0))
-            Ns_Log(Error, "%s: %s: certificate file does not exist", 
-                    server, MODULE);
+            Ns_Log(Error, "%s: %s: '%s' certificate file does not exist", 
+                    server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
     Ns_Free(certFile);
 
-    Ns_Log (Notice, "%s: %s: certificate loaded successfully", server, MODULE);
+    Ns_Log(Notice, "%s: %s: '%s' certificate loaded successfully", 
+            server, MODULE, sslcontext->name);
 
     /*
      * Load the certificate's key and check that it matches the certificate.
      */
 
     if (sslcontext->keyFile == NULL) {
-        Ns_Log(Error, "%s: %s: no key file defined", server, MODULE);
+        Ns_Log(Error, "%s: %s: no key file defined for '%s'", 
+                server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
 
@@ -1252,22 +1260,23 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
     rc = SSL_CTX_use_PrivateKey_file(sslcontext->sslctx, keyFile,
             SSL_FILETYPE_PEM);
     if (rc == 0) {
-        Ns_Log (Error, "%s: %s: error loading private key '%s'",
-                server, MODULE, keyFile);
+        Ns_Log(Error, "%s: %s: '%s' error loading private key '%s'",
+                server, MODULE, sslcontext->name, keyFile);
         if ((access(keyFile, F_OK) != 0) || (access(keyFile, R_OK) != 0))
-            Ns_Log(Error, "%s: %s: key file does not exist or is not readable", 
-                    server, MODULE);
+            Ns_Log(Error, "%s: %s: '%s' key file does not exist or is not readable", 
+                    server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
 
     if (SSL_CTX_check_private_key(sslcontext->sslctx) == 0) {
-        Ns_Log (Error, "%s: %s: private key does not match certificate",
-                server, MODULE);
+        Ns_Log(Error, "%s: %s: '%s' private key does not match certificate",
+                server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
     Ns_Free(keyFile);
 
-    Ns_Log (Notice, "%s: %s: key file loaded successfully", server, MODULE);
+    Ns_Log(Notice, "%s: %s: '%s' key file loaded successfully", 
+            server, MODULE, sslcontext->name);
 
     /*
      * Load the cipher suite list.
@@ -1276,8 +1285,8 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
     rc = SSL_CTX_set_cipher_list(sslcontext->sslctx, 
             sslcontext->cipherSuite);
     if (rc == 0) {
-            Ns_Log(Error, "%s: %s: error setting cipher suite to '%s'",
-                    server, MODULE, sslcontext->cipherSuite);
+            Ns_Log(Error, "%s: %s: '%s' error setting cipher suite to '%s'",
+                    server, MODULE, sslcontext->name, sslcontext->cipherSuite);
             return NS_ERROR;
     }
 
@@ -1290,30 +1299,30 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
     bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
 
     if (sslcontext->protocols == NULL) {
-        Ns_Log (Notice, "%s: %s: protocol parameter not set; using all protocols: SSLv2, SSLv3 and TLSv1",
-                server, MODULE);
+        Ns_Log(Notice, "%s: %s: '%s' protocol parameter not set; using all protocols: SSLv2, SSLv3 and TLSv1",
+                server, MODULE, sslcontext->name);
             bits &= ~bits;
     } else {
         lprotocols = Ns_StrDup(sslcontext->protocols);
         lprotocols = Ns_StrToLower(lprotocols);
 
         /* XXX check use of strstr here */
-        if (strstr (lprotocols, "all") != NULL) {
-            Ns_Log (Notice, "%s: %s: using all protocols: SSLv2, SSLv3 and TLSv1",
-                server, MODULE);
+        if (strstr(lprotocols, "all") != NULL) {
+            Ns_Log(Notice, "%s: %s: '%s' using all protocols: SSLv2, SSLv3 and TLSv1",
+                server, MODULE, sslcontext->name);
             bits &= ~bits;
         } else {
-            if (strstr (lprotocols, "sslv2") != NULL) {
-                Ns_Log (Notice, "%s: %s: using SSLv2 protocol", server, MODULE);
+            if (strstr(lprotocols, "sslv2") != NULL) {
+                Ns_Log(Notice, "%s: %s: '%s' using SSLv2 protocol", server, MODULE, sslcontext->name);
                 bits &= ~SSL_OP_NO_SSLv2;
             }
-            if (strstr (lprotocols, "sslv3") != NULL) {
-                Ns_Log (Notice, "%s: %s: using SSLv3 protocol", server, MODULE);
+            if (strstr(lprotocols, "sslv3") != NULL) {
+                Ns_Log(Notice, "%s: %s: '%s' using SSLv3 protocol", server, MODULE, sslcontext->name);
                 bits &= ~SSL_OP_NO_SSLv3;
             }
-            if (strstr (lprotocols, "tlsv1") != NULL) {
-                Ns_Log (Notice, "%s: %s: using TLSv1 protocol",
-                     server, MODULE);
+            if (strstr(lprotocols, "tlsv1") != NULL) {
+                Ns_Log(Notice, "%s: %s: '%s' using TLSv1 protocol",
+                     server, MODULE, sslcontext->name);
                 bits &= ~SSL_OP_NO_TLSv1;
             }
         }
@@ -1338,16 +1347,12 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
 
     rc = SSL_CTX_load_verify_locations(sslcontext->sslctx, caFile, NULL);
     if (rc == 0) {
-        Ns_Log(Notice, "%s: %s: failed to load CA certificate file '%s'",
-               server, MODULE, caFile);
-
+        Ns_Log(Notice, "%s: %s: '%s' failed to load CA certificate file '%s'",
+               server, MODULE, sslcontext->name, caFile);
         if (sslcontext->peerVerify)
-            Ns_Log(Error, "%s: %s: you have peer verification turned on; CA \
+            Ns_Log(Error, "%s: %s: '%s' is set to verify peers; CA \
                     certificates are required to perform peer verification",
-                    server, MODULE);
-
-        /* XXX do I really want to fail the context init here, or go on? */
-        return NS_ERROR;
+                    server, MODULE, sslcontext->name);
     }
     Ns_Free(caFile);
 
@@ -1364,14 +1369,14 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
         Ns_DStringFree(&ds);
     }
 
-    rc = SSL_CTX_load_verify_locations (sslcontext->sslctx, NULL, caDir);
+    rc = SSL_CTX_load_verify_locations(sslcontext->sslctx, NULL, caDir);
     if (rc == 0) {
-        Ns_Log (Error, "%s: %s: error using CA directory '%s'",
-               server, MODULE, caDir);
+        Ns_Log(Warning, "%s: %s: '%s' error using CA directory '%s'",
+               server, MODULE, sslcontext->name, caDir);
         dirfp = opendir(caDir);
         if (dirfp == NULL) {
-	        Ns_Log (Notice, "%s: %s: cannot open CA certificate directory",
-		        server, MODULE);
+	        Ns_Log(Warning, "%s: %s: '%s' cannot open CA certificate directory",
+		        server, MODULE, sslcontext->name);
         }
         closedir(dirfp);
     }
@@ -1391,8 +1396,8 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
     if (sslcontext->peerVerifyDepth >= 0) {
         SSL_CTX_set_verify_depth(sslcontext->sslctx, sslcontext->peerVerifyDepth);
     } else {
-        Ns_Log(Warning, "%s: %s: Peer verify parameter invalid - defaulting to %d",
-                server, MODULE, DEFAULT_PEER_VERIFY_DEPTH);
+        Ns_Log(Warning, "%s: %s: '%s' peer verify parameter invalid; defaulting to %d",
+                server, MODULE, sslcontext->name, DEFAULT_PEER_VERIFY_DEPTH);
         SSL_CTX_set_verify_depth(sslcontext->sslctx, DEFAULT_PEER_VERIFY_DEPTH);
     }
 
@@ -1405,7 +1410,7 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
         SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_SERVER);
         SSL_CTX_set_session_id_context(sslcontext->sslctx,
             (void *) &sslcontext->sessionCacheId,
-            sizeof (sslcontext->sessionCacheId));
+            sizeof(sslcontext->sessionCacheId));
 
         /*
          * If not already set, set to defaults
@@ -1423,15 +1428,14 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
 
     /* XXX lock struct */
     if (sslcontext->trace) {
-        Ns_Log(Debug, "****  %s: %s: Turning trace ON", server, MODULE);
         SSL_CTX_set_info_callback(sslcontext->sslctx, OpenSSLTrace);
     } else {
-        Ns_Log(Debug, "****  %s: %s: Turning trace OFF", server, MODULE);
         SSL_CTX_set_info_callback(sslcontext->sslctx, NULL);
     }
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1456,23 +1460,24 @@ Ns_OpenSSLContextInit (char *server, char *module, Ns_OpenSSLContext *sslcontext
 
 /* XXX add the ability to wait for the context to be inactive? */
 int
-Ns_OpenSSLContextRelease (char *server, char *module, Ns_OpenSSLContext *sslcontext)
+Ns_OpenSSLContextRelease(char *server, char *module, Ns_OpenSSLContext *sslcontext)
 {
 
     /* XXX rw lock */
     if (sslcontext->refcnt > 0) {
-        Ns_Log (Error, "%s: %s: attempted to release SSL context '%s' while still in use by active connections", 
+        Ns_Log(Error, "%s: %s: attempted to release SSL context '%s' while still in use by active connections", 
                 server, MODULE, sslcontext->name);
         return NS_ERROR;
     }
 
-    Ns_Log (Warning, "%s: %s: releasing SSL context '%s' to be writeable",
+    Ns_Log(Warning, "%s: %s: releasing SSL context '%s' to be writeable",
             server, MODULE, sslcontext->name);
     sslcontext->readonly = NS_FALSE;
     /* XXX rw unlock */
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1497,7 +1502,6 @@ Ns_OpenSSLContextDestroy(char *server, char *module, Ns_OpenSSLContext *sslconte
     return NS_OK;
 }
 
-
 
 /*                     
  *----------------------------------------------------------------------
@@ -1518,7 +1522,7 @@ Ns_OpenSSLContextDestroy(char *server, char *module, Ns_OpenSSLContext *sslconte
  */
 
 int
-Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
+Ns_OpenSSLFetchURL(Ns_DString *page, char *url, Ns_Set *headers)
 {
     Ns_OpenSSLConn *sslconn;
     Ns_DString ds;
@@ -1534,21 +1538,21 @@ Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
      * Parse the URL and open a connection.
      */
 
-    Ns_DStringVarAppend (&ds, "GET ", url, " HTTP/1.0", NULL);
-    request = Ns_ParseRequest (ds.string);
+    Ns_DStringVarAppend(&ds, "GET ", url, " HTTP/1.0", NULL);
+    request = Ns_ParseRequest(ds.string);
     if (request == NULL || request->protocol == NULL ||
             /* XXX try to get the server name into the log message */
-	!STREQ (request->protocol, "https") || request->host == NULL) {
-	Ns_Log (Notice, "%s: urlopen: invalid url '%s'", MODULE, url);
+	!STREQ(request->protocol, "https") || request->host == NULL) {
+	Ns_Log(Notice, "%s: urlopen: invalid url '%s'", MODULE, url);
 	goto done;
     }
     if (request->port == 0) {
 	request->port = 443;
     }
-    sslconn = Ns_OpenSSLSockConnect (request->host, request->port, 0, 300);
+    sslconn = Ns_OpenSSLSockConnect(request->host, request->port, 0, 300);
             /* XXX try to get the server name into the log message */
     if (sslconn == NULL) {
-	Ns_Log (Error, "%s: Ns_OpenSSLFetchURL failed to connect to '%s'", MODULE, url);
+	Ns_Log(Error, "%s: Ns_OpenSSLFetchURL failed to connect to '%s'", MODULE, url);
 	goto done;
     }
 
@@ -1556,18 +1560,18 @@ Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
      * Send a simple HTTP GET request.
      */
 
-    Ns_DStringTrunc (&ds, 0);
-    Ns_DStringVarAppend (&ds, "GET ", request->url, NULL);
+    Ns_DStringTrunc(&ds, 0);
+    Ns_DStringVarAppend(&ds, "GET ", request->url, NULL);
     if (request->query != NULL) {
-	Ns_DStringVarAppend (&ds, "?", request->query, NULL);
+	Ns_DStringVarAppend(&ds, "?", request->query, NULL);
     }
-    Ns_DStringAppend (&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
+    Ns_DStringAppend(&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
     p = ds.string;
     tosend = ds.length;
     while (tosend > 0) {
-	n = NsOpenSSLSend (sslconn, p, tosend);
+	n = NsOpenSSLSend(sslconn, p, tosend);
 	if (n <= 0) {
-	    Ns_Log (Error, "%s: urlopen: failed to send data to '%s'", MODULE, url);
+	    Ns_Log(Error, "%s: urlopen: failed to send data to '%s'", MODULE, url);
 	    goto done;
 	}
 	tosend -= n;
@@ -1583,22 +1587,22 @@ Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
     stream.error = 0;
     stream.ptr = stream.buf;
     stream.sslconn = (Ns_OpenSSLConn *) sslconn;
-    if (!GetLine (&stream, &ds)) {
+    if (!GetLine(&stream, &ds)) {
 	goto done;
     }
-    if (headers != NULL && strncmp (ds.string, "HTTP", 4) == 0) {
+    if (headers != NULL && strncmp(ds.string, "HTTP", 4) == 0) {
 	if (headers->name != NULL) {
-	    ns_free (headers->name);
+	    ns_free(headers->name);
 	}
-	headers->name = Ns_DStringExport (&ds);
+	headers->name = Ns_DStringExport(&ds);
     }
     do {
-	if (!GetLine (&stream, &ds)) {
+	if (!GetLine(&stream, &ds)) {
 	    goto done;
 	}
 	if (ds.length > 0
 	    && headers != NULL
-	    && Ns_ParseHeader (headers, ds.string, Preserve) != NS_OK) {
+	    && Ns_ParseHeader(headers, ds.string, Preserve) != NS_OK) {
 	    goto done;
 	}
     } while (ds.length > 0);
@@ -1609,20 +1613,20 @@ Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
      */
 
     do {
-	Ns_DStringNAppend (page, stream.ptr, stream.cnt);
-    } while (FillBuf (&stream));
+	Ns_DStringNAppend(page, stream.ptr, stream.cnt);
+    } while (FillBuf(&stream));
     if (!stream.error) {
 	status = NS_OK;
     }
 
   done:
     if (request != NULL) {
-	Ns_FreeRequest (request);
+	Ns_FreeRequest(request);
     }
     if (sslconn != NULL) {
-	NsOpenSSLConnDestroy (sslconn);
+	NsOpenSSLConnDestroy(sslconn);
     }
-    Ns_DStringFree (&ds);
+    Ns_DStringFree(&ds);
     return status;
 }
 
@@ -1645,9 +1649,9 @@ Ns_OpenSSLFetchURL (Ns_DString *page, char *url, Ns_Set *headers)
  */
 
 int
-Ns_OpenSSLFetchPage (Ns_DString *page, char *url, char *server)
+Ns_OpenSSLFetchPage(Ns_DString *page, char *url, char *server)
 {
-    return Ns_FetchPage (page, url, server);
+    return Ns_FetchPage(page, url, server);
 }
 
 
@@ -1668,9 +1672,9 @@ Ns_OpenSSLFetchPage (Ns_DString *page, char *url, char *server)
  */
 
 int
-Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn)
+Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *sslconn)
 {
-    if (SSL_get_verify_result (sslconn->ssl) == X509_V_OK) {
+    if (SSL_get_verify_result(sslconn->ssl) == X509_V_OK) {
 	return NS_TRUE;
     } else {
 	return NS_FALSE;
@@ -1703,6 +1707,7 @@ Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn)
        X509_V_ERR_APPLICATION_VERIFICATION
      */
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1725,7 +1730,7 @@ Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn)
  */
 
 static int
-PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx)
+PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx)
 {   
     return 1;
 }   
@@ -1749,19 +1754,19 @@ PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx)
  */
 
 static RSA *
-IssueTmpRSAKey (SSL *ssl, int export, int keylen)
+IssueTmpRSAKey(SSL *ssl, int export, int keylen)
 {
     Ns_OpenSSLConn *sslconn;
     static RSA *rsa_tmp;
 
-    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
+    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data(ssl);
 
-    rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
+    rsa_tmp = RSA_generate_key(keylen, RSA_F4, NULL, NULL);
     if (rsa_tmp == NULL) {
         Ns_Log(Error, "%s: %s: Temporary RSA key generation failed",
                 MODULE, sslconn->ssldriver->server);
     } else {
-        Ns_Log (Notice, "%s: %s: Generated %d-bit temporary RSA key",
+        Ns_Log(Notice, "%s: %s: Generated %d-bit temporary RSA key",
                 MODULE, sslconn->ssldriver->server, keylen);
     }
 
@@ -1786,7 +1791,7 @@ IssueTmpRSAKey (SSL *ssl, int export, int keylen)
  */
 
 void
-OpenSSLTrace (SSL *ssl, int where, int rc)
+OpenSSLTrace(SSL *ssl, int where, int rc)
 {
     Ns_OpenSSLConn *sslconn;
     char *alertTypePrefix;
@@ -1796,25 +1801,24 @@ OpenSSLTrace (SSL *ssl, int where, int rc)
 
     Ns_Log(Debug, "*** HERE in TRACE");
 
-    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
+    sslconn = (Ns_OpenSSLConn *) SSL_get_app_data(ssl);
 
     if (where & SSL_CB_ALERT) {
 	alertTypePrefix = "; alert type = ";
-	alertType = SSL_alert_type_string_long (rc);
+	alertType = SSL_alert_type_string_long(rc);
 	alertDescPrefix = "; alert desc = ";
-	alertDesc = SSL_alert_desc_string_long (rc);
+	alertDesc = SSL_alert_desc_string_long(rc);
     } else {
 	alertTypePrefix = alertType = "";
 	alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log (Notice, "%s: trace: %s: %s%s%s%s%s",
+    Ns_Log(Notice, "%s: trace: %s: %s%s%s%s%s",
 	    MODULE,
             sslconn->type,
-	    SSL_state_string_long (ssl),
+	    SSL_state_string_long(ssl),
 	    alertTypePrefix, alertType, alertDescPrefix, alertDesc);
 }
-
 
 
 /*
@@ -1835,33 +1839,33 @@ OpenSSLTrace (SSL *ssl, int where, int rc)
  */
 
 static int
-GetLine (Stream *stream, Ns_DString *ds)
+GetLine(Stream *stream, Ns_DString *ds)
 {
     char *eol;
     int n;
 
-    Ns_DStringTrunc (ds, 0);
+    Ns_DStringTrunc(ds, 0);
     do {
 	if (stream->cnt > 0) {
-	    eol = strchr (stream->ptr, '\n');
+	    eol = strchr(stream->ptr, '\n');
 	    if (eol == NULL) {
 		n = stream->cnt;
 	    } else {
 		*eol++ = '\0';
 		n = eol - stream->ptr;
 	    }
-	    Ns_DStringNAppend (ds, stream->ptr, n - 1);
+	    Ns_DStringNAppend(ds, stream->ptr, n - 1);
 	    stream->ptr += n;
 	    stream->cnt -= n;
 	    if (eol != NULL) {
 		n = ds->length;
 		if (n > 0 && ds->string[n - 1] == '\r') {
-		    Ns_DStringTrunc (ds, n - 1);
+		    Ns_DStringTrunc(ds, n - 1);
 		}
 		return NS_TRUE;
 	    }
 	}
-    } while (FillBuf (stream));
+    } while (FillBuf(stream));
 
     return NS_FALSE;
 }
@@ -1884,14 +1888,14 @@ GetLine (Stream *stream, Ns_DString *ds)
  */
 
 static int
-FillBuf (Stream *stream)
+FillBuf(Stream *stream)
 {
     int n;
 
-    n = NsOpenSSLRecv (stream->sslconn, stream->buf, BUFSIZE);
+    n = NsOpenSSLRecv(stream->sslconn, stream->buf, BUFSIZE);
     if (n <= 0) {
 	if (n < 0) {
-	    Ns_Log (Error, "%sNs_OpenSSLFetchURL failed to fill socket stream buffer",
+	    Ns_Log(Error, "%sNs_OpenSSLFetchURL failed to fill socket stream buffer",
                     MODULE);
 	    stream->error = 1;
 	}
