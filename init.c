@@ -587,8 +587,8 @@ IssueTmpRSAKey (SSL * ssl, int export, int keylen)
     if (rsa_tmp == NULL) {
         Ns_Log(Error, MODULE, ": Temporary RSA key generation failed");
     } else {
-	    Ns_Log (Notice, "%s: Generated %d-bit temporary RSA key", 
-                driver->module, keylen);
+	    Ns_Log (Notice, MODULE, ": Generated %d-bit temporary RSA key", 
+                keylen);
     }
 
 	return rsa_tmp;

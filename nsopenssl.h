@@ -35,8 +35,8 @@
 
 /* XXX remove from production */
 #define NSOPENSSL_DEBUG
-#define where() __FUNCTION__, __FILE__, __LINE__
-extern void DEBUG(char *func, char *file, int line);
+#define where() "__FUNCTION__, __FILE__, __LINE__"
+extern void DEBUG(char *where);
 
 
 /* Required for Tcl channels to work */
@@ -72,13 +72,16 @@ extern void DEBUG(char *func, char *file, int line);
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
- include <openssl/opensslconf.h>
-  
- define OPENSSL_THREAD_DEFINES
+#include <openssl/opensslconf.h>
+
+/* XXX don't forget to turn this back on */
+#if 0
+define OPENSSL_THREAD_DEFINES
  /* requires newer version of OpenSSL */
- ifndef OPENSSL_THREADS
- error "OpenSSL was not compiled with thread support!"
- endif
+ifndef OPENSSL_THREADS
+error "OpenSSL was not compiled with thread support!"
+endif
+#endif
 
 #define MODULE                   "nsopenssl"
 
@@ -120,12 +123,13 @@ extern void DEBUG(char *func, char *file, int line);
  */
 
 typedef struct Ns_OpenSSLContext {
-    Ns_Mutex           lock;
-    int                refcnt; 
     char              *server; 
     char              *module;
+    int                refcnt; 
     struct Ns_OpenSSLContext *next;
     int                conntype;
+    int                role;
+    char              *moduleDir;
     char              *name;
     char              *desc;
     char              *certFile;             /* Cert file, PEM format */
@@ -141,37 +145,35 @@ typedef struct Ns_OpenSSLContext {
     int                sessionCacheSize;     /* In bytes */
     int                sessionCacheTimeout;  /* Flush session cache in seconds */
     int                trace;                /* 0 = off; 1 = on */
+    Ns_Mutex           lock;
     SSL_CTX           *sslctx;
 } Ns_OpenSSLContext;
 
 typedef struct NsOpenSSLDriver {
-    Ns_Mutex                  lock;
-    int                       refcnt;
     char                     *server;      
     char                     *module;      
+    struct Ns_Driver         *driver;        /* Huh? */
     struct NsOpenSSLDriver   *next;          /* pointer to next driver */
     struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
-    struct Ns_OpenSSLContext *context;       /* SSL context assoc with driver */ 
-    struct Ns_Driver         *driver;        /* Huh? */
+    struct Ns_OpenSSLContext *context;       /* SSL context assoc with this driver */ 
+    int                       refcnt;        /* Don't ns_free() unless this is 0 */
     char                     *configPath;
     char                     *dir;
     char                     *location;
     char                     *address;	
     char                     *bindaddr;
-    char                     *randomFile;    /* XXX should be global */
     SOCKET                    lsock;
     int                       port;
-    int                       bufsize;
-    int                       timeout;
+    Ns_Mutex                  lock;
 } NsOpenSSLDriver;
 
 typedef struct Ns_OpenSSLConn {
-    Ns_Mutex                lock;
-    int                     refcnt;
     char                   *server;
     char                   *module;
     struct Ns_OpenSSLConn  *next;      /* next conn */
     struct NsOpenSSLDriver *driver;    /* the driver this conn belongs to */
+    Ns_Mutex                lock;
+    int                     refcnt;    /* don't ns_free() unless this is 0 */
     int                     conntype;  /* server, sockserver or sockclient */
     int                     peerport;  /* port number of remote side */
     char                    peer[16];  /* peer's name */
@@ -211,6 +213,12 @@ typedef struct SSLTclCmd {
 #define CONNTYPE_SOCKSERVER            1
 #define CONNTYPE_SOCKCLIENT            2
 
+/* XXX remove */
+#define CLIENT_ROLE                    0
+#define ROLE_SSL_CLIENT                0
+#define SERVER_ROLE                    1
+#define ROLE_SSL_SERVER                1
+
 #define DEFAULT_PROTOCOLS              "All"
 #define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
 #define DEFAULT_CERT_FILE              "certificate.pem"
@@ -221,7 +229,7 @@ typedef struct SSLTclCmd {
 #define DEFAULT_PEER_VERIFY_DEPTH      3
 #define DEFAULT_SESSION_CACHE          NS_TRUE
 #define DEFAULT_SESSION_CACHE_SIZE     128
-#define DEFAULT_SESSION_TIMEOUT        300
+#define DEFAULT_SESSION_CACHE_TIMEOUT  300
 #define DEFAULT_TRACE                  NS_FALSE
 
 #define DEFAULT_SOCKTIMEOUT            30
@@ -287,6 +295,8 @@ extern Tcl_CmdProc NsTclSSLGetByCmd;
  * nsopenssl.c
  */
 
+extern NsOpenSSLModuleInit(char *server, char *module);
+
 extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *name, char *host, 
 		int port, int async, int timeout);
 
@@ -304,7 +314,8 @@ extern Ns_OpenSSLContext *NsOpenSSLContextSockServerDefault (void);
 extern Ns_OpenSSLContext *NsOpenSSLContextSockClientDefault (void);
 
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
-		char *module, char *name, char *desc, char *type);
+		char *module, char *name, char *type);
+extern int Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *context);
 
 extern int Ns_OpenSSLContextInit(char *server, char *module, 
         Ns_OpenSSLContext *context);
@@ -368,4 +379,24 @@ extern int Ns_OpenSSLContextTraceSet(char *server, char *module,
         Ns_OpenSSLContext *context, int trace);
 extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
+
+extern NsOpenSSLDriver *NsOpenSSLDriverCreate(char *server, char *module);
+extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *driver);
+
+
+/* XXX TMP */
+/*
+ *----------------------------------------------------------------------
+ *
+ * DEBUG --
+ *
+ *     XXX Temporary debug logging function
+ *
+ *----------------------------------------------------------------------
+ */
+void
+DEBUG(char *where)
+{
+    Ns_Log(Debug, "%s", where);
+}
 

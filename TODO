@@ -1,4 +1,6 @@
-ACTIVITIES for nsopenssl 3.0:
+ACTIVITIES for nsopenssl 3.0: 
+  - Merge SetProtocols and others into their new API functions.
+  - #ifdef out protocols and ciphers that are not supported in the user's compiled OpenSSL library.
   - Research locking of Ns_OpenSSLContext structs is done correctly
   - Merge SetProtocols, LoadCert, ... into the Ns_OpenSSL*Set/Get functions
   - Review structures in nsopenssl.h and validate members

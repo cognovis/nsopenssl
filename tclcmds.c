@@ -227,7 +227,7 @@ NsTclOpenSSLCmd (ClientData dummy, Tcl_Interp * interp, int argc, char **argv)
 
 	} else if (STREQ (argv[2], "name")) {
 
-	    Tcl_SetResult (interp, conn->driver->module, TCL_VOLATILE);
+	    Tcl_SetResult (interp, MODULE, TCL_VOLATILE);
 
 	} else if (STREQ (argv[2], "port")) {
 
@@ -543,7 +543,7 @@ NsTclSSLSockOpenCmd (ClientData dummy, Tcl_Interp * interp, int argc,
     }
 
     if (CreateTclChannel (conn, interp) != NS_OK) {
-	Ns_Log (Warning, "%s: %s: Tcl channel not available", conn->driver->module,
+	Ns_Log (Warning, MODULE, ": %s: Tcl channel not available",
 		conn->type);
     }
 
@@ -656,7 +656,7 @@ NsTclSSLSockAcceptCmd (ClientData dummy, Tcl_Interp * interp, int argc,
     }
 
     if (CreateTclChannel (conn, interp) != NS_OK) {
-	Ns_Log (Warning, "%s: %s: Tcl channel not available", conn->driver->module,
+	Ns_Log (Warning, MODULE, ": %s: Tcl channel not available",
 		conn->type);
     }
 
@@ -1327,8 +1327,8 @@ CreateTclChannel (Ns_OpenSSLConn * conn, Tcl_Interp * interp)
 
     if (chan == (Tcl_Channel) NULL) {
 	NsOpenSSLDestroyConn (conn);
-	Ns_Log (Error, "%s: %s: could not create new Tcl channel",
-		conn->driver->module, conn->type);
+	Ns_Log (Error, MODULE, ": %s: could not create new Tcl channel",
+		conn->type);
 	Tcl_AppendResult (interp, "could not create new Tcl channel", NULL);
 	return TCL_ERROR;
     }
@@ -1349,8 +1349,8 @@ CreateTclChannel (Ns_OpenSSLConn * conn, Tcl_Interp * interp)
 
     if (chan == (Tcl_Channel) NULL) {
 	NsOpenSSLDestroyConn (conn);
-	Ns_Log (Error, "%s: %s: could not create new Tcl channel",
-		conn->driver->module, conn->type);
+	Ns_Log (Error, MODULE, ": %s: could not create new Tcl channel",
+		conn->type);
 	Tcl_AppendResult (interp, "could not create new Tcl channel", NULL);
 	return TCL_ERROR;
     }
@@ -1884,7 +1884,7 @@ SSLSockListenCallback (SOCKET sock, void *arg, int why)
 	Tcl_DStringFree (&script);
     }
     if (result != TCL_OK) {
-	Ns_Log (Warning, "%s: %s: Tcl channel not available", conn->driver->module,
+	Ns_Log (Warning, MODULE, ": %s: Tcl channel not available",
 		conn->type);
 	Ns_TclLogError (interp);
     }
