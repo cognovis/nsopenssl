@@ -1,12 +1,12 @@
 2004-04-04  Scott Goodwin  <scott@scottg.net>
 
-      * nsopenssl.h, ssl.c, tclcmds.c: Cleaned up CreateTclChannel. This
-      affects calls to ns_openssl_sockopen and friends: the number of list
-      values is the same and so is there meaning, but list items 1 and 2 are
-      now the same socket descriptors where in the past they used to be
-      separate, one for read and one for write. The benefits besides simpler
-      C code are that your web server will use 1 less fd for each connection
-      you make using nsopenssl's Tcl API.
+      * nsopenssl.h, ssl.c, tclcmds.c, https.tcl: Cleaned up CreateTclChannel.
+      This affects calls to ns_openssl_sockopen and friends: the number of
+      list values is the same and so is there meaning, but list items 1 and 2
+      are now the same socket descriptors where in the past they used to be
+      separate, one for read and one for write. The benefits besides simpler C
+      code are that your web server will use 1 less fd for each connection you
+      make using nsopenssl's Tcl API.
 
       * ssl.c, tclcmds.c: Fixed fd leak when using nsopenssl Tcl API. Have to
       do a shutdown on the socket for both read/write sides, then ns_sockclose
