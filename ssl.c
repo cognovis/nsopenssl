@@ -244,63 +244,6 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
 /*
  *----------------------------------------------------------------------
  *
- * NsOpenSSLConnRecv --
- *
- *      Read data from an SSL connection
- *
- * Results:
- *      The number of bytes read or a negative number in case of
- *      an error.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-extern int
-NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread)
-{
-    int rc     = -1;
-    int socket = INVALID_SOCKET;
-
-    /*
-     * Check the socket to see if it's still alive. If the client
-     * aborts the connection during a file upload, the BIO read will
-     * loop forever, using cpu cycles, but reading no further
-     * data. Note that checking to see if sock is INVALID_SOCKET
-     * doesn't always work here.
-     */
-
-    /* XXX uncomment */
-#if 0
-    if (send(sslconn->socket, NULL, 0, 0) != 0) {
-        Ns_Log(Notice, "%s (%s): connection reset by peer",
-                MODULE, sslconn->server);
-        return NS_ERROR;
-    }
-#endif
-
-    BIO_get_fd(bio, &socket);
-
-    do {
-        rc = BIO_read(bio, buffer, toread);
-        Ns_Log(Debug, "NsOpenSSLConnRecv: read = (%d); sock = (%d)", rc, socket);
-    } while (
-            rc < 0 && 
-            rc < toread &&
-            BIO_should_retry(bio) &&
-            Ns_SockWait(socket, NS_SOCK_READ, 2) == NS_OK
-            );
-    
-
-    return rc;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
  * Ns_OpenSSLSockConnect --
  *
  *      Open an SSL connection to the given host and port.
@@ -661,15 +604,84 @@ NsOpenSSLConnSend(BIO *bio, void *buffer, int towrite)
     /* XXX temporary */
     BIO_get_fd(bio, &socket);
 
+    Ns_Log(Debug, "NsOpenSSLConnRecv: towrite = (%d)", towrite);
     do {
 	rc = BIO_write(bio, buffer, towrite);
-	Ns_Log(Debug, "NsOpenSSLConnSend: wrote = (%d); sock = (%d)", rc, socket);
 	BIO_flush(bio);
+	if (rc > 0) {
+	    towrite -= rc;
+	}
+	Ns_Log(Debug, "NsOpenSSLConnSend: wrote = (%d); towrite = (%d)", rc, towrite);
     } while (
-	    rc < towrite && 
+	    towrite > 0 && 
 	    BIO_should_retry(bio) &&
 	    BIO_should_write(bio)
 	    );
+
+    return rc;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * NsOpenSSLConnRecv --
+ *
+ *      Read data from an SSL connection
+ *
+ * Results:
+ *      The number of bytes read or a negative number in case of
+ *      an error.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+extern int
+NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread)
+{
+    int rc     = -1;
+    int total  = 0;
+    int socket = INVALID_SOCKET;
+
+    /*
+     * Check the socket to see if it's still alive. If the client
+     * aborts the connection during a file upload, the BIO read will
+     * loop forever, using cpu cycles, but reading no further
+     * data. Note that checking to see if sock is INVALID_SOCKET
+     * doesn't always work here.
+     */
+
+    BIO_get_fd(bio, &socket);
+
+    /* XXX Ensure socket is still alive */
+#if 0
+    if (send(socket, NULL, 0, 0) != 0) {
+        Ns_Log(Notice, "%s (SERVER): connection reset by peer",
+                MODULE);
+        return NS_ERROR;
+    }
+#endif
+
+   // Ns_Log(Debug, "NsOpenSSLConnRecv[%d]: toread = (%d)", socket, toread);
+    do {
+        rc = BIO_read(bio, buffer, toread);
+	if (rc > 0) {
+	    toread -= rc;
+	    total += rc;
+	}
+	BIO_flush(bio);
+    } while (
+            rc < 0 && 
+            toread > 0 &&
+            BIO_should_retry(bio) &&
+            BIO_should_read(bio)
+        //    Ns_SockWait(socket, NS_SOCK_READ, 2) == NS_OK
+            );
+    
+    Ns_Log(Debug, "NsOpenSSLConnRecv[%d]: read = (%d); toread = (%d); total = (%d)", socket, rc, toread, total);
 
     return rc;
 }

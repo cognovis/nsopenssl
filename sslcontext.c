@@ -1893,8 +1893,8 @@ SSLContextProtocolsInit(NsOpenSSLContext *sslcontext)
 
         lprotocols = ns_strdup(sslcontext->protocols);
         lprotocols = Ns_StrToLower(lprotocols);
-        /* XXX check use of strstr here */
 
+        /* XXX check use of strstr here */
         if (strstr(lprotocols, "all") != NULL) {
             Ns_Log(Notice, "%s (%s): '%s' using all protocols: SSLv2, SSLv3 and TLSv1",
                     MODULE, sslcontext->server, sslcontext->name);
@@ -1922,6 +1922,7 @@ SSLContextProtocolsInit(NsOpenSSLContext *sslcontext)
         ns_free(lprotocols);
     }
 
+    /* XXX log a warning when SSLv2 is configured */
     if (SSL_CTX_set_options(sslcontext->sslctx, bits) == 0) {
         Ns_Log(Error, "%s (%s): protocol initialization failed",
                 MODULE, sslcontext->server);
