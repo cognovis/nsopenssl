@@ -18,6 +18,7 @@
  *
  * Copyright (C) 1999 Stefan Arentz
  * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -30,11 +31,18 @@
  * version of this file under either the License or the GPL.
  */
 
-/*
-static const char *RCSID =
-    "@(#) $Header$, compiled: "
-    __DATE__ " " __TIME__;
-*/
+/* @(#) $Header$ */
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/x509v3.h>
+
+#ifdef closesocket
+/* openssl and nsd both define this */
+#undef closesocket
+#endif
+
+#include <ns.h>
 
 #define DRIVER_NAME                   "nsopenssl"
 
@@ -45,201 +53,72 @@ static const char *RCSID =
  */
 
 #define SSL_LIBRARY_NAME               "OpenSSL"
-#define SSL_LIBRARY_VERSION            "0.9.5a"
+#define SSL_LIBRARY_VERSION            "0.9.6"
 #define SSL_CRYPTO_LIBRARY_NAME        "OpenSSL"
-#define SSL_CRYPTO_LIBRARY_VERSION     "0.9.5a"
+#define SSL_CRYPTO_LIBRARY_VERSION     "0.9.6"
 
-#define SSL_PROTOCOL_NONE  (0)
-#define SSL_PROTOCOL_SSLV2 (1<<0)
-#define SSL_PROTOCOL_SSLV3 (1<<1)
-#define SSL_PROTOCOL_TLSV1 (1<<2)
-#define SSL_PROTOCOL_ALL   (SSL_PROTOCOL_SSLV2|SSL_PROTOCOL_SSLV3|SSL_PROTOCOL_TLSV1)
+struct NsOpenSSLConnection;
 
-#define DEFAULT_PORT		     443
-#define DEFAULT_PROTOCOL 	     "https"
-#define DEFAULT_NAME		     "nsopenssl"
+typedef struct NsOpenSSLDriver {
+    struct NsOpenSSLDriver   *nextPtr;
+    struct NsOpenSSLConnection *firstFreePtr;
 
-#define CONFIG_CIPHERSUITE           "CipherSuite"
-#define DEFAULT_CIPHERSUITE          SSL_DEFAULT_CIPHER_LIST
+    Ns_Mutex         lock;
+    int              refcnt;
+    Ns_Driver        driver;
 
-#define CONFIG_PROTOCOL_LIST         "Protocol"
-#define DEFAULT_PROTOCOL_LIST        "SSLv2,SSLv3,TLSv1"
+    char            *module;       /* Module name */
+    char            *configPath;   /* E.g. ns/server/s1/module/nsopenssl */
+    char            *dir;          /* Module directory (on disk) */
 
-#define CONFIG_CERTFILE              "CertFile"
-#define DEFAULT_CERTFILE             "certificate.pem"
+    char            *location;     /* E.g. https://example.com:8443 */
+    char            *address;      /* Advertised address */
+    char            *bindaddr;     /* Bind address - might be 0.0.0.0 */
+    int              port;         /* Bind port */
 
-#define CONFIG_KEYFILE               "KeyFile"
-#define DEFAULT_KEYFILE              "key.pem"
+    int              bufsize;
+    int              timeout;
+    SOCKET           lsock;
 
-#define CONFIG_CACERTPATH            "ClientCACertPath"
-#define DEFAULT_CACERTPATH          "ssl.ca"
-#define CONFIG_CACERTFILE            "ClientCACertFile"
-#define DEFAULT_CACERTFILE          "ssl.ca/ca-bundle.crt"
+    SSL_CTX         *context;
 
-#define CONFIG_CLIENTVERIFY          "ClientVerify"
-#define DEFAULT_CLIENTVERIFY         NS_FALSE
+    Ns_Cache        *sessionCache;
+} NsOpenSSLDriver;
 
-#define CONFIG_CLIENTVERIFYDEPTH     "ClientVerifyDepth"
-#define DEFAULT_CLIENTVERIFYDEPTH    1
+typedef struct NsOpenSSLConnection {
+    struct NsOpenSSLConnection *nextPtr;
+    struct NsOpenSSLDriver   *sdPtr;
 
-#define CONFIG_CLIENTVERIFYONCE      "ClientVerifyOnce"
-#define DEFAULT_CLIENTVERIFYONCE     NS_TRUE
+    SOCKET  sock;
+    char    peer[16];
+    int     port;
 
-#define CONFIG_CLIENTVERIFYDEFAULT   "ClientVerifyDefault"
-#define DEFAULT_CLIENTVERIFYDEFAULT  NS_FALSE
+    SSL    *ssl;
+    BIO    *io;
 
-#define CONFIG_SESSIONCACHE          "SessionCache"
-#define CONFIG_SESSIONCACHESIZE      "SessionCacheSize"
-#define CONFIG_SESSIONCACHETIMEOUT   "SessionCacheTimeout"
-#define DEFAULT_SESSIONCACHE         NS_TRUE
-#define DEFAULT_SESSIONCACHESIZE     128
-#define DEFAULT_SESSIONCACHETIMEOUT  300
-
-#define BUFSIZZ 16*1024
-static int Bufsize = BUFSIZZ;
+    X509   *clientcert;
+} NsOpenSSLConnection;
 
 /*
- * SSLConf is used to pass configuration parameters from NsModuleInit
- * to NsSSLCreateServer. NsSSLCreateServer then creates a server
- * context (think of it like a template) which is used to create a new
- * connection structure in NsSSLCreateConn for each incoming
- * connection.
+ * init.c
  */
 
-typedef struct SSLConf {
-  char *certfile;           /* server's cert file */
-  char *keyfile;            /* server's key file */
-  char *ciphersuite;
-  int  protocols;           /* SSLv2, SSLv3, TLSv1, ALL */
-  char *cacertfile;
-  char *cacertpath;
-  int  clientverifymode;    /* determines whether we ask for client cert */
-  int  clientverifydepth;   /* how deep we allow the ca chain */
-  int  clientverifyonce;    /* don't keep revalidating the cert on session reuse */
-  int  clientverifydefault; /* don't abort conn if no client cert or cert is invalid */
-  int  cache;
-  int  cachesize;
-  int  cachetimeout;
-} SSLConf;
-
-typedef struct SSLServer {
-    SSL_CTX *context;
-    SSL_METHOD *method;
-    char *certfile;
-    char *keyfile;
-    Ns_Cache *cachehash;
-    char *ciphersuite;
-    int  cachesize;
-    int  cachetimeout;
-    int  protocols;
-    int  clientverify;
-} SSLServer;
-
-typedef struct SSLConnection {
-    SSLServer *server;
-    SSL  *ssl;
-    BIO  *io;
-    BIO  *ssl_bio;
-    X509 *clientcert;
-    int  clientcertisvalid;
-} SSLConnection;
-
-typedef struct SSLSessionCacheEntry {
-    time_t time;		/* Entry time of this cache entry */
-    int size;			/* Size of the data */
-    void *data;			/* Ptr to the data */
-} SSLSessionCacheEntry;
-
-struct ConnData;
-
-typedef struct SockDrv {
-    struct SockDrv *nextPtr;
-    struct ConnData *firstFreePtr;
-    Ns_Mutex lock;
-    int refcnt;
-    Ns_Driver driver;
-    char *name;
-    char *location;
-    char *address;
-    char *bindaddr;
-    int port;
-    int bufsize;
-    int timeout;
-    SOCKET lsock;
-    SSLServer *server;
-} SockDrv;
-
-typedef struct ConnData {
-    struct ConnData *nextPtr;
-    struct SockDrv *sdPtr;
-    SOCKET sock;
-    char peer[16];
-    int port;
-    SSLConnection *conn; /* This is here so we can get the conn data from within Tcl commands */
-    int cnt;
-    char *base;
-    char buf[1];
-} ConnData;
-
-/* need to lose this? */
-static int debug;
+extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
+    Ns_DrvProc *procs);
+extern void NsOpenSSLFreeDriver(NsOpenSSLDriver *sdPtr);
 
 /*
- * SSL functions
+ * ssl.c
  */
 
-extern SSLServer *
-NsSSLCreateServer (SSLConf * config);
-
-extern int
-NsSSLDestroyServer (SSLServer * server);
-
-extern int
-NsSSLFlush (SSLConnection * conn);
-
-extern SSLConnection *
-NsSSLCreateConn (SOCKET sock, int timeout,
-		 SSLServer * server);
-
-extern int
-NsSSLDestroyConn (SSLConnection * conn);
-
-extern int
-NsSSLRecv (SSLConnection * conn, void *buffer, int toread);
-
-extern int
-NsSSLSend (SSLConnection * conn, void *buffer, int towrite);
-
-extern SSLConnection *
-NsSSLGetConn(Ns_Conn *conn);
-
-/*
- * Cache functions
- */
-
-extern int
-NsSSLNewSessionCacheEntry (SSL * ssl, SSL_SESSION * session);
-
-extern SSL_SESSION *
-NsSSLGetSessionCacheEntry (SSL * ssl, unsigned char *id,
-			   int idlen, int *pCopy);
-
-extern void
-NsSSLDelSessionCacheEntry (SSL_CTX * ctx, SSL_SESSION * pSession);
-
-extern void
-NsSSLFreeEntry (SSLSessionCacheEntry * cacheEntry);
-
-/*
- * OpenSSL tracing
- */
-
-extern void
-NsSSLLogTracingState (SSL * ssl, int where, int rc);
-
-
-
-
-
-
+extern int NsOpenSSLCreateConn(NsOpenSSLConnection *scPtr);
+extern void NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr);
+extern void NsOpenSSLTrace(SSL *ssl, int where, int rc);
+extern int NsOpenSSLShutdown(SSL *ssl);
+extern int NsOpenSSLFlush(NsOpenSSLConnection *scPtr);
+extern void NsDestroyOpenSSLConn(NsOpenSSLConnection *scPtr);
+extern int NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer,
+    int toread);
+extern int NsOpenSSLSend(NsOpenSSLConnection *scPtr, void *buffer,
+    int towrite);
 

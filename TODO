@@ -1,75 +1,53 @@
 Things that need to be done:
-Scott S. Goodwin - scott@scottg.net
 
-- ** It's working ** I'm not sure how or why, but MSIE now works when
-  nsopenssl is in client verify mode. Here's the original problem
-  description:
+- Add ability for server to return nice error page to client when
+  they've connected to the HTTPS port with HTTP (it happens). Maybe
+  even a nice link they can click on, and/or a redirect to the same
+  page via HTTPS.
 
-  MSIE doesn't work with this module yet. It breaks the connection to
-  the server and then prompts you to select the client cert that you
-  want to use, then reconnects. You're supposed to get a passphrase
-  box from MSIE next, and something does popup, but there is nowhere
-  to type in the passphrase. I'm not sure whether the problem is with
-  the nsopenssl or MSIE, but I suspect nsopenssl isn't handling the
-  disconnect properly, because it used to work fine, and I'm not sure
-  what I changed that caused this problem. OpenSSL's s_client works
-  fine, as does Netscape. All three were using the same client
-  certificate.
+- Find a way to automatically retrieve the OpenSSL version so
+  we can put that in the info command.
 
-- Add 'clientcert exists' Tcl command.
+- Test all combos of protocols
+
+- Put back ns_openssl Tcl command to return serial number as a string
+  (e.g. "27c6")
+
+- Add back option to specify client verification depth
+
+- Figure out whether there's any point to cache.c.  SSL_CTX does its
+  own caching; are the cache callbacks intended for caching to disk,
+  etc.?
+
+- Think about whether an SSL_SESSION can be used from multiple
+  threads.
+
+- Think about setting CRYPTO_malloc hooks.
 
 - Add more Tcl commands for examining the server's cert, generating
   keypairs and CSRs etc.
 
-- Caching was flakey before. I have it half-working. Before, the cache
-  delete callback was being called when the connection was closed,
-  thus removing the cached session. Not sure what the behavior should
-  be here yet. Now, the first connection gets cached, and it's used
-  for the second connection. The third connection finds the cached
-  session, but a new session id is generated anyway and we have to go
-  through the whole process again.
-
-- There are lots of comments sprinkled throughout the code that begin
-  with "TODO:". Some are bugs, some are features that could be added,
-  and that I'll get to.
-
 - Add Certificate Revocation support. Should optionally pass through
-  nsopenssl and be handled by the app.
-
-- Lots of cleanup. I'm new to C and I'm afraid I've left a lot of
-  cruft lying around.
-
-- The nsd.tcl config parameters need to be scrutinized:
-  ns_param ClientVerify              true
-  ns_param ClientVerifyDepth         3
-  ns_param ClientVerifyOnce          true
-  ns_param ClientVerifyDefault       true
-  ns_param ClientCACertPath          ssl.ca
-  ns_param ClientCACertFile          ssl.ca/ca-bundle.crt
+  nsopenssl and be handled by the app. Not sure how to do this
+  consistently though, and it may need to be handled as a
+  site-specific Tcl implentation. At DoD, our CRL is really just a
+  list of the revoked certificate's serial numbers.
 
 - Testing -- lots of it. Maybe even a regression suite to run against
   each release.
 
-- Compilation against OpenSSL 0.9.6.
-
-- Load problems: last time I tested, nsopenssl could handle lots of
-  small files (< 100k) fairly well; but 1MB file downloads put the
-  server into deadlock. Same thing happens with nsssl module as well.
-
-- Add UseSessionId parameter so that a session id will be generated
-  and used by client and server, even if caching is turned off. Wonder
-  if this is really all that useful.
-
-- Add an ErrorPage option to the config file to handle invalid or
-  missing client certificates that nsopenssl would automatically run
-  in these cases.
-
-- Figure out how to tell the client ahead of time what CA's are
-  acceptable, or what type of certificates can be used. Right now,
-  both MSIE and Netscape ask me which certificate I'd like to use each
-  time I connect, even though I have only one client certificate in
-  the browser.
+- Add an ErrorPage option to the config file to give user friendly
+  error message when they have an invalid or no certificate.
 
 - Have 'make' automatically run at server start time in the ssl.ca
   directory.
 
+- There might be a need for cache callbacks to distribute a session to
+  other AOLservers in a cluster.  I haven't even considered
+  implementing this.
+
+- I anticipate adding a preauth filter to nsopenssl that you can
+  register to various URLs in the config file.  The filter will send
+  some HTTP error to clients if there was no certificate or if the
+  certificate was invalid.  This could easily be implemented in Tcl
+  but I'll do it in C for efficiency.

@@ -1,3 +1,58 @@
+2000-11-18  root  <scott@>
+
+	* nsopenssl.h: changed library version to 0.9.6. Gotta find a way
+	to automatically set this based on what version of OpenSSL you
+	compile against. Right now, OpenSSL 0.9.6 is required. Shouldn't
+	be difficult to make this module work with 0.9.5a if you really
+	want.
+
+2000-11-18  root  <scott@scottg.net>
+
+	* production-ready: Although there is still more to do (see below
+	and the TODO file), I have done extensive load-testing on RedHat
+	6.2 and Debian 2.2 and consider this code to be
+	production-ready. Note that I haven't had time to run load tests
+	on a Solaris box yet.
+
+	* init.c: fixed LoadCACerts; the CA directory was forced to NULL
+	when calling SSL_CTX_load_verify_locations.
+
+	* all: Rob Mayoff has taken the module and really done an
+	excellent job of refactoring and cleaning it up. Most notable changes:
+
+	Extensive reformatting to bring code (mostly) in line with
+	AOLserver standards.
+
+        Consolidated structures.  Now there is a single struct
+	representing the driver and a single struct for each connection,
+	instead of two in each case.
+
+	Driver initialization factored mostly into init.c.
+
+	Implemented timeout during SSL handshake.
+
+	Revised Makefile.  Now detects OPENSSL not set in a way that
+	doesn't involve bracketing the whole Makefile in an ifdef.
+
+	I modified the cache code extensively; however, it probably
+	doesn't manage reference counts quite right.  See next item
+	anyway.
+
+	The cache is disabled by default. This code was (I assume) blindly
+	modelled on mod_ssl's cache. The reason mod_ssl needs it is
+	because the Apache children don't share one SSL_CTX. Since nsd
+	threads do share one SSL_CTX, and the SSL_CTX has its own session
+	cache anyway, there's no point in building our own in this way.
+
+	Config utilities in config.c.  All config #defines in config.h.
+
+	Added thread (mutex) callbacks in thread.c.
+
+	If the client sends an invalid certificate, the connection is
+	still accepted.  I added a new command, [ns_openssl clientcert
+	valid], that returns 1 if the client sent a certificate AND we
+	were able to verify it.
+
 2000-11-05  root  <scott@scottg.net>
 
 	* tclcmds.c: added 'ns_openssl clientcert exists' command.

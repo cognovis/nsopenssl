@@ -14,7 +14,7 @@
 
 <table border=1 cellspacing=0>
 
-<tr><td><font color=red>Does Cert Exist?</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert exists</font></td><td>
 <%
   if {[ns_openssl clientcert exists]} {
         ns_puts "Client cert exists"
@@ -24,57 +24,68 @@
 %>
 </td></tr>
 
-<tr><td><font color=red>SSL INFO</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert valid</font></td><td>
+<%
+  if {[ns_openssl clientcert valid]} {
+        ns_puts "Client cert is valid"
+  } else {
+        ns_puts "Client cert is NOT valid"
+  }
+%>
+</td></tr>
+
+<tr><td><font color=red>ns_openssl info</font></td><td>
 <%=[ns_openssl info]%>
 </td></tr>
 
-<tr><td><font color=red>CLIENT CERT VERSION</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert version</font></td><td>
 <%=[ns_openssl clientcert version]%>
 </td></tr>
 
-<tr><td><font color=red>SERIAL NUMBER</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert serial</font></td><td>
 <%=[ns_openssl clientcert serial]%>
 </td></tr>
 
-<tr><td><font color=red>SUBJECT</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert subject</font></td><td>
 <%
   set var [ns_openssl clientcert subject]
   ns_puts "$var"
 %>
 </td></tr>
 
-<tr><td><font color=red>ISSUER</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert issuer</font></td><td>
 <%
   set var [ns_openssl clientcert issuer]
   ns_puts "$var"
 %>
 </td></tr>
 
-<tr><td><font color=red>NOT BEFORE</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert notbefore</font></td><td>
 <%=[ns_openssl clientcert notbefore]%>
 </td></tr>
 
-<tr><td><font color=red>NOT AFTER</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert notafter</font></td><td>
 <%=[ns_openssl clientcert notafter]%>
 </td></tr>
 
-<tr><td><font color=red>SIGNATURE ALGORITHM</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert signature_algorithm</font></td><td>
 <%=[ns_openssl clientcert signature_algorithm]%>
 </td></tr>
 
-<tr><td><font color=red>KEY ALGORITHM</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert key_algorithm</font></td><td>
 <%=[ns_openssl clientcert key_algorithm]%>
 </td></tr>
 
-<tr><td><font color=red>PEM Certificate</font></td><td>
+<tr><td><font color=red>ns_openssl clientcert pem</font></td><td>
 <%=[ns_openssl clientcert pem]%>
 </td></tr>
 
 </table>
 
-<p>This page and client certificate support in nsopenssl brought to
-you by Scott S. Goodwin, <a
-href="http://scottg.net">http://scottg.net</a>.
+<p>Client certificate support in nsopenssl brought to you by <a href="mailto:scott@scottg.net">Scott
+S. Goodwin</a>, <a href="http://scottg.net">http://scottg.net</a>. <a
+href="mailto:mayoff@arsdigita.com">Rob Mayoff</a> refactored the code
+and added some extra client cert support.
 
 <p>Copyright &copy; 2000 by Scott S. Goodwin
 <p>Send feedback, bugs and comments to <a href="mailto:scott@scottg.net">me</a>. Enjoy!!!

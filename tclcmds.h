@@ -17,6 +17,7 @@
  * Inc. All Rights Reserved.
  *
  * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -29,11 +30,8 @@
  * version of this file under either the License or the GPL.
  */
 
-/*
- * Tcl commands
- */
+/* @(#) $Header$ */
 
-extern int
-SSLCmd(ClientData dummy, Tcl_Interp *interp, int argc, char **argv);
+extern Ns_TclInterpInitProc NsOpenSSLInterpInit;
 
 

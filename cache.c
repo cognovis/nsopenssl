@@ -18,6 +18,7 @@
  *
  * Copyright (C) 1999 Stefan Arentz
  * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -33,219 +34,215 @@
 
 static const char *RCSID =    "@(#) $Header$, compiled: "    __DATE__ " " __TIME__;
 
+#include <time.h>
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/x509v3.h>
-
-#include <sys/stat.h>
-#include <ctype.h>
-#include <limits.h>
-
-#include "ns.h"
 #include "nsopenssl.h"
+#include "cache.h"
+#include "config.h"
 
+static int NewEntry(SSL *ssl, SSL_SESSION *session);
+static SSL_SESSION *GetEntry(SSL *ssl, unsigned char *id, int id_length,
+    int *copy);
+static void DeleteEntry(SSL_CTX *ctx, SSL_SESSION *session);
+static void FreeValue(void *value);
+
+
 
 /*
  *----------------------------------------------------------------------
  *
- * NsSSLNewSessionCacheEntry --
+ * NsOpenSSLInitSessionCache --
+ *
+ *       Initialize the session cache for the SSL server as specified
+ *       in the server config.
  *
  * Results:
+ *       NS_OK or NS_ERROR.
  *
  * Side effects:
+ *       None.
  *
  *----------------------------------------------------------------------
  */
 
 int
-NsSSLNewSessionCacheEntry (SSL * ssl, SSL_SESSION * session)
+NsOpenSSLInitSessionCache(NsOpenSSLDriver *sdPtr)
 {
-    SSLConnection *connection;
-    SSLServer *server;
-    SSLSessionCacheEntry *cacheEntry;
-    Ns_Entry *hashEntry;
-    int new;
-    char key[1024];
-    unsigned char data[16 * 1024];	/* How to calc this? Standard base64 size rule on SSL_SESSION? */
-    unsigned char *datap, *value;
-    int datalength;
-    int result = TCL_ERROR;
+    char *module = sdPtr->module;
+    char *path = sdPtr->configPath;
+    int   cacheEnabled;
+    int   cacheSize;
+    long  timeout;
 
-    Ns_Log (Debug, ">>> NsSSLNewSessionCacheEntry()");
+    cacheEnabled = ConfigBoolDefault(module, path, CONFIG_SESSIONCACHE,
+	DEFAULT_SESSIONCACHE);
 
-    /*
-     * Get our server record via the SSL's application data.
-     */
+    if (cacheEnabled) {
 
-    connection = (SSLConnection *) SSL_get_app_data (ssl);
-    server = connection->server;
+	timeout = (long) ConfigIntDefault(module, path,
+	    CONFIG_SESSIONTIMEOUT, DEFAULT_SESSIONTIMEOUT);
+	SSL_CTX_set_timeout(sdPtr->context, timeout);
 
-    /*
-     * Convert the session id to a base64 encoded string.
-     */
+	SSL_CTX_set_session_cache_mode(sdPtr->context,
+	    SSL_SESS_CACHE_SERVER);
 
-    Ns_HtuuEncode (session->session_id, session->session_id_length, key);
+	cacheSize = ConfigIntDefault(module, path,
+	    CONFIG_SESSIONCACHESIZE, DEFAULT_SESSIONCACHESIZE);
 
-    /*
-     * Transform the session into a data stream.
-     * XXX Rewrite this. Crappy code.
-     */
+	if (cacheSize > 0) {
 
-    datap = data;
-    datalength = i2d_SSL_SESSION (session, &datap);
+	    sdPtr->sessionCache = Ns_CacheCreateSz("ns_openssl",
+		TCL_STRING_KEYS, cacheSize,
+		(Ns_Callback *) FreeValue);
 
-    value = Ns_Malloc (datalength);
-    memcpy (value, data, datalength);
-
-    /*
-     * Set the timeout for this session.
-     */
-
-    Ns_Log(Debug, "NsSSLNewSessionCacheEntry: session timeout set to %d", server->cachetimeout);
-    SSL_set_timeout (session, server->cachetimeout);
-
-    /*
-     * Now insert the session into the hash.
-     */
-
-    cacheEntry =
-	(SSLSessionCacheEntry *) Ns_Malloc (sizeof (SSLSessionCacheEntry));
-    cacheEntry->time = time (NULL);
-    cacheEntry->data = value;
-    cacheEntry->size = datalength;
-
-    Ns_CacheLock (server->cachehash);
-    {
-	hashEntry = Ns_CacheCreateEntry (server->cachehash, key, &new);
-	if (!new) {
-	    SSLSessionCacheEntry *cacheEntryTmp;
-
-	    Ns_Log (Debug, "Entry exists with Session ID: '%s'", key);
-	    cacheEntryTmp = Ns_CacheGetValue (hashEntry);
-
-	    if (
-		(strncmp
-		 ((char *) cacheEntry->data, (char *) cacheEntryTmp->data,
-		  cacheEntry->size)) != 0) {
-		Ns_Log (Debug, "Cache Unset of key : '%s'", key);
-		Ns_CacheUnsetValue (cacheEntryTmp);
-		new = 1;
-	    } else {
-		Ns_Log (Debug, "Cache entry is the same: key : '%s'", key);
-		result = TCL_OK;
-	    }
+	    SSL_CTX_sess_set_new_cb(sdPtr->context, NewEntry);
+	    SSL_CTX_sess_set_get_cb(sdPtr->context, GetEntry);
+	    SSL_CTX_sess_set_remove_cb(sdPtr->context, DeleteEntry);
 
 	}
 
-	if (new) {
-	    Ns_Log (Debug, "Added New Session ID: '%s'", key);
-	    Ns_CacheSetValueSz (hashEntry, cacheEntry, cacheEntry->size);
-	    result = TCL_OK;
-	} else {
-	    Ns_Log (Debug, "Was not able to add New Session ID: '%s'", key);
-	    Ns_Free (value);
-	    Ns_Free (cacheEntry);
-	    result = TCL_ERROR;
-	}
+    } else {
+
+	SSL_CTX_set_session_cache_mode(sdPtr->context, SSL_SESS_CACHE_OFF);
     }
-    Ns_CacheUnlock (server->cachehash);
 
-    return result;
+    return NS_OK;
 }
 
-SSL_SESSION *
-NsSSLGetSessionCacheEntry (SSL * ssl, unsigned char *id, int id_length,
-			   int *copy)
+/*
+ *----------------------------------------------------------------------
+ *
+ * NewEntry --
+ *
+ *	Store an SSL_SESSION in the session cache.
+ *
+ * Results:
+ *	1 if we kept a reference to the session, else 0.  The caller
+ *      already incremented the session reference count for us, so
+ *      if we don't keep a reference here we return zero and the caller
+ *      will decrement the reference count.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+NewEntry(SSL *ssl, SSL_SESSION *session)
 {
-    SSLConnection *connection;
-    SSLServer *server;
-    SSL_SESSION *session = NULL;
-    SSLSessionCacheEntry *cacheEntry;
-    Ns_Entry *hashEntry;
-    char key[1024];
+    NsOpenSSLConnection *scPtr;
+    NsOpenSSLDriver     *sdPtr;
+    char                 key[SSL_MAX_SSL_SESSION_ID_LENGTH*2];
+    int                  new;
+    Ns_Entry            *ePtr;
+    SSL_SESSION         *otherSession;
+    int                  keptReference;
 
-    Ns_Log (Debug, ">>> NsSSLGetSessionCacheEntry()");
-
-    /*
-     * Get our server record via the SSL's application data.
-     */
-
-    connection = (SSLConnection *) SSL_get_app_data (ssl);
-    server = connection->server;
+    scPtr = (NsOpenSSLConnection *) SSL_get_app_data (ssl);
+    sdPtr = scPtr->sdPtr;
 
     /*
-     * Convert the session id to ascii base64
-     */
+    * Ns_Cache uses zero-terminated string keys. The string will be
+    * about 1.33 * session_id_length, so SSL_MAX_SSL_SESSION_ID_LENGTH*2
+    * is plenty of room even including the terminating NUL.
+    */
+
+    Ns_HtuuEncode(session->session_id, session->session_id_length, key);
+
+    Ns_Log(Debug, "%s: cache %p with key %s", sdPtr->module, session, key);
+
+    Ns_CacheLock (sdPtr->sessionCache);
+    {
+	ePtr = Ns_CacheCreateEntry(sdPtr->sessionCache, key, &new);
+
+	if (new) {
+
+	    Ns_Log(Debug, "%s: new cache entry",
+		sdPtr->module, session);
+	    keptReference = 1;
+	    Ns_CacheSetValueSz(ePtr, session, 1);
+
+	} else {
+	    otherSession = (SSL_SESSION *) Ns_CacheGetValue(ePtr);
+
+	    Ns_Log(Debug, "%s: found existing session cache entry %p",
+		sdPtr->module, otherSession);
+
+	    keptReference = 0;
+	}
+    }
+    Ns_CacheUnlock (sdPtr->sessionCache);
+
+    return keptReference;
+}
+
+static SSL_SESSION *
+GetEntry(SSL *ssl, unsigned char *id, int id_length, int *copy)
+{
+    NsOpenSSLConnection *scPtr;
+    NsOpenSSLDriver     *sdPtr;
+    char                 key[SSL_MAX_SSL_SESSION_ID_LENGTH*2];
+    Ns_Entry            *ePtr;
+    SSL_SESSION         *session;
+
+    session = NULL;
+
+    scPtr = (NsOpenSSLConnection *) SSL_get_app_data(ssl);
+    sdPtr = scPtr->sdPtr;
 
     Ns_HtuuEncode (id, id_length, key);
 
-    Ns_CacheLock (server->cachehash);
+    Ns_Log(Debug, "%s: looking up %s in session cache", sdPtr->module,
+	key);
+
+    Ns_CacheLock(sdPtr->sessionCache);
     {
-	hashEntry = Ns_CacheFindEntry (server->cachehash, key);
-	if (hashEntry == NULL) {
-	    Ns_Log (Debug, "SSLCache: Did not find entry for key '%s'", key);
+	ePtr = Ns_CacheFindEntry (sdPtr->sessionCache, key);
+	if (ePtr == NULL) {
+	    Ns_Log (Debug, "%s: key not found", sdPtr->module, key);
 	} else {
-	    Ns_Log (Debug, "SSLCache: Found entry for key '%s'", key);
-	    cacheEntry = Ns_CacheGetValue (hashEntry);
-	    session =
-		d2i_SSL_SESSION (NULL, (unsigned char **) &cacheEntry->data,
-				 cacheEntry->size);
+	    session = (SSL_SESSION *) Ns_CacheGetValue(ePtr);
+	    Ns_Log (Debug, "%s: found %p", sdPtr->module, session);
 	}
     }
-    Ns_CacheUnlock (server->cachehash);
+    Ns_CacheUnlock(sdPtr->sessionCache);
 
     *copy = 0;
     return session;
 }
 
-void
-NsSSLDelSessionCacheEntry (SSL_CTX * ctx, SSL_SESSION * session)
+static void
+DeleteEntry(SSL_CTX *ctx, SSL_SESSION *session)
 {
-    SSLConnection *connection;
-    SSLServer *server;
-    Ns_Entry *hashEntry;
-    SSLSessionCacheEntry *cacheEntry;
-    char key[1024];
+    NsOpenSSLDriver *sdPtr;
+    Ns_Entry        *ePtr;
+    char             key[SSL_MAX_SSL_SESSION_ID_LENGTH*2];
 
-    Ns_Log (Debug, ">>> NsSSLDelSessionCacheEntry()");
-
-    Ns_Log (Debug, "NsSSLDelSessionCacheEntry: Session hits: '%d'", SSL_CTX_sess_hits (ctx));
-
-    /*
-     * Get our server record via the SSL_CTX's application data.
-     */
-
-    server = (SSLServer *) SSL_CTX_get_app_data (ctx);
-
-    /*
-     * Convert the session id to ascii base64
-     */
+    sdPtr = (NsOpenSSLDriver *) SSL_CTX_get_app_data (ctx);
 
     Ns_HtuuEncode (session->session_id, session->session_id_length, key);
-    Ns_Log (Debug, "Deleting Session ID: '%s'", key);
 
-    Ns_CacheLock (server->cachehash);
+    Ns_Log(Debug, "%s: uncache %p with key %s", sdPtr->module,
+	session, key);
+
+    Ns_CacheLock (sdPtr->sessionCache);
     {
-	hashEntry = Ns_CacheFindEntry (server->cachehash, key);
-	if (hashEntry != NULL) {
-	    cacheEntry = Ns_CacheGetValue (hashEntry);
-	    if (cacheEntry == NULL) {
-		Ns_Log (Debug, "SSLCache: Did not find entry for key '%s'",
-			key);
-	    } else {
-		NsSSLFreeEntry (cacheEntry);
-		Ns_CacheDeleteEntry (hashEntry);
-	    }
+	ePtr = Ns_CacheFindEntry(sdPtr->sessionCache, key);
+	if (ePtr == NULL) {
+	    Ns_Log (Debug, "%s: key not found", sdPtr->module, key);
+	} else {
+	    Ns_Log (Debug, "%s: found %p", sdPtr->module,
+		Ns_CacheGetValue(ePtr));
+	    Ns_CacheFlushEntry(ePtr);
 	}
     }
-    Ns_CacheUnlock (server->cachehash);
+    Ns_CacheUnlock (sdPtr->sessionCache);
 }
 
-void
-NsSSLFreeEntry (SSLSessionCacheEntry * cacheEntry)
+static void
+FreeValue(void *value)
 {
-    Ns_Free (cacheEntry->data);
-    Ns_Free (cacheEntry);
+    SSL_SESSION_free((SSL_SESSION *) value);
 }
 

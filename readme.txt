@@ -8,6 +8,7 @@ SSLv2, SSLv3, TLSv1 Module
 Please note that this software is beta quality and probably should not
 be used in a production environment. Feedback would be appreciated.
 
+This module *REQUIRES* OpenSSL 0.9.6.
 
 Feature Highlights
 ------------------
@@ -84,26 +85,45 @@ Configuration Options
 ---------------------
 
 ns_section "ns/server/${servername}/module/nsopenssl"
-ns_param Port                     $httpsport
-ns_param Hostname                 $hostname
+ns_param port                     $httpsport
+ns_param hostname                 $hostname
 ns_param CertFile                 certfile.pem
 ns_param KeyFile                  keyfile.pem
-ns_param SessionCacheSize         512
-ns_param SessionCacheTimeout      300
-ns_param Protocol                 "ALL, SSLv2, SSLv3, TLSv1"
-ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+ns_param Protocol                 All
+#ns_param Protocol                 SSLv2
+#ns_param Protocol                 SSLv3
+#ns_param Protocol                 TLSv1
+#ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+#ns_param SessionCache		  true
+#ns_param SessionCacheSize         512
+#ns_param SessionCacheTimeout      300
 ns_param ClientVerify             true
-ns_param ClientVerifyDepth        3
-ns_param ClientVerifyOnce         true
-ns_param ClientVerifyDefault      true
-ns_param ClientCACertPath         ssl.ca
-ns_param ClientCACertFile         ssl.ca/ca-bundle.crt
+ns_param CADir                    ca
+ns_param CAFile                   ca.pem 
+ns_param Trace                    false
+
+# NOT IMPLEMENTED YET:
+#ns_param VerifyDepth            3
+#ns_param CRLDir                 crl
+#ns_param CRLFile                crl.pem
 
 ns_section "ns/server/${servername}/modules"
 ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
 
-Note that "ALL" in the protocol parameter obviates the need for listing the other protocols.
 
+Configuration Notes
+-------------------
+
+The cache is disabled by default. This code was modeled on mod_ssl's
+cache. The reason mod_ssl needs it is because the Apache children
+don't share one SSL_CTX. Since nsd threads do share one SSL_CTX, and
+the SSL_CTX has its own session cache anyway, there's no point in
+building our own in this way.
+
+If the client sends an invalid certificate, the connection is still
+accepted. Use 'ns_openssl clientcert valid' in your Tcl code or ADP
+page to determine if you received a client certificate and if it was
+valid.
 
 
 Tcl Interface Commands
@@ -116,6 +136,9 @@ ns_openssl info
 ns_openssl clientcert exists
   - returns 0 if no client certificate exists, or a 1 if a client
     certificate does exist.
+
+ns_openssl clientcert valid
+  - returns 1 if client certificate was obtained *and* it is valid; 0 otherwise.
 
 ns_openssl clientcert version
   - returns a Tcl string containing the certificate's version number, e.g. "3".

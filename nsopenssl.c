@@ -11,13 +11,15 @@
  *
  * The Original Code is AOLserver Code and related documentation
  * distributed by AOL.
- * 
+ *
  * The Initial Developer of the Original Code is America Online,
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz
+ * Copyright (C) 1999 Stefan Arentz.
  * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 2000 Freddie Mendoza
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -30,927 +32,691 @@
  * version of this file under either the License or the GPL.
  */
 
-static const char *RCSID =
-    "@(#) $Header$, compiled: "
-    __DATE__ " " __TIME__;
+/*
+ * nsopenssl.c
+ *
+ * This module implements an SSL socket driver using the OpenSSL library.
+ *
+ * WARNING THIS IS ALPHA SOFTWARE. IT HAS NOT BEEN TESTED AND SHOULD NOT
+ * BE USED IN A PRODUCTION ENVIRONMENT. USE AT YOUR OWN RISK.
+ *
+ * Originally by Stefan Arentz <stefan.arentz@soze.com>.
+ *
+ * AOLserver 3.0 adaptations by Freddie Mendoza <avm@satori.com>.
+ *
+ * Client certificate support and general cleanup by Scott Goodwin
+ * <scott@scottg.net> and Rob Mayoff <mayoff@arsdigita.com>.
+ *
+ * Todo:
+ *
+ *  Add configuration options to configure OpenSSL caching.
+ *  Better error messages in the logfile
+ *  Bind on all interfaces if 'address' if not specified.
+ *  Test test test test and test.
+ *
+ * References:
+ *
+ *  Distribution - http://stefan.arentz.nl/software/
+ *  OpenSSL - http://www.openssl.org
+ *  AOLServer Home - http://www.aolserver.com
+ *  SSL for Apache - http://www.modssl.org
+ *
+ */
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/x509v3.h>
+static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #include <sys/stat.h>
 #include <ctype.h>
 #include <limits.h>
 
-#include "ns.h"
 #include "nsopenssl.h"
+#include "config.h"
+#include "tclcmds.h"
+
+/* Standard module interface symbols */
+
+NS_EXPORT int Ns_ModuleVersion = 1;
+
+NS_EXPORT int Ns_ModuleInit(char *server, char *module);
+
+
 
 /*
- * Local functions to this file
+ * Local functions defined in this file
  */
 
-static
-SSLConnection *NsSSLAbortConn (SSLConnection * conPtr);
+static Ns_ThreadProc SockThread;
+static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr);
+static Ns_Thread sockThread;
+static SOCKET trigPipe[2];
 
-static int
-  SSL_smart_shutdown (SSL * ssl);
+static Ns_DriverStartProc      SockStart;
+static Ns_DriverStopProc       SockStop;
+static Ns_ConnReadProc         SockRead;
+static Ns_ConnWriteProc        SockWrite;
+static Ns_ConnCloseProc        SockClose;
+static Ns_ConnConnectionFdProc SockConnectionFd;
+static Ns_ConnDetachProc       SockDetach;
+static Ns_ConnPeerProc         SockPeer;
+static Ns_ConnLocationProc     SockLocation;
+static Ns_ConnPeerPortProc     SockPeerPort;
+static Ns_ConnPortProc         SockPort;
+static Ns_ConnHostProc         SockHost;
+static Ns_ConnDriverNameProc   SockName;
+static Ns_ConnInitProc         SockInit;
 
-static int
-  NsSSLClientVerify (int num);
+/* Linked list of all configured nsopenssl instances */
+static NsOpenSSLDriver *firstSSLDriverPtr;
 
-int count, i;
-int clientverify;
+static Ns_DrvProc sockProcs[] = {
+    {Ns_DrvIdStart,        (void *) SockStart},
+    {Ns_DrvIdStop,         (void *) SockStop},
+    {Ns_DrvIdRead,         (void *) SockRead},
+    {Ns_DrvIdWrite,        (void *) SockWrite},
+    {Ns_DrvIdClose,        (void *) SockClose},
+    {Ns_DrvIdHost,         (void *) SockHost},
+    {Ns_DrvIdPort,         (void *) SockPort},
+    {Ns_DrvIdName,         (void *) SockName},
+    {Ns_DrvIdPeer,         (void *) SockPeer},
+    {Ns_DrvIdPeerPort,     (void *) SockPeerPort},
+    {Ns_DrvIdLocation,     (void *) SockLocation},
+    {Ns_DrvIdConnectionFd, (void *) SockConnectionFd},
+    {Ns_DrvIdDetach,       (void *) SockDetach},
+    {Ns_DrvIdInit,         (void *) SockInit},
+    {0,                    NULL}
+};
 
-static char server_session_id_context[] = "nsopenssl/OpenSSL";	/* anything will do */
 
 /*
  *----------------------------------------------------------------------
  *
- * NsSSLCreateServer --
+ * Ns_ModuleInit --
  *
- *      Create an SSL server.
+ *  Sock module init routine.
  *
  * Results:
- *      Always NS_OK.
+ *  NS_OK if initialized ok, NS_ERROR otherwise.
  *
  * Side effects:
- *      None.
- *
- * Todo:
- *      None.
+ *  Calls Ns_RegisterLocation as specified by this instance
+ *  in the config file.
  *
  *----------------------------------------------------------------------
  */
 
-SSLServer *
-NsSSLCreateServer (SSLConf * config)
+NS_EXPORT int
+Ns_ModuleInit(char *server, char *module)
 {
-    SSLServer *srvPtr;
-    STACK_OF (X509_NAME) * client_ca_stack;
-    X509_NAME *caname;
-    char buf[120];
-    X509_NAME *xn;
-    int i, j;
+    NsOpenSSLDriver *sdPtr;
 
-    Ns_Log (Debug, "Entering NsSSLCreateServer()");
-
-#if 0
-    assert (config->certfile != NULL && *certfile != 0x00);
-    assert (config->keyfile != NULL && *keyfile != 0x00);
-#endif
-
-    srvPtr = (SSLServer *) ns_calloc (1, sizeof (SSLServer));
-    if (srvPtr != NULL) {
-
-	/*
-	 * Store the config settings into this connection's structure.
-	 */
-
-	srvPtr->certfile = config->certfile;
-	srvPtr->keyfile = config->keyfile;
-	srvPtr->cachesize = config->cachesize;
-	srvPtr->cachetimeout = config->cachetimeout;
-	srvPtr->ciphersuite = config->ciphersuite;
-	srvPtr->protocols = config->protocols;
-	srvPtr->clientverify = config->clientverifymode;
-
-	/*
-	 * Set the protocols that the server supports.
-	 */
-
-	if (srvPtr->protocols == SSL_PROTOCOL_SSLV2)
-	    srvPtr->method = SSLv2_server_method ();
-	else
-	    srvPtr->method = SSLv23_server_method ();
-
-	/* Create and initialize a new SSL server context.  */
-
-	srvPtr->context = SSL_CTX_new (srvPtr->method);
-	if (srvPtr->context == NULL) {
-	    Ns_Log (Error, "Could not create new SSL context.");
-	    NsSSLDestroyServer (srvPtr);
-	    return NULL;
-	}
-
-	/* Take out protocols not specified in config file */
-
-	if (!(srvPtr->protocols & SSL_PROTOCOL_SSLV2))
-	    SSL_CTX_set_options (srvPtr->context, SSL_OP_NO_SSLv2);
-	if (!(srvPtr->protocols & SSL_PROTOCOL_SSLV3))
-	    SSL_CTX_set_options (srvPtr->context, SSL_OP_NO_SSLv3);
-	if (!(srvPtr->protocols & SSL_PROTOCOL_TLSV1))
-	    SSL_CTX_set_options (srvPtr->context, SSL_OP_NO_TLSv1);
-
-	/*
-	 * SSL_OP_ALL turns on all compatibility flags for known
-	 * protocol implementation bugs in the browsers. You can set
-	 * them individually, but it doesn't seem to make sense that
-	 * you wouldn't want all broken browser behavior to be handled
-	 * properly.
-	 */
-
-	SSL_CTX_set_options (srvPtr->context, SSL_OP_ALL);
-
-	/*
-	 * SSL_OP_SINGLE_DH_USE prevents a DH key from being created
-	 * for SSL_[CTX_]set_tmp_dh; each handshake creates its own
-	 * key anyway, so it's a waste to generate here.
-	 */
-
-	SSL_CTX_set_options (srvPtr->context, SSL_OP_SINGLE_DH_USE);
-
-	/* Store our SSLConnection as OpenSSL's app data */
-
-	SSL_CTX_set_app_data (srvPtr->context, srvPtr);
-
-	/* Set the cipher suite that we support.  */
-
-	if (SSL_CTX_set_cipher_list (srvPtr->context, srvPtr->ciphersuite) ==
-	    0) {
-	    Ns_Log (Error, "Unable to configure permitted SSL ciphers (%s).",
-		    srvPtr->ciphersuite);
-	    NsSSLDestroyServer (srvPtr);
-	    return NULL;
-	}
-
-	/* Turn on OpenSSL tracing */
-
-	SSL_CTX_set_info_callback (srvPtr->context, NsSSLLogTracingState);
-
-#if 0
-	/*
-	 * Register a function to handle client certificate verification,
-	 * which will override OpenSSL's built-in verification.
-	 *
-	 * In cases where verification fails, yet I want to give the user some
-	 * nice html page explaining the problem: how can I communicate that extra
-	 * thing be done? Via a passed in CTX structure? Via a numbered return?
-	 */
-
-	Ns_Log (Debug,
-		"NsSSLCreateServer: Registering NsSSLClientVerify callback");
-	SSL_CTX_set_cert_verify_callback (srvPtr->context, NsSSLClientVerify,
-					  NULL);
-#endif
-
-	Ns_Log (Debug, "Setting client verify mode");
-	SSL_CTX_set_verify (srvPtr->context, srvPtr->clientverify, NULL);
-
-	/*
-	 * Set up the trusted CA list. There are a couple of methods
-	 * you can use here. The easiest is to concatenate all your
-	 * trusted CA certificates into one file and point to
-	 * it. Another is to leave each certificate in it's own file
-	 * and place all of these files in the same directory; you
-	 * have to set up a hash for the files, which I don't fully
-	 * understand yet -- see the Apache conf/ssl.crt readme for
-	 * more info. Both methods can work at the same time.
-	 */
-
-	if (srvPtr->clientverify != SSL_VERIFY_NONE) {
-	    if (!SSL_CTX_load_verify_locations
-		(srvPtr->context, config->cacertfile, config->cacertpath)) {
-		Ns_Log (Error, "Failed to load CA certificates");
-		return NULL;
-	    }
-	}
-
-	/*
-	 * Initialize the session cache.  The two valid values for a
-	 * server session cache mode are SSL_SESS_CACHE_SERVER or
-	 * SSL_SESS_CACHE_OFF.
-	 */
-
-	if (srvPtr->cachesize != 0) {
-
-            /*
-	     * We must set a session id context. This can be any
-	     * string you want.
-	     */
-
-	    SSL_CTX_set_session_id_context (srvPtr->context, (void *)
-					    &server_session_id_context,
-					    sizeof
-					    (server_session_id_context));
-
-	    SSL_CTX_set_session_cache_mode (srvPtr->context,
-					    SSL_SESS_CACHE_SERVER);
-
-	    srvPtr->cachehash = Ns_CacheCreateSz ("ns_openssl",
-						  TCL_STRING_KEYS,
-						  srvPtr->cachesize,
-						  (Ns_Callback *)
-						  NsSSLFreeEntry);
-
-	    /* Set session cache callbacks */
-
-	    SSL_CTX_sess_set_new_cb (srvPtr->context,
-				     NsSSLNewSessionCacheEntry);
-	    SSL_CTX_sess_set_get_cb (srvPtr->context,
-				     NsSSLGetSessionCacheEntry);
-#if 1
-	    /* TODO: BUG: This is where the caching "breaks". What
-	     * happens is that when caching is turned on, each
-	     * connections gets a session id and that session is
-	     * cached. But when the socket closes after the page has
-	     * been retrieved, this callback runs which removes the
-	     * session id from the cache, so effectively you get no
-	     * caching. This happens when the refcnt of the driver is
-	     * 0 and the driver is freed -- maybe this behavior should
-	     * change. Do I need this callback, or can I just define
-	     * my own scheduled routine to clean it up? */
-
-	    SSL_CTX_sess_set_remove_cb (srvPtr->context,
-					NsSSLDelSessionCacheEntry);
-#endif
-	} else {
-	    SSL_CTX_set_session_cache_mode (srvPtr->context,
-					    SSL_SESS_CACHE_OFF);
-	    Ns_Log (Notice, "Session caching is turned off");
-	}
-
-	/*
-	 * Load the SSL Certificate and Private Key. If either of these fail then
-	 * the server cannot be started.
-	 */
-
-	Ns_Log (Notice, "Loading SSL server certificate '%s'",
-		config->certfile);
-	if (SSL_CTX_use_certificate_file
-	    (srvPtr->context, config->certfile, SSL_FILETYPE_PEM) <= 0) {
-	    Ns_Log (Error, "Could not load the certificate %s.",
-		    config->certfile);
-	    NsSSLDestroyServer (srvPtr);
-	    return NULL;
-	}
-
-	Ns_Log (Notice, "Loading SSL server private key '%s'",
-		config->keyfile);
-	if (SSL_CTX_use_PrivateKey_file
-	    (srvPtr->context, config->keyfile, SSL_FILETYPE_PEM) <= 0) {
-	    Ns_Log (Error, "Could not load the private key %s.",
-		    config->keyfile);
-	    NsSSLDestroyServer (srvPtr);
-	    return NULL;
-	}
-
-	/*
-	 * Check if the private key matches the certificate's public key.
-	 */
-
-	Ns_Log (Notice, "Checking SSL private key");
-	if (SSL_CTX_check_private_key (srvPtr->context) == 0) {
-	    Ns_Log (Error,
-		    "Private key does not match the certificate public key");
-	    return NULL;
-	}
-
+    if (Ns_TclInitInterps(server, NsOpenSSLInterpInit, NULL)
+	    != NS_OK) {
+	return NS_ERROR;
     }
 
-    Ns_Log (Debug, "Leaving NsSSLCreateServer()");
+    sdPtr = NsOpenSSLCreateDriver(server, module, sockProcs);
+    if (sdPtr == NULL) {
+	return NS_ERROR;
+    }
 
-    return srvPtr;
+    sdPtr->nextPtr = firstSSLDriverPtr;
+    firstSSLDriverPtr = sdPtr;
+
+    return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
  *
- * NsSSLCreateConn --
+ * SockStart --
  *
- *	Create an SSL connection. The socket has already been accept()ed
- *      and is ready for reading/writing.
+ *	Configure and then start the SockThread servicing new
+ *	connections.  This is the final initializiation routine
+ *	called from main().
  *
  * Results:
- *      An SSLConnection object or NULL. ->server is always guaranteed
- *      filled in.
+ *	NS_OK or NS_ERROR.
  *
  * Side effects:
- *      If the SSL connection was open then it will be forced to close
- *      first.
- *
- * Todo:
- *      Implement timeouts using an alarm and a OpenSSL callback.
+ *	SockThread is created.
  *
  *----------------------------------------------------------------------
  */
 
-SSLConnection *
-NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
+static int
+SockStart(char *server, char *label, void **drvDataPtr)
 {
-    SSLConnection *conPtr;
-    int err;
-    char buf[8194];
-    int rd;
-    BIO *sbio;
-    fd_set readfds;
-    int width;
-    char *subject, *issuer;
-    ASN1_INTEGER *bs, *serial;
-    BIO *notbefore, *notafter;
-    ASN1_UTCTIME *nob, *noa;
-    X509 *clientcert;
+    NsOpenSSLDriver *sdPtr = *((NsOpenSSLDriver **) drvDataPtr);
 
-    Ns_Log (Debug, "Entering NsSSLCreateConn()");
-
-    if ((conPtr = (SSLConnection *) ns_calloc (1, sizeof (SSLConnection))) ==
-	NULL) {
-	Ns_Log (Error,
-		"NsSSLCreateConn: unable to allocate an SSLConnection structure");
-	return NULL;
+    sdPtr->lsock = Ns_SockListen(sdPtr->bindaddr, sdPtr->port);
+    if (sdPtr->lsock == INVALID_SOCKET) {
+	Ns_Log(Error, "%s: could not listen on %s:%d: %s",
+	    sdPtr->module, sdPtr->address ? sdPtr->address : "*",
+	    sdPtr->port, ns_sockstrerror(ns_sockerrno));
+	return NS_ERROR;
     }
 
-    /* Remember the server in the connection */
-
-    conPtr->server = server;
-
-    /* 
-     * Allocate an SSL structure within the SSLConnection structure
-     * and initialize the state engine to request a handshake.
-     */
-
-    if ((conPtr->ssl = SSL_new (server->context)) == NULL) {
-	Ns_Log (Error,
-		"NsSSLCreateConn: Failed to create new SSL context with SSL_new");
-	(void) NsSSLDestroyConn (conPtr);
-	return NULL;
+    if (sockThread == NULL) {
+	if (ns_sockpair(trigPipe) != 0) {
+	    Ns_Fatal("ns_sockpair() failed: %s",
+		ns_sockstrerror(ns_sockerrno));
+	}
+	Ns_ThreadCreate(SockThread, NULL, 0, &sockThread);
     }
+    return NS_OK;
+}
 
-    SSL_clear (conPtr->ssl);
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockFreeConn --
+ *
+ *  Return a connection to the free list.
+ *
+ * Results:
+ *  None.
+ *
+ * Side effects:
+ *  None.
+ *
+ *----------------------------------------------------------------------
+ */
 
-    conPtr->io = NULL;
-    conPtr->ssl_bio = NULL;
+static void
+SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr)
+{
+    int refcnt;
 
-    /* Store our SSLConnection as OpenSSL's app data */
+    Ns_MutexLock(&sdPtr->lock);
+    if (scPtr != NULL) {
+	scPtr->nextPtr = sdPtr->firstFreePtr;
+	sdPtr->firstFreePtr = scPtr;
+    }
+    refcnt = --sdPtr->refcnt;
+    Ns_MutexUnlock(&sdPtr->lock);
 
-    SSL_set_app_data (conPtr->ssl, conPtr);
+    if (refcnt == 0) {
+	NsOpenSSLFreeDriver(sdPtr);
+    }
+}
 
-    /*
-     * Create new BIO structure that does SSL on the data read and
-     * written to it. The io is a filter BIO that will be stacked on
-     * top of ssl_bio.  Remember to BIO_free this structure when done
-     * with it.
-     */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockThread --
+ *
+ *  Main listening socket driver thread.
+ *
+ * Results:
+ *  None.
+ *
+ * Side effects:
+ *  Connections are accepted on the configured listen sockets
+ *  and placed on the run queue to be serviced.
+ *
+ *----------------------------------------------------------------------
+ */
 
-    conPtr->io = BIO_new (BIO_f_buffer ());
-    conPtr->ssl_bio = BIO_new (BIO_f_ssl ());
+static void
+SockThread(void *ignored)
+{
+    fd_set set, watch;
+    char c;
+    int slen, n, stop;
+    NsOpenSSLDriver *sdPtr, *nextPtr;
+    NsOpenSSLConnection *scPtr;
+    struct sockaddr_in sa;
+    SOCKET max, sock;
 
-    if (!BIO_set_write_buffer_size (conPtr->io, Bufsize))
-	return (NsSSLAbortConn (conPtr));
+    Ns_ThreadSetName("-nsopenssl-");
+    Ns_Log(Notice, "waiting for startup");
+    Ns_WaitForStartup();
+    Ns_Log(Notice, "starting");
 
-#if 0
-    /*
-     * TODO: TEST STATEMENT: Forcing an abort here cleans up the
-     * server-side stuff but leaves the browser spinning. Is there
-     * anyway I can get the connection to close cleanly if an abort
-     * happens up here?
-     */
+    FD_ZERO(&watch);
+    FD_SET(trigPipe[0], &watch);
+    max = trigPipe[0];
 
-    NsSSLAbortConn (conPtr);
-#endif
+    sdPtr = firstSSLDriverPtr;
+    firstSSLDriverPtr = NULL;
+    while (sdPtr != NULL) {
 
-    /*
-     * Create a socket BIO where all read and write operations refer
-     * to the socket.
-     */
+	nextPtr = sdPtr->nextPtr;
+	if (sdPtr->lsock != INVALID_SOCKET) {
+	    Ns_Log(Notice, "%s: listening on %s (%s:%d)",
+		sdPtr->module, sdPtr->location,
+		sdPtr->address ? sdPtr->address : "*", sdPtr->port);
+	    if (max < sdPtr->lsock) {
+		max = sdPtr->lsock;
+	    }
+	    FD_SET(sdPtr->lsock, &watch);
+	    Ns_SockSetNonBlocking(sdPtr->lsock);
+	    sdPtr->nextPtr = firstSSLDriverPtr;
+	    firstSSLDriverPtr = sdPtr;
+	}
+	sdPtr = nextPtr;
 
-    sbio = BIO_new_socket (sock, BIO_NOCLOSE);
+    }
+    ++max;
 
-    /*
-     * Set the BIOs that will be used for reading and writing data
-     * when calling SSL_read and SSL_write for the specified SSL
-     * connection. Argument two is the read bio; argument three is the
-     * write bio. The RSA SSL-C docs say that you can refer to the
-     * same BIO for read and write; this is probably true with OpenSSL
-     * as well.
-     */
+    Ns_Log(Notice, "accepting connections");
 
-    SSL_set_bio (conPtr->ssl, sbio, sbio);
+    stop = 0;
+    do {
+        memcpy(&set, &watch, sizeof(fd_set));
+	do {
+	    n = select(max, &set, NULL, NULL, NULL);
+	} while (n < 0  && ns_sockerrno == EINTR);
+	if (n < 0) {
+	    Ns_Fatal("select() failed: %s", ns_sockstrerror(ns_sockerrno));
+	} else if (FD_ISSET(trigPipe[0], &set)) {
+	    if (recv(trigPipe[0], &c, 1, 0) != 1) {
+		Ns_Fatal("trigger recv() failed: %s",
+		    ns_sockstrerror(ns_sockerrno));
+	    }
+	    Ns_Log(Notice, "stopping");
+	    stop = 1;
+	    --n;
+	}
 
-    /*
-     * Put the SSL connection reference in the accept state; this is
-     * how you tell I'm the server and not the client.  When an
-     * SSL_do_handshake or an SSL_read or SSL_write is called, the
-     * server side of the SSL protocol is initiated.
-     */
+	sdPtr = firstSSLDriverPtr;
+	while (n > 0 && sdPtr != NULL) {
+	    if (FD_ISSET(sdPtr->lsock, &set)) {
+		--n;
+		slen = sizeof(sa);
+		sock = accept(sdPtr->lsock, (struct sockaddr *) &sa, &slen);
+		if (sock != INVALID_SOCKET) {
+		    Ns_MutexLock(&sdPtr->lock);
+		    sdPtr->refcnt++;
+		    scPtr = sdPtr->firstFreePtr;
+		    if (scPtr != NULL) {
+			sdPtr->firstFreePtr = scPtr->nextPtr;
+		    }
+		    Ns_MutexUnlock(&sdPtr->lock);
+		    if (scPtr == NULL) {
+			scPtr = (NsOpenSSLConnection *)
+			    ns_malloc(sizeof *scPtr);
+		    }
 
-    SSL_set_accept_state (conPtr->ssl);
-    BIO_set_ssl (conPtr->ssl_bio, conPtr->ssl, BIO_CLOSE);
+		    memset(scPtr, 0, sizeof *scPtr);
+		    scPtr->sdPtr = sdPtr;
+		    scPtr->sock = sock;
+		    scPtr->port = ntohs(sa.sin_port);
+		    strcpy(scPtr->peer, ns_inet_ntoa(sa.sin_addr));
 
-    /* 
-     * conPtr->io is a filter BIO; conPtr->ssl_bio is a source/sink
-     * BIO. A source/sink BIO takes data from a device or sends data
-     * to a device; a filter BIO modifies the data written to or read
-     * from a source/sink BIO. A stack of BIOs consist of one
-     * source/sink BIO at the bottom of the stack and filter BIOs on
-     * top. Writing to any of the filter BIOs causes the data to work
-     * its way down the stack with each filter BIO modifying the data
-     * until it gets to the source/sink BIO, at which point it goes to
-     * the device, and vice versa.
-     */
-
-    BIO_push (conPtr->io, conPtr->ssl_bio);
-
-    Ns_Log (Debug, "NsSSLCreateConn: pre-handshake loop");
-
-    /* Connect this connection's descriptor to the SSL connection */
-
-    SSL_set_fd (conPtr->ssl, sock);
-
-    /* 
-     * We force the client certificate to be 'accepted' so the
-     * connection isn't aborted. We may want the application to handle
-     * any invalid or missing client certificates with a friendly
-     * error page.
-     */
-
-#if 0
-    SSL_set_verify_result (conPtr->ssl, X509_V_OK);
-#endif
-
-    while (!SSL_is_init_finished (conPtr->ssl)) {
-
-	if ((err = SSL_accept (conPtr->ssl)) <= 0) {
-
-	    Ns_Log (Notice,
-		    "Failed to accept SSL connection, err = %d / %d", err,
-		    SSL_get_error (conPtr->ssl, err));
-	    if (SSL_get_error (conPtr->ssl, err) == SSL_ERROR_ZERO_RETURN) {
-		Ns_Log (Notice, "Error: SSL_ERROR_ZERO_RETURN");
-		/*
-		 * The case where the connection was closed before any data
-		 * was transferred. That's not a real error and can occur
-		 * sporadically with some clients.
-		 */
-		Ns_Log (Notice, "handshake stopped: connection was closed");
-	    } else if (ERR_GET_REASON (ERR_peek_error ()) ==
-		       SSL_R_HTTP_REQUEST) {
-		Ns_Log (Notice, "Error: This is an HTTP request");
-		/* What to do here? */
-	    } else if (SSL_get_error (conPtr->ssl, err) == SSL_ERROR_SYSCALL) {
-		Ns_Log (Notice, "Error: SSL_ERROR_SYSCALL");
-
-		/* Let interrupted syscalls continue */
-		if (errno == EINTR) {
-		    continue;
+		    if (Ns_QueueConn(sdPtr->driver, scPtr) != NS_OK) {
+			Ns_Log(Warning, "%s: connection dropped",
+			    sdPtr->module);
+			(void) SockClose(scPtr);
+		    }
 		}
-
-		if (errno > 0) {
-		    Ns_Log (Notice,
-			    "SSL handshake interrupted by system; browser stop button?");
-		} else {
-		    Ns_Log (Notice, "Spurious SSL handshake interrupt");
-		}
-	    } else {
-		Ns_Log (Notice, "Error: Unknown error");
 	    }
-
-	    /* For all errors we destroy the connection */
-
-	    return (NsSSLAbortConn (conPtr));
-
-	} else {
-
-	    /*
-	     * Successful SSL_accept. This means that the handshake was done
-	     * and that the SSL communication channel has been setup.
-	     */
-
-	    Ns_Log (Debug, "SSL_accept was successful");
-
-	    /*
-	     * Tie the client certificate structure to the
-	     * SSLConnection structure if a client cert exists. We
-	     * must use X509_free to free the clientcert structure
-	     * when we're done with it (see NsSSLDestroyConn).
-	     */
-
-	    if ((conPtr->clientcert = SSL_get_peer_certificate (conPtr->ssl))
-		!= NULL) {
-		subject =
-		    X509_NAME_oneline (X509_get_subject_name
-				       (conPtr->clientcert), NULL, 0);
-		Ns_Log (Debug, "Subject name: %s", subject);
-		issuer =
-		    X509_NAME_oneline (X509_get_issuer_name
-				       (conPtr->clientcert), NULL, 0);
-		Ns_Log (Debug, "Issuer name: %s", issuer);
-	    } else {
-		Ns_Log (Debug, "No client certificate");
-	    }
-
-#if 0
-	    /*
-	     * This is where we check the validity of the client certificate.
-	     */
-
-	    if ((err = SSL_get_verify_result (conPtr->ssl)) != X509_V_OK) {
-		char *errstr = (char *) X509_verify_cert_error_string (err);
-		Ns_Log (Notice,
-			"SSL client authentication failed: %s",
-			errstr != NULL ? errstr : "unknown reason");
-
-		goto err;
-	    } else {
-		Ns_Log (Debug, "NsSSLCreateConn: returning\n");
-		return conPtr;
-	    }
-#endif
-
+	    sdPtr = sdPtr->nextPtr;
 	}
+    } while (!stop);
+
+    while ((sdPtr = firstSSLDriverPtr) != NULL) {
+	firstSSLDriverPtr = sdPtr->nextPtr;
+	Ns_Log(Notice, "%s: closing %s", sdPtr->module, sdPtr->location);
+	ns_sockclose(sdPtr->lsock);
+	SockFreeConn(sdPtr, NULL);
     }
 
-    Ns_Log (Debug, "Leaving NsSSLCreateConn()");
-
-    return conPtr;
+    ns_sockclose(trigPipe[0]);
+    ns_sockclose(trigPipe[1]);
 }
-
-static SSLConnection *
-NsSSLAbortConn (SSLConnection * conPtr)
-{
-    Ns_Log (Notice, "NsSSLAbortConn: Aborting connection\n");
 
-    /* TODO: If I force an abort before SSL_accept in NsSSLCreateConn,
-     * the browser is left spinning. Is there a way to actually close
-     * the connection such that the browser actually gets the message
-     * and stops spinning? Maybe do an SSL_accept here and then
-     * immediately close the connection???
-     */
-
-    SSL_set_shutdown (conPtr->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
-    SSL_smart_shutdown (conPtr->ssl);
-
-    if (conPtr->io != NULL) {
-	BIO_free (conPtr->io);
-	conPtr->io = NULL;
-    }
-#if 0
-    /* TODO: BUG: Do NOT use SSL_free to free conPtr->ssl or BIO_free
-       to free conPtr->ssl_bio here!!! Depending on where in the
-       connection process we are when we abort, we can inadvertently
-       destroy the connection and hang the server. Behavior: when MSIE
-       connects and then breaks the connection to ask the user which
-       cert they want to use, the server gets destroyed and no more
-       incoming SSL connections. Look up in the area of the handshake
-       loop where i check for the SYSCALL error etc.  */
-
-    if (conPtr->ssl_bio != NULL) {
-	BIO_free (conPtr->ssl_bio);
-	conPtr->ssl_bio = NULL;
-    }
-#endif
-
-    (void) NsSSLDestroyConn (conPtr);
-
-    return NULL;
-}
 
 /*
  *----------------------------------------------------------------------
  *
- * NsSSLClientVerify --
+ * SockStop --
  *
- *      Function registered as a callback when verifying client
- *      certificate. For now it simply returns '1'. Later we'll add
- *      more code to do our own verification.
+ *  Trigger the SockThread to shutdown.
  *
  * Results:
- *      Always 1
+ *  None.
  *
  * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-int
-NsSSLClientVerify (int num)
-{
-    Ns_Log (Debug, "*** IN NsSSLClientVerify !!!");
-
-    return 1;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * NsSSLDestroyServer --
- *
- *      Destroy an SSL Server structure.
- *
- * Results:
- *      Always NS_OK.
- *
- * Side effects:
- *      None.
- *
- * Todo:
- *      None.
+ *  SockThread will close ports.
  *
  *----------------------------------------------------------------------
  */
 
-int
-NsSSLDestroyServer (SSLServer * server)
+static void
+SockStop(void *arg)
 {
+    NsOpenSSLDriver *sdPtr = (NsOpenSSLDriver *) arg;
 
-    Ns_Log (Debug, "Entering NsSSLDestroyServer()");
-
-    assert (server != NULL);
-
-    if (server->context != NULL) {
-	SSL_CTX_free (server->context);
-    }
-
-    if (server->certfile != NULL) {
-	Ns_Free (server->certfile);
-    }
-
-    if (server->keyfile != NULL) {
-	Ns_Free (server->keyfile);
-    }
-
-    if (server->cachesize != 0) {
-	Ns_CacheDestroy (server->cachehash);
-    }
-
-    if (server->ciphersuite != NULL) {
-	Ns_Free (server->ciphersuite);
-    }
-
-    Ns_Free (server);
-
-    Ns_Log (Debug, "Leaving NsSSLDestroyServer()");
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * NsSSLFlushConn --
- *
- *      Flush the SSL connection.
- *
- * Results:
- *      Always NS_OK.
- *
- * Side effects:
- *      None.
- *
- * Todo:
- *      Implement
- *
- *----------------------------------------------------------------------
- */
-
-int
-NsSSLFlush (SSLConnection * conn)
-{
-
-    Ns_Log (Debug, "Entering NsSSLFlush()");
-
-    assert (conn != NULL);
-    assert (conn->ssl != NULL);
-
-    BIO_flush (SSL_get_wbio (conn->ssl));
-
-    Ns_Log (Debug, "Leaving NsSSLFlush()");
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * NsSSLDestroyConn --
- *
- *	Destroy an SSL connection.
- *
- * Results:
- *      NS_OK
- *
- * Side effects:
- *      If the SSL connection was open then it will be forced to close
- *      first.
- *
- *----------------------------------------------------------------------
- */
-
-int
-NsSSLDestroyConn (SSLConnection * conn)
-{
-
-    Ns_Log (Debug, "Entering NsSSLDestroyConn()");
-
-    assert (conn != NULL);
-
-    /*
-     * We free these using the same memory allocation routines that created them.
-     */
-
-    if (conn->io != NULL) {
-	BIO_free (conn->io);
-    }
-
-    /*
-     * Free the client certificate structure if it exists
-     */
-
-    if (conn->clientcert != NULL) {
-	X509_free (conn->clientcert);
-    }
-#if 0
-    /* I would have thought this would work, but it doesn't. When I do
-       this, the server hangs after the first connection has completed
-       -- why? */
-    if (conn->ssl_bio != NULL) {
-	BIO_free (conn->ssl_bio);
-    }
-#endif
-
-    if (conn->ssl != NULL) {
-	SSL_free (conn->ssl);
-    }
-
-    Ns_Free (conn);
-
-    Ns_Log (Debug, "Leaving NsSSLDestroyConn()");
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * NsSSLRecv --
- *
- *	Read data from an SSL connection
- *
- * Results:
- *	The number of bytes read or a negative number in case of
- *      an error.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-int
-NsSSLRecv (SSLConnection * conn, void *buffer, int toread)
-{
-    int rd, i = 0;
-    char *buf = NULL;
-
-    assert (conn != NULL);
-    assert (conn->ssl != NULL);
-    assert (buffer != NULL);
-
-  again:
-
-    rd = BIO_read (conn->io, buffer, toread);
-    if (rd < 0) {
-
-	if (BIO_should_retry (conn->io)) {
-	    goto again;
+    if (sockThread != NULL) {
+        Ns_Log(Notice, DEFAULT_NAME ":  exiting: triggering shutdown");
+	if (send(trigPipe[1], "", 1, 0) != 1) {
+	    Ns_Fatal("trigger send() failed: %s",
+		ns_sockstrerror(ns_sockerrno));
 	}
-    } else if (rd == 0) {
-	rd = 0;
+	Ns_ThreadJoin(&sockThread, NULL);
+	sockThread = NULL;
+        Ns_Log(Notice, DEFAULT_NAME ":  exiting: shutdown complete");
     }
-#if 0
-    rd = SSL_read (conn->ssl, (char *) buffer, toread);
-    switch (SSL_get_error (conn->ssl, rd)) {
-    case SSL_ERROR_NONE:
-	break;
-    case SSL_ERROR_WANT_WRITE:
-    case SSL_ERROR_WANT_READ:
-    case SSL_ERROR_WANT_X509_LOOKUP:
-	Ns_Log (Debug, "NsSSLRecv: WANT_SOMETHING\n");
-	SSL_renegotiate (conn->ssl);
-	SSL_write (conn->ssl, NULL, 0);
-	goto again;
-    case SSL_ERROR_SYSCALL:
-    case SSL_ERROR_SSL:
-	Ns_Log (Debug, "NsSSLRecv: SSL_ERROR_SYSCALL\n");
-	break;
-    case SSL_ERROR_ZERO_RETURN:
-	Ns_Log (Debug, "NsSSLRecv: SSL_ERROR_ZERO_RETURN\n");
-	break;
-    }
-#endif
-
-    return rd;
 }
+
 
 /*
  *----------------------------------------------------------------------
  *
- * NsSSLSend --
+ * SockClose --
  *
- *	Send data through an SSL connection
- *
- * Results:
- *	The number of bytes send or a negative number in case of
- *      an error.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-int
-NsSSLSend (SSLConnection * conn, void *buffer, int towrite)
-{
-    int wr;
-    assert (conn != NULL);
-    assert (conn->ssl != NULL);
-    assert (buffer != NULL);
-
-    return SSL_write (conn->ssl, buffer, towrite);
-}
-
-void
-NsSSLLogTracingState (SSL * ssl, int where, int rc)
-{
-    SSLConnection *connection;
-    SSLServer *server;
-    char *str;
-
-    /*
-     * Get our server record via the SSL's application data.
-     */
-
-    connection = (SSLConnection *) SSL_get_app_data (ssl);
-    server = connection->server;
-
-    if (where & SSL_CB_HANDSHAKE_START) {
-	Ns_Log (Debug, "%s: Handshake : start", SSL_LIBRARY_NAME);
-    } else if (where & SSL_CB_HANDSHAKE_DONE) {
-	Ns_Log (Debug, "%s: Handshake : done", SSL_LIBRARY_NAME);
-    } else if (where & SSL_CB_LOOP) {
-	Ns_Log (Debug, "%s: Loop : %s", SSL_LIBRARY_NAME,
-		SSL_state_string_long (ssl));
-    } else if (where & SSL_CB_READ) {
-	Ns_Log (Debug, "%s: Read : %s", SSL_LIBRARY_NAME,
-		SSL_state_string_long (ssl));
-    } else if (where & SSL_CB_WRITE) {
-	Ns_Log (Debug, "%s: Write : %s", SSL_LIBRARY_NAME,
-		SSL_state_string_long (ssl));
-    } else if (where & SSL_CB_ALERT) {
-	str = (where & SSL_CB_READ) ? "read" : "write";
-	Ns_Log (Debug, "%s: Alert : %s:%s:%s", SSL_LIBRARY_NAME,
-		str,
-		SSL_alert_type_string_long (rc),
-		SSL_alert_desc_string_long (rc));
-    } else if (where & SSL_CB_EXIT) {
-	if (rc == 0) {
-	    Ns_Log (Debug, "%s: Exit : failed  in  %s", SSL_LIBRARY_NAME,
-		    SSL_state_string_long (ssl));
-	} else if (rc < 0) {
-	    Ns_Log (Debug, "%s: Exit : error in  %s", SSL_LIBRARY_NAME,
-		    SSL_state_string_long (ssl));
-	}
-
-    }
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * SSL_smart_shutdown --
- *
- *      Close an SSL connection.
+ *  Close the socket
  *
  * Results:
- *	OpenSSL Error.
+ *  NS_OK/NS_ERROR
  *
  * Side effects:
- *	None.
- *
- * Copyright:
- *      Taken from mod_ssl; ssl_util_ssl.c / http://www.modssl.org
- *      Copyright (c) 1998-1999 Ralf S. Engelschall. All rights reserved.
+ *  Socket will be closed and buffer returned to free list.
  *
  *----------------------------------------------------------------------
  */
 
 static int
-SSL_smart_shutdown (SSL * ssl)
+SockClose(void *arg)
 {
-    int i;
-    int rc;
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+    NsOpenSSLDriver *sdPtr = scPtr->sdPtr;
 
-    /*
-     * Repeat the calls, because SSL_shutdown internally dispatches through a
-     * little state machine. Usually only one or two interation should be
-     * needed, so we restrict the total number of restrictions in order to
-     * avoid process hangs in case the client played bad with the socket
-     * connection and OpenSSL cannot recognize it.
-     */
-    rc = 0;
-    for (i = 0; i < 4 /* max 2x pending + 2x data = 4 */ ; i++) {
-	if ((rc = SSL_shutdown (ssl)))
-	    break;
+    Ns_Log(Debug, "%s: SockClose", sdPtr->module);
+    if (scPtr->sock != INVALID_SOCKET) {
+	if (scPtr->ssl != NULL) {
+	    NsOpenSSLFlush(scPtr);
+	}
+	NsOpenSSLDestroyConn(scPtr);
     }
-    return rc;
+    SockFreeConn(sdPtr, scPtr);
+    return NS_OK;
 }
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockRead --
+ *
+ *  Read from the socket
+ *
+ * Results:
+ *  # bytes read
+ *
+ * Side effects:
+ *  Will read from socket
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockRead(void *arg, void *vbuf, int toread)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return NsOpenSSLRecv(scPtr, vbuf, toread);
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockWrite --
+ *
+ *  Writes data to a socket.
+ *  NOTE: This may not write all of the data you send it!
+ *
+ * Results:
+ *  Number of bytes written, -1 for error
+ *
+ * Side effects:
+ *  Bytes may be written to a socket
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockWrite(void *arg, void *buf, int towrite)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return NsOpenSSLSend(scPtr, buf, towrite);
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockHost --
+ *
+ *  Return the host (addr) I'm bound to
+ *
+ * Results:
+ *  String hostname
+ *
+ * Side effects:
+ *  None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static char *
+SockHost(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return scPtr->sdPtr->address;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockPort --
+ *
+ *  Get the port I'm listening on.
+ *
+ * Results:
+ *  A TCP port number
+ *
+ * Side effects:
+ *  None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockPort(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return scPtr->sdPtr->port;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockName --
+ *
+ * 	Return the name of this driver
+ *
+ * Results:
+ *	DRIVER_NAME.
+ *
+ * Side effects:
+ * 	None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static char *
+SockName(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return DRIVER_NAME;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockPeer --
+ *
+ *  Return the string name of the peer address
+ *
+ * Results:
+ *  String peer (ip) addr
+ *
+ * Side effects:
+ *  None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static char *
+SockPeer(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return scPtr->peer;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockConnectionFd --
+ *
+ *  Get the socket fd
+ *
+ * Results:
+ *  The socket fd
+ *
+ * Side effects:
+ *  None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockConnectionFd(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    if (NsOpenSSLFlush(scPtr) == NS_ERROR) {
+	return -1;
+    }
+
+    return (int) scPtr->sock;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockDetach --
+ *
+ *  Detach the connection data from this connection for keep-alive.
+ *
+ * Results:
+ *  Pointer to connection data.
+ *
+ * Side effects:
+ *  None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void *
+SockDetach(void *arg)
+{
+    return arg;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockPeerPort --
+ *
+ *  Get the peer's originating tcp port
+ *
+ * Results:
+ *  A tcp port
+ *
+ * Side effects:
+ *  None
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockPeerPort(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return scPtr->port;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockLocation --
+ *
+ *  Returns the location, suitable for making anchors
+ *
+ * Results:
+ *  String location
+ *
+ * Side effects:
+ *  none
+ *
+ *----------------------------------------------------------------------
+ */
+
+static char *
+SockLocation(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    return scPtr->sdPtr->location;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * SockInit --
+ *
+ *      Initialize the SSL connection.
+ *
+ * Results:
+ *  NS_OK/NS_ERROR
+ *
+ * Side effects:
+ *  Stuff may be written to a socket.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+SockInit(void *arg)
+{
+    NsOpenSSLConnection *scPtr = (NsOpenSSLConnection *) arg;
+
+    if (scPtr->ssl == NULL) {
+	return NsOpenSSLCreateConn(scPtr);
+    } else {
+	return NS_OK;
+    }
+}
+
