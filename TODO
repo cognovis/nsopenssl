@@ -1,4 +1,9 @@
-nsopenssl TODO:
+nsopenssl
+
+- Create OpenSSLCmd library (OpenSSLVerifyCert, ...); use for nsopenssl, nshttps, nsencrypt
+- Fix log messages: add MODULE, server; remove useless messages
+
+
 
 Goals:
 

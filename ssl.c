@@ -90,8 +90,7 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
 
     sslconn->server     = sslcontext->server;
     sslconn->module     = sslcontext->module;
-    sslconn->role       = sslcontext->role;
-    sslconn->ssldriver  = ssldriver; /* NULL if not driven by AOLserver comm driver */
+    sslconn->ssldriver  = ssldriver;
     sslconn->sslcontext = sslcontext;
     sslconn->next       = NULL;
     sslconn->ssl        = NULL;
@@ -113,15 +112,7 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver,
     SSL_clear(sslconn->ssl);
     SSL_set_app_data(sslconn->ssl, sslconn);
 
-    if (STRIEQ(sslconn->role, ROLE_SERVER)) {
-        SSL_set_accept_state(sslconn->ssl);
-    } else if (STRIEQ(sslconn->role, ROLE_CLIENT)) {
-        SSL_set_connect_state(sslconn->ssl);
-    } else {
-        Ns_Log(Error, "%s: %s: SSL context '%s' role is wrong!",
-                sslconn->server, MODULE, sslconn->role);
-        return NS_ERROR;
-    }
+    SSL_set_accept_state(sslconn->ssl);
 
     /* Create socket BIO and attach it to the socket */
 
@@ -265,16 +256,18 @@ NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread)
 
     if (send(sslconn->sock, NULL, 0, 0) != 0) {
 	Ns_Log(Notice, "%s: %s: connection reset by peer",
-		MODULE, sslconn->type);
+		MODULE, sslconn->server);
 	return NS_ERROR;
     }
 
     rc = BIO_read(sslconn->io, buffer, toread);
-    Ns_Log(Debug, "NsOpenSSLRecv: read(1): %d %d", toread, rc);
+    Ns_Log(Debug, "%s: %s: NsOpenSSLRecv: read(1): %d %d", 
+        MODULE, sslconn->server, toread, rc);
     if (rc < 0 && BIO_should_retry(sslconn->io)
 	&& Ns_SockWait(sslconn->sock, NS_SOCK_READ, 2) == NS_OK) {
 	rc = BIO_read(sslconn->io, buffer, toread);
-        Ns_Log(Debug, "NsOpenSSLRecv: read(2): %d %d", toread, rc);
+        Ns_Log(Debug, "%s: %s: NsOpenSSLRecv: read(2): %d %d", 
+            MODULE, sslconn->server, toread, rc);
     }
     return rc;
 }
@@ -288,8 +281,7 @@ NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread)
  *  Send data through an SSL connection
  *
  * Results:
- *  The number of bytes send or a negative number in case of
- *      an error.
+ *      The number of bytes send or a negative number in case of an error.
  *
  * Side effects:
  *      None.
@@ -300,11 +292,6 @@ NsOpenSSLRecv(Ns_OpenSSLConn *sslconn, void *buffer, int toread)
 int
 NsOpenSSLSend(Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
 {
-#if 0
-    /* XXX how it was done in nsopenssl 1.1c */
-    return SSL_write(sslconn->ssl, buffer, towrite);
-#endif
-
     int rc;
     int total;
 
@@ -314,8 +301,11 @@ NsOpenSSLSend(Ns_OpenSSLConn *sslconn, void *buffer, int towrite)
 	rc = SSL_write(sslconn->ssl, buffer, towrite);
 	if (rc > 0)
 	    towrite -= rc;
-    } while (BIO_should_retry(sslconn->ssl->wbio) &&
-	     BIO_should_write(sslconn->ssl->wbio));
+    } while (
+        BIO_should_retry(sslconn->ssl->wbio) &&
+	BIO_should_write(sslconn->ssl->wbio)
+      );  
+
     return rc;
 }
 
@@ -414,63 +404,7 @@ DestroySSLSockConn(Ns_OpenSSLConn *sslconn)
  *
  * RunSSLHandshake --
  *
- *	Run the SSL handshake sequence.
- *
- * Results:
- *      NS_OK or NS_ERROR.
- *
- * Side effects:
- *	Sets pointer to peer certificate
- *
- *----------------------------------------------------------------------
- */
-
-static int
-RunSSLHandshake(Ns_OpenSSLConn *sslconn)
-{
-    int rc;
-    //char buffer[256];
-    //char *buf = (char *) &buffer;
-
-    /* XXX reverse these -- server handshakes happen more often */
-    if (STREQ(sslconn->role, ROLE_SERVER)) {
-        return RunServerSSLHandshake(sslconn);
-    }
-
-    do {
-        rc = BIO_do_handshake(sslconn->io);
-#if 0
-        if (rc < 0) {
-            ERR_error_string(ERR_get_error(), buf);
-            Ns_Log(Error, MODULE, ": %s", buf);
-        }
-#endif
-    } while (rc < 0 && BIO_should_retry(sslconn->io));
-
-    if (rc < 0) {
-	    return NS_ERROR;
-    }
-
-    sslconn->peercert = SSL_get_peer_certificate(sslconn->ssl);
-
-    /* Test cert validity in log file */
-    if (Ns_OpenSSLIsPeerCertValid(sslconn)) {
-	    Ns_Log(Notice, "%s: %s: SERVER's CERT is VALID",
-		    MODULE, sslconn->type);
-    } else {
-	    Ns_Log(Notice, "%s: %s: SERVER's CERT is NOT VALID",
-		    MODULE, sslconn->type);
-    }
-    return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * RunServerSSLHandshake --
- *
- *      Run the Server SSL handshake sequence.
+ *      Run the server SSL handshake sequence.
  *
  * Results:
  *      NS_OK or NS_ERROR.
@@ -482,7 +416,7 @@ RunSSLHandshake(Ns_OpenSSLConn *sslconn)
  */
 
 static int
-RunServerSSLHandshake(Ns_OpenSSLConn *sslconn)
+RunSSLHandshake(Ns_OpenSSLConn *sslconn)
 {
     int rc, error, n;
     time_t endtime;

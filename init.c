@@ -40,7 +40,9 @@
 
 static int InitOpenSSL(void);
 static int SeedPRNG(void);
+
 static Ns_Mutex *locks;
+
 static void ThreadLockCallback(int mode, int n, const char *file, int line);
 static unsigned long ThreadIdCallback(void);
 static struct CRYPTO_dynlock_value *ThreadDynlockCreateCallback(char *file,
@@ -49,6 +51,7 @@ static void ThreadDynlockLockCallback(int mode,
         struct CRYPTO_dynlock_value *dynlock, const char *file, int line);
 static void ThreadDynlockDestroyCallback(struct CRYPTO_dynlock_value *dynlock,
         const char *file, int line);
+
 static Ns_Callback ServerShutdown;
 
 static void LoadSSLContexts(char *server, char *module);
@@ -57,20 +60,20 @@ static void LoadSSLDrivers(char *server, char *module);
 
 static void OpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *ssldriver);
 static void OpenSSLDriverDestroy(NsOpenSSLDriver *ssldriver);
+
 static void ServerStateInit(char *server, char *module);
-/* XXX chg to ServerStateGet */
-/* XXX add ServerStateDestroy */
+#if 0
+static void ServerStateDestroy(char *server, char *module);
+#endif
 static Server *ServerStateGet(char *server, char *module);
 static void ServerStateSSLContextAdd(char *server, char *module, Ns_OpenSSLContext *sslcontext);
 static int ServerStateSSLDriverAdd(char *server, char *module, NsOpenSSLDriver *ssldriver);
 static Ns_OpenSSLContext *ServerStateSSLContextGet(char *server, char *module, char *name);
 
-
 /*
  * Static variables defined in this file.
  */
 
-static Ns_Tls tls_sslconn;
 static Ns_DriverProc OpenSSLProc; /* Callback used by core NSD */
 
 /*
@@ -144,6 +147,7 @@ NsOpenSSLModuleInit(char *server, char *module)
 #ifdef TEST
     NSOPENSSLDumpState();
 #endif
+
     return NS_OK;
 }
 
@@ -177,8 +181,7 @@ ServerStateInit(char *server, char *module)
     Tcl_SetHashValue(hPtr, thisServer);
     Tcl_InitHashTable(&thisServer->sslcontexts, TCL_STRING_KEYS);
     Tcl_InitHashTable(&thisServer->ssldrivers, TCL_STRING_KEYS);
-    thisServer->defaultservercontext = NULL;
-    thisServer->defaultclientcontext = NULL;
+    thisServer->defaultcontext = NULL;
     return;
 }
 
@@ -375,9 +378,10 @@ LoadSSLContexts(char *server, char *module)
     }
 
     /*
-     * Get defaults server and client contexts
+     * Set default server SSL context
      */
 
+#if 0
     path = Ns_ConfigGetPath(server, module, "defaults", NULL);
     defaults = Ns_ConfigGetSection(path);
 
@@ -392,9 +396,9 @@ LoadSSLContexts(char *server, char *module)
             Ns_Log(Notice, "%s: %s: default SSL context for %s is %s", 
                 MODULE, server, name, value);
             if (STREQ(name, "server")) {
-                thisServer->defaultservercontext = strdup(value);
+                thisServer->defaultcontext = strdup(value);
             } else if (STREQ(name, "client")) {
-                thisServer->defaultclientcontext = strdup(value);
+                thisServer->defaultcontext = strdup(value);
             } else {
                 Ns_Log(Error, "%s: %s: bad parameter '%s' for default contexts",
                     MODULE, server, name);
@@ -406,6 +410,7 @@ LoadSSLContexts(char *server, char *module)
                 thisServer->defaultservercontext);
     Ns_Log(Debug, "***  default SSL context for client is %s", 
                 thisServer->defaultclientcontext);
+#endif
 }
 
 
@@ -431,7 +436,9 @@ LoadSSLDrivers(char *server, char *module)
     Ns_OpenSSLContext *sslcontext;
     NsOpenSSLDriver *ssldriver;
     Ns_Set *ssldrivers;
-    char *path, *name, *sslcontextname;
+    char *path;
+    char *name;
+    char *sslcontextname;
     int i, n;
 
     path = Ns_ConfigGetPath(server, module, "ssldrivers", NULL);
@@ -650,7 +657,6 @@ LoadSSLContext(char *server, char *module, char *name)
 {
     Ns_OpenSSLContext *sslcontext;
     char *path, *moduleDir;
-    char *role;
     char *certFile, *keyFile, *caFile, *caDir;
     char *protocols, *cipherSuite;
     int   peerVerify, peerVerifyDepth;
@@ -664,13 +670,6 @@ LoadSSLContext(char *server, char *module, char *name)
         return NULL;
     }
 
-    role = Ns_ConfigGetValue(path, "role");
-    if (role == NULL) {
-        Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
-                server, MODULE, name);
-        return NULL;
-    }
-
     sslcontext = Ns_OpenSSLContextCreate(server, module);
     if (sslcontext == NULL) {
         Ns_Log(Error, "%s: %s: SSL context came back NULL in ConfigSSLContextLoad",
@@ -678,7 +677,6 @@ LoadSSLContext(char *server, char *module, char *name)
         return NULL;
     }
     sslcontext->name = ns_strdup(name);
-    sslcontext->role = role;
    
     /*
      * A default module directory is automatically set when the SSL context was
@@ -840,6 +838,7 @@ InitOpenSSL(void)
      * Initialize the session cache id number generator.
      */
 
+    /* XXX need to make session caches with prefix = "nsopenssl" */
     nextSessionCacheId = ns_calloc(1, sizeof(NsOpenSSLSessionCacheId));
     Ns_MutexLock(&nextSessionCacheId->lock);
     Ns_MutexSetName2(&nextSessionCacheId->lock, MODULE, "nsopensslsessioncacheid");

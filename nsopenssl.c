@@ -52,19 +52,6 @@ static int PeerVerifyCallback(int preverify_ok, X509_STORE_CTX *x509_ctx);
 static RSA *IssueTmpRSAKey(SSL *ssl, int export, int keylen);
 static void OpenSSLTrace(SSL *ssl, int where, int rc);
 
-#define BUFSIZE 2048
-
-typedef struct Stream {
-    Ns_OpenSSLConn *sslconn;
-    int error;
-    int cnt;
-    char *ptr;
-    /* XXX analyze this */
-    char buf[BUFSIZE + 1];
-} Stream; 
-static int GetLine(Stream *stream, Ns_DString *ds);
-static int FillBuf(Stream *stream);
-
 static int InitCiphers(Ns_OpenSSLContext *sslcontext);
 static int InitProtocols(Ns_OpenSSLContext *sslcontext);
 static int InitCertFile(Ns_OpenSSLContext *sslcontext);
@@ -102,221 +89,6 @@ NS_EXPORT int
 Ns_ModuleInit(char *server, char *module)
 {
     return NsOpenSSLModuleInit(server, module);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLSockConnect --
- *
- *      Open an SSL connection to the given host and port.
- *
- * Arguments:
- *      name:    The name of the SSL context to use
- *      host:    The remote hosts name or IP address
- *      port:    The port to connect to
- *      async:   If 0, leave socket in synchronous mode, otherwise async
- *      timeout: How long to wait for response from remote host
- *      
- * Results:
- *      A pointer to a new Ns_OpenSSLConn structure.
- *
- * Side effects:
- *      Runs the SSL handshake.
- *
- *----------------------------------------------------------------------
- */
-
-Ns_OpenSSLConn *
-Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout,
-                      Ns_OpenSSLContext *sslcontext)
-{
-    Ns_OpenSSLConn *sslconn;
-#if 0
-    Ns_OpenSSLContext *sslcontext;
-#endif
-    SOCKET sock;
-
-    if (timeout < 0) {
-        sock = Ns_SockConnect(host, port);
-    } else {
-        sock = Ns_SockTimedConnect(host, port, timeout);
-    }
-
-    if (sock == INVALID_SOCKET)
-        return NULL;
-
-    /*
-     * If we didn't specify an SSL context, return an error.
-     */
-  
-    if (sslcontext == NULL) {
-        /* XXX add code to use default SSL context if it exists */
-        /* XXX need to put server name in log output */
-        Ns_Log(Error, "%s: cannot create SSL connection: no SSL context was specified",
-            MODULE);
-        return NULL;
-    }
-
-    if ((sslconn = NsOpenSSLConnCreate(sock, NULL, sslcontext)) == NULL) {
-        return NULL;
-    }
-
-    /*
-     * We leave the socket blocking until after the handshake.
-     */
-
-    if (async)
-	Ns_SockSetNonBlocking(sslconn->sock);
-
-    SSL_set_app_data(sslconn->ssl, sslconn);
-    return sslconn;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLSockAccept --
- *
- *      Accept a TCP socket, setting close on exec.
- *
- * Arguments:
- *      name: the name of the SSL context to use for this connection
- *      sock: the socket id that we're accept'ing on
- *      
- * Results:
- *      A socket or INVALID_SOCKET on error.
- *
- * Side effects:
- *      The socket is always placed in non-blocking mode.
- *
- *----------------------------------------------------------------------
- */
-
-Ns_OpenSSLConn *
-Ns_OpenSSLSockAccept(SOCKET sock)
-{
-    Ns_OpenSSLConn *sslconn;
-    Ns_OpenSSLContext *sslcontext;
-
-    if (sock == INVALID_SOCKET) 
-        return NULL;
-    if ((sslconn = NsOpenSSLConnCreate(sock, NULL, sslcontext)) == NULL)
-        return NULL;
-    Ns_SockSetNonBlocking(sslconn->sock);
-    SSL_set_app_data(sslconn->ssl, sslconn);
-    return sslconn;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLSockListen --
- *
- *      Listen for connections with default backlog. Just a wrapper
- *      around Ns_SockListen at the moment.
- *
- * XXX
- * Arguments:
- *      name: the name of the SSL context to use for this connection
- *      addr: the IP address to bind to
- *      port: the port to listen on
- *
- * Results:
- *      A socket.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-SOCKET
-Ns_OpenSSLSockListen(char *addr, int port)
-{
-    return Ns_SockListen(addr, port);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLSockCallback --
- *
- *      Register a callback to be run when a socket that underlies an
- *      SSL connection reaches a certain state. The callback proc is
- *      responsible for layering SSL on top of the connected socket.
- *
- * XXX
- * Arguments:
- *      name: the name of the SSL context to use for this connection
- *      sock: the id of the socket to listen on
- *      proc: the proc to run when a connection comes in
- *      when:
- *      
- * Results:
- *      NS_OK/NS_ERROR
- *
- * Side effects:
- *      Will wake up the callback thread.
- *
- *----------------------------------------------------------------------
- */
-
-/* XXX unusable with a direct call except from NsTclSSLSockCallback */
-/* XXX essentially, the callback proc is going to have to be reponsible */
-/* XXX for layering SSL on top of the socket once a connection comes in, */
-/* XXX and before the script is run. I might need a new type, Ns_OpenSSLSockProc */
-/* XXX but we'll see. I may be able to create a generic way to do this */
-/* XXX so the developer using the API won't have to */
-
-int
-Ns_OpenSSLSockCallback(SOCKET sock, Ns_SockProc *proc, void *arg, int when)
-{
-	/* XXX need to handle SSL wrapping here somehow... */
-	return Ns_SockCallback(sock, proc, arg, when);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLSockListenCallback --
- *
- *      Listen on an address/port that underlies an SSL connection and
- *      register a callback to be run when connections come in on it.
- *
- * Arguments:
- *      name: the name of the SSL context to use for this connection
- *      addr: the IP address to listen on
- *      port: the port to listen on
- *      proc: the proc to run when a connection comes in
- *      arg:  the argument to pass to the proc
- *
- * Results:
- *      NS_OK/NS_ERROR
- *
- * Side effects:
- *      Will wake up the callback thread.
- *
- *----------------------------------------------------------------------
- */
-
-/* XXX unusable with a direct call except from NsTclSSLSockListenCallback */
-/* XXX essentially, the callback proc is going to have to be reponsible */
-/* XXX for layering SSL on top of the socket once a connection comes in, */
-/* XXX and before the script is run. I might need a new type, Ns_OpenSSLSockProc */
-/* XXX but we'll see. I may be able to create a generic way to do this */
-/* XXX so the developer using the API won't have to */
-
-int
-Ns_OpenSSLSockListenCallback(char *addr, int port, Ns_SockProc *proc,
-			      void *arg)
-{
-    return Ns_SockListenCallback(addr, port, proc, arg);
 }
 
 
@@ -1151,16 +923,7 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
      * (i.e. these are not configurable via nsd.tcl or Ns_OpenSSL* calls).
      */
 
-    if (STRIEQ(sslcontext->role, ROLE_SERVER)) {
-        sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
-    } else if (STRIEQ(sslcontext->role, ROLE_CLIENT)) {
-        sslcontext->sslctx = SSL_CTX_new(SSLv23_client_method());
-        Ns_Log(Debug, "*** SSL_CTX_new for CLIENT");
-    } else {
-        Ns_Log(Error, "%s: %s: SSL context '%s' role parameter is wrong, wrong, wrong!",
-                server, MODULE, sslcontext->name);
-        return NS_ERROR;
-    }
+    sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
 
     if (sslcontext->sslctx == NULL) {
         /* XXX FAILURE: clean up and then free the struct */
@@ -1220,6 +983,132 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
     InitTrace(sslcontext);
 
     return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextRelease --
+ *
+ *       Release an SSL Context so you can modify it.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       An SSL Context that has a refcnt > 0 won't be released because refcnt
+ *       conns are currently using the structure. Once released, the SSL
+ *       Context can't be used for connections again until
+ *       Ns_OpenSSLContextInit() is called to (re-)initialize the SSL_CTX
+ *       structure inside of it: this would be bad if you release the context
+ *       used for incoming conns to your site.
+ *
+ *----------------------------------------------------------------------
+ */
+
+/* XXX add the ability to wait for the context to be inactive? */
+int
+Ns_OpenSSLContextRelease(char *server, char *module, Ns_OpenSSLContext *sslcontext)
+{
+
+    /* XXX rw lock */
+    if (sslcontext->refcnt > 0) {
+        Ns_Log(Error, "%s: %s: attempted to release SSL context '%s' while still in use by active connections", 
+                server, MODULE, sslcontext->name);
+        return NS_ERROR;
+    }
+
+    Ns_Log(Warning, "%s: %s: releasing SSL context '%s' to be writeable",
+            server, MODULE, sslcontext->name);
+    sslcontext->readonly = NS_FALSE;
+    /* XXX rw unlock */
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextDestroy --
+ *
+ *       Destroy an Ns_OpenSSLContext structure
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       Memory is deallocated.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextDestroy(char *server, char *module, Ns_OpenSSLContext *sslcontext)
+{
+    /* XXX fill this in */
+    /* XXX to free:
+       XXX    sslcontext->certFile
+       XXX    sslcontext->keyFile
+       XXX    sslcontext->caFile
+       XXX    anything else that has been strdup'd
+     */
+
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLIsPeerCertValid --
+ *
+ *      Determine if the peer's certificate is valid.
+ *
+ * Results:
+ *      NS_TRUE or NS_FALSE.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *sslconn)
+{
+    if (SSL_get_verify_result(sslconn->ssl) == X509_V_OK) {
+	return NS_TRUE;
+    } else {
+	return NS_FALSE;
+    }
+
+    /* Possible (long) values from SSL_get_verify_result:
+       X509_V_OK
+       X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT
+       X509_V_ERR_UNABLE_TO_GET_CRL
+       X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE
+       X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE
+       X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
+       X509_V_ERR_CERT_SIGNATURE_FAILURE
+       X509_V_ERR_CRL_SIGNATURE_FAILURE
+       X509_V_ERR_CERT_NOT_YET_VALID
+       X509_V_ERR_CERT_HAS_EXPIRED
+       X509_V_ERR_CRL_NOT_YET_VALID
+       X509_V_ERR_CRL_HAS_EXPIRED
+       X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD
+       X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD
+       X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD
+       X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD
+       X509_V_ERR_OUT_OF_MEM
+       X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
+       X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+       X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+       X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE
+       X509_V_ERR_CERT_CHAIN_TOO_LONG
+       X509_V_ERR_CERT_REVOKED
+       X509_V_ERR_APPLICATION_VERIFICATION
+     */
 }
 
 
@@ -1364,7 +1253,7 @@ InitCAFile(Ns_OpenSSLContext *sslcontext)
 /*
  *----------------------------------------------------------------------
  *
- * InitCADIR --
+ * InitCADir --
  *
  *       Initializes SSL context's CA directory
  *
@@ -1503,11 +1392,7 @@ InitSessionCache(Ns_OpenSSLContext *sslcontext)
 {
     /* XXX need to make this work well with Timeout, Size set/get funcs */
     if (sslcontext->sessionCache) {
-        if (STRIEQ(sslcontext->role, ROLE_SERVER)) {
-            SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_SERVER);
-        } else {
-            SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_CLIENT);
-        }
+        SSL_CTX_set_session_cache_mode(sslcontext->sslctx, SSL_SESS_CACHE_SERVER);
 
         /* XXX fix to prefix with "nsopenssl", "nsopensslclient" etc. */
         SSL_CTX_set_session_id_context(sslcontext->sslctx,
@@ -1617,284 +1502,6 @@ InitProtocols(Ns_OpenSSLContext *sslcontext)
 /*
  *----------------------------------------------------------------------
  *
- * Ns_OpenSSLContextRelease --
- *
- *       Release an SSL Context so you can modify it.
- *
- * Results:
- *       NS_OK or NS_ERROR
- *
- * Side effects:
- *       An SSL Context that has a refcnt > 0 won't be released because refcnt
- *       conns are currently using the structure. Once released, the SSL
- *       Context can't be used for connections again until
- *       Ns_OpenSSLContextInit() is called to (re-)initialize the SSL_CTX
- *       structure inside of it: this would be bad if you release the context
- *       used for incoming conns to your site.
- *
- *----------------------------------------------------------------------
- */
-
-/* XXX add the ability to wait for the context to be inactive? */
-int
-Ns_OpenSSLContextRelease(char *server, char *module, Ns_OpenSSLContext *sslcontext)
-{
-
-    /* XXX rw lock */
-    if (sslcontext->refcnt > 0) {
-        Ns_Log(Error, "%s: %s: attempted to release SSL context '%s' while still in use by active connections", 
-                server, MODULE, sslcontext->name);
-        return NS_ERROR;
-    }
-
-    Ns_Log(Warning, "%s: %s: releasing SSL context '%s' to be writeable",
-            server, MODULE, sslcontext->name);
-    sslcontext->readonly = NS_FALSE;
-    /* XXX rw unlock */
-    return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLContextDestroy --
- *
- *       Destroy an Ns_OpenSSLContext structure
- *
- * Results:
- *       NS_OK or NS_ERROR
- *
- * Side effects:
- *       Memory is deallocated.
- *
- *----------------------------------------------------------------------
- */
-
-int
-Ns_OpenSSLContextDestroy(char *server, char *module, Ns_OpenSSLContext *sslcontext)
-{
-    /* XXX fill this in */
-    /* XXX to free:
-       XXX    sslcontext->certFile
-       XXX    sslcontext->keyFile
-       XXX    sslcontext->caFile
-       XXX    anything else that has been strdup'd
-     */
-
-    return NS_OK;
-}
-
-
-/*                     
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLFetchURL --
- *
- *      Open up an HTTPS connection to an arbitrary URL.
- *
- * Results:
- *      NS_OK or NS_ERROR.  
- *
- * Side effects: 
- *      Page contents will be appended to the passed-in dstring.  Headers
- *      returned to us will be put into the passed-in Ns_Set.  The set name
- *      will be changed to a copy of the HTTP status line.
- *
- *----------------------------------------------------------------------
- */
-
-int
-Ns_OpenSSLFetchURL(Ns_DString *page, char *url, Ns_Set *headers)
-{
-    Ns_OpenSSLConn *sslconn;
-    Ns_DString ds;
-    Stream stream;
-    Ns_Request *request;
-    char *p;
-    int status, tosend, n;
-
-    status = NS_ERROR;
-    Ns_DStringInit (&ds);
-
-    /*
-     * Parse the URL and open a connection.
-     */
-
-    Ns_DStringVarAppend(&ds, "GET ", url, " HTTP/1.0", NULL);
-    request = Ns_ParseRequest(ds.string);
-    if (request == NULL || request->protocol == NULL ||
-            /* XXX try to get the server name into the log message */
-	!STREQ(request->protocol, "https") || request->host == NULL) {
-	Ns_Log(Notice, "%s: urlopen: invalid url '%s'", MODULE, url);
-	goto done;
-    }
-    if (request->port == 0) {
-	request->port = 443;
-    }
-    sslconn = Ns_OpenSSLSockConnect(request->host, request->port, 0, 300, NULL);
-            /* XXX try to get the server name into the log message */
-    if (sslconn == NULL) {
-	Ns_Log(Error, "%s: Ns_OpenSSLFetchURL failed to connect to '%s'", MODULE, url);
-	goto done;
-    }
-
-    /*
-     * Send a simple HTTP GET request.
-     */
-
-    Ns_DStringTrunc(&ds, 0);
-    Ns_DStringVarAppend(&ds, "GET ", request->url, NULL);
-    if (request->query != NULL) {
-	Ns_DStringVarAppend(&ds, "?", request->query, NULL);
-    }
-    Ns_DStringAppend(&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
-    p = ds.string;
-    tosend = ds.length;
-    while (tosend > 0) {
-	n = NsOpenSSLSend(sslconn, p, tosend);
-	if (n <= 0) {
-	    Ns_Log(Error, "%s: urlopen: failed to send data to '%s'", MODULE, url);
-	    goto done;
-	}
-	tosend -= n;
-	p += n;
-    }
-
-    /*
-     * Buffer the socket and read the response line and then
-     * consume the headers, parsing them into any given header set.
-     */
-
-    stream.cnt = 0;
-    stream.error = 0;
-    stream.ptr = stream.buf;
-    stream.sslconn = (Ns_OpenSSLConn *) sslconn;
-    if (!GetLine(&stream, &ds)) {
-	goto done;
-    }
-    if (headers != NULL && strncmp(ds.string, "HTTP", 4) == 0) {
-	if (headers->name != NULL) {
-	    ns_free(headers->name);
-	}
-	headers->name = Ns_DStringExport(&ds);
-    }
-    do {
-	if (!GetLine(&stream, &ds)) {
-	    goto done;
-	}
-	if (ds.length > 0
-	    && headers != NULL
-	    && Ns_ParseHeader(headers, ds.string, Preserve) != NS_OK) {
-	    goto done;
-	}
-    } while (ds.length > 0);
-
-    /*
-     * Without any check on limit or total size, foolishly read
-     * the remaining content into the dstring.
-     */
-
-    do {
-	Ns_DStringNAppend(page, stream.ptr, stream.cnt);
-    } while (FillBuf(&stream));
-    if (!stream.error) {
-	status = NS_OK;
-    }
-
-  done:
-    if (request != NULL) {
-	ns_free(request);
-    }
-    if (sslconn != NULL) {
-	NsOpenSSLConnDestroy(sslconn);
-    }
-    Ns_DStringFree(&ds);
-    return status;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLFetchPage --
- *
- *      Fetch a page off of this very server. Url must reference a
- *      file in the filesystem.
- *
- * Results:
- *      NS_OK or NS_ERROR.
- *
- * Side effects:
- *      The file contents will be put into the passed-in dstring.
- *
- *----------------------------------------------------------------------
- */
-
-int
-Ns_OpenSSLFetchPage(Ns_DString *page, char *url, char *server)
-{
-    return Ns_FetchPage(page, url, server);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * Ns_OpenSSLIsPeerCertValid --
- *
- *      Determine if the peer's certificate is valid.
- *
- * Results:
- *      NS_TRUE or NS_FALSE.
- *
- * Side effects:
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-int
-Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *sslconn)
-{
-    if (SSL_get_verify_result(sslconn->ssl) == X509_V_OK) {
-	return NS_TRUE;
-    } else {
-	return NS_FALSE;
-    }
-
-    /* Possible (long) values from SSL_get_verify_result:
-       X509_V_OK
-       X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT
-       X509_V_ERR_UNABLE_TO_GET_CRL
-       X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE
-       X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE
-       X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
-       X509_V_ERR_CERT_SIGNATURE_FAILURE
-       X509_V_ERR_CRL_SIGNATURE_FAILURE
-       X509_V_ERR_CERT_NOT_YET_VALID
-       X509_V_ERR_CERT_HAS_EXPIRED
-       X509_V_ERR_CRL_NOT_YET_VALID
-       X509_V_ERR_CRL_HAS_EXPIRED
-       X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD
-       X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD
-       X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD
-       X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD
-       X509_V_ERR_OUT_OF_MEM
-       X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
-       X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
-       X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
-       X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE
-       X509_V_ERR_CERT_CHAIN_TOO_LONG
-       X509_V_ERR_CERT_REVOKED
-       X509_V_ERR_APPLICATION_VERIFICATION
-     */
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
  * PeerVerifyCallback --
  *
  *      Called by the SSL library at each stage of client certificate
@@ -1995,95 +1602,8 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
 	alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log(Notice, "%s: trace: %s: %s%s%s%s%s",
+    Ns_Log(Notice, "%s: trace: %s%s%s%s%s",
 	    MODULE,
-            sslconn->type,
 	    SSL_state_string_long(ssl),
 	    alertTypePrefix, alertType, alertDescPrefix, alertDesc);
-}
-
-
-/*
- *----------------------------------------------------------------------
- *   
- * GetLine --
- *
- *      Copy the next line from the stream to a dstring, trimming
- *      the \n and \r.
- *
- * Results:
- *      NS_TRUE or NS_FALSE.
- *
- * Side effects:
- *      The dstring is truncated on entry.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-GetLine(Stream *stream, Ns_DString *ds)
-{
-    char *eol;
-    int n;
-
-    Ns_DStringTrunc(ds, 0);
-    do {
-	if (stream->cnt > 0) {
-	    eol = strchr(stream->ptr, '\n');
-	    if (eol == NULL) {
-		n = stream->cnt;
-	    } else {
-		*eol++ = '\0';
-		n = eol - stream->ptr;
-	    }
-	    Ns_DStringNAppend(ds, stream->ptr, n - 1);
-	    stream->ptr += n;
-	    stream->cnt -= n;
-	    if (eol != NULL) {
-		n = ds->length;
-		if (n > 0 && ds->string[n - 1] == '\r') {
-		    Ns_DStringTrunc(ds, n - 1);
-		}
-		return NS_TRUE;
-	    }
-	}
-    } while (FillBuf(stream));
-    return NS_FALSE;
-}
-
-
-/*
- *----------------------------------------------------------------------
- * 
- * FillBuf --
- * 
- *      Fill the socket stream buffer.
- *
- * Results:
- *      NS_TRUE if fill ok, NS_FALSE otherwise.
- *
- * Side effects:       
- *      None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-FillBuf(Stream *stream)
-{
-    int n;
-
-    n = NsOpenSSLRecv(stream->sslconn, stream->buf, BUFSIZE);
-    if (n <= 0) {
-	if (n < 0) {
-	    Ns_Log(Error, "%sNs_OpenSSLFetchURL failed to fill socket stream buffer",
-                    MODULE);
-	    stream->error = 1;
-	}
-	return NS_FALSE;
-    }
-    stream->buf[n] = '\0';
-    stream->ptr = stream->buf;
-    stream->cnt = n;
-    return NS_TRUE;
 }

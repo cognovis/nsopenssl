@@ -33,15 +33,6 @@
  * $Header$
  */
 
-//#if OPENSSL_VERSION_NUMBER <= 0x00905000L
-//#error "This version of nsopenssl requires OpenSSL 0.9.6 or higher"
-//#endif
-
-/* Required for Tcl channels to work */
-#ifndef USE_TCL8X
-#define USE_TCL8X
-#endif
-
 #include <ns.h>
 
 #include <ctype.h>
@@ -71,26 +62,14 @@
 #include <openssl/x509v3.h>
 #include <openssl/opensslconf.h>
 
-/* XXX don't forget to turn this back on */
-#if 0
-define OPENSSL_THREAD_DEFINES
- /* requires newer version of OpenSSL */
-ifndef OPENSSL_THREADS
-error "OpenSSL was not compiled with thread support!"
-endif
-#endif
-
 
 /*
  * Defaults
- * XXX push this out to a separate defaults.h file ???
  */
 
 #define MODULE                         "nsopenssl"
 #define DEFAULT_PORT                   443
 #define DEFAULT_PROTOCOL               "https"
-#define ROLE_SERVER                    "server"
-#define ROLE_CLIENT                    "client"
 #define DEFAULT_PROTOCOLS              "All"
 #define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
 #define DEFAULT_CERT_FILE              "certificate.pem"
@@ -123,11 +102,11 @@ endif
 typedef struct Ns_OpenSSLContext {
     char              *server; 
     char              *module;
-    char              *role;
-    int                conntype;
     char              *moduleDir;
     char              *name;
     char              *desc;
+    /* XXX this stuff is already in config path; why duplicate it here? */
+    /* XXX any way to get some of it back through OpensSSL ? */
     char              *certFile;             /* Cert file, PEM format */
     char              *keyFile;              /* Key file, PEM format */
     char              *protocols;            /* Protocols to use */
@@ -180,8 +159,6 @@ typedef struct NsOpenSSLDriver {
 typedef struct Ns_OpenSSLConn {
     char                     *server;
     char                     *module;
-    char                     *role;
-    int                       type;      /* server = 0; client = 1 */
     int                       peerport;  /* port number of remote side */
     char                      peer[16];  /* peer's name */
     X509                     *peercert;  /* peer's cert in PEM format */
@@ -198,24 +175,23 @@ typedef struct Ns_OpenSSLConn {
 } Ns_OpenSSLConn;
 
 /*
- * Store per-virtual server information.
+ * Manages each virtual server's specific SSL information.
  */
 
 typedef struct Server {
     char              *server;
     Tcl_HashTable      sslcontexts;
     Tcl_HashTable      ssldrivers;
-    Ns_OpenSSLConn    *firstOutgoingSSLConnPtr; /* Tcl API managed client conns */
-    Ns_OpenSSLConn    *firstIncomingSSLConnPtr; /* Tcl API managed server conns */
-    char              *defaultservercontext;
-    char              *defaultclientcontext;
+    char              *defaultcontext;
     Ns_Mutex          *lock;
 } Server;
 
 /*
- * Session cache id management. This is OpenSSL-library global.
+ * Session cache id management. This is OpenSSL-library global, so cache items
+ * need to be prefixed by the module name and virtual server name.
  */
-/* XXX merge into per-virtual server struct above */
+
+/* XXX merge into per-virtual server struct above ??? */
 typedef struct NsOpenSSLSessionCacheId {
     Ns_Mutex lock;
     int id;
@@ -238,47 +214,15 @@ extern int NsOpenSSLShutdown(SSL *ssl);
  */
 
 extern void NsOpenSSLTclInit(char *server);
-//extern void NsOpenSSLAddCmds(Tcl_Interp *interp, void *ignored);
-//extern Ns_TclInterpInitProc NsOpenSSLAddCmds;
 extern Tcl_CmdProc NsTclOpenSSLConnCmd;
 
 extern Tcl_CmdProc NsTclOpenSSLCmd;
-extern Tcl_CmdProc NsTclSSLGetUrlCmd;
-extern Tcl_CmdProc NsTclSSLSockOpenCmd;
-extern Tcl_CmdProc NsTclSSLSockReadCmd;
-extern Tcl_CmdProc NsTclSSLSockWriteCmd;
-extern Tcl_CmdProc NsTclSSLSockListenCmd;
-extern Tcl_CmdProc NsTclSSLSockAcceptCmd;
-extern Tcl_CmdProc NsTclSSLSockNReadCmd;
-extern Tcl_CmdProc NsTclSSLSockSelectCmd;
-extern Tcl_CmdProc NsTclSSLSockCheckCmd;
-extern Tcl_CmdProc NsTclSSLSockSetBlockingCmd;
-extern Tcl_CmdProc NsTclSSLSockSetNonBlockingCmd;
-extern Tcl_CmdProc NsTclSSLSockCallbackCmd;
-extern Tcl_CmdProc NsTclSSLSockListenCallbackCmd;
-
-#if 0				/* not yet implemented */
-extern Tcl_CmdProc NsTclSSLSocketPairCmd;
-extern Tcl_CmdProc NsTclSSLGetByCmd;
-#endif
-
 
 /*
  * nsopenssl.c (C API)
  */
 
-extern int Ns_OpenSSLFetchPage (Ns_DString *page, char *url, char *server);
-extern int Ns_OpenSSLFetchURL (Ns_DString *page, char *url,
-		Ns_Set *headers);
 extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *sslconn);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, 
-        int port, int async, int timeout, Ns_OpenSSLContext *sslcontext);
-extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
-extern SOCKET Ns_OpenSSLSockListen (char *addr, int port);
-extern int Ns_OpenSSLSockCallback (SOCKET sock, 
-        Ns_SockProc *proc, void *arg, int when);
-extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
-        Ns_SockProc *proc, void *arg);
 
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
         char *module);
@@ -348,9 +292,6 @@ extern int Ns_OpenSSLContextTraceGet(char *server, char *module,
         Ns_OpenSSLContext *sslcontext);
 
 extern int NsOpenSSLModuleInit(char *server, char *module);
-//extern Tcl_HashTable NsOpenSSLVirtualServerTable;
-//extern NsOpenSSLSessionCacheId *nextSessionCacheId;
-
 
 #ifdef TEST
 extern void NSOPENSSLDumpState(void);
