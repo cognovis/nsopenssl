@@ -252,4 +252,51 @@ extern char *NsOpenSSLGetModuleName (void);
 extern SSL_CTX *NsOpenSSLGetSockServerSSLContext (void);
 extern SSL_CTX *NsOpenSSLGetSockClientSSLContext (void);
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, char *module, char *name);
+extern int Ns_OpenSSLContextInit (Ns_OpenSSLContext *sslContext);
+
+extern int Ns_OpenSSLContextModuleDirSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, char *moduleDir);
+
+extern int Ns_OpenSSLContextCertFileSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, char *certFile);
+
+extern int Ns_OpenSSLContextKeyFileSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, char *keyFile);
+
+extern int Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, char *cipherSuite);
+
+extern int Ns_OpenSSLContextProtocolsSet(char *server, char *module, 
+        Ns_OpenSSLContext *sslContext, char *protocols);
+
+extern int Ns_OpenSSLContextCAFileSet(char *server, char *module, 
+        Ns_OpenSSLContext *sslContext, char *caFile);
+
+extern int Ns_OpenSSLContextCADirSet(char *server, char *module, 
+        Ns_OpenSSLContext *sslContext, char *caDir);
+
+extern int Ns_OpenSSLContextPeerVerifySet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, int peerVerify);
+
+extern int Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, int peerVerifyDepth);
+
+
+extern int Ns_OpenSSLContextSessionCacheSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, int sessionCache);
+
+
+extern int Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, 
+       Ns_OpenSSLContext *sslContext, int sessionCacheSize);
+
+
+extern int Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, 
+            Ns_OpenSSLContext *sslContext, int sessionCacheTimeout);
+
+extern int Ns_OpenSSLContextTraceSet (char *server, char *module, 
+        Ns_OpenSSLContext *sslContext, int trace);
+
+
+
+
 

@@ -270,26 +270,6 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name)
     sslContext->sessionCacheTimeout = DEFAULT_SESSION_CACHE_TIMEOUT;
     sslContext->trace               = DEFAULT_TRACE;
 
-    /* XXX does this belong here or in an init function ??? */
-    /* XXX i.e. do I want to load SSL_CTX as a last phase? */
-    if (sslContext->role == ROLE_SSL_SERVER) {
-        sslContext->sslctx = SSL_CTX_new (SSLv23_server_method());
-    } else {
-        sslContext->sslctx = SSL_CTX_new (SSLv23_client_method());
-    }
-
-    /* So we can get to SSL context pointer in an OpenSSL callback */
-    SSL_CTX_set_app_data (sslContext->sslctx, sslContext);
-
-    /* Enable SSL bug compatibility */
-    SSL_CTX_set_options (sslContext->sslctx, SSL_OP_ALL);
-
-    /* This apparently prevents some sort of DH attack. */
-    SSL_CTX_set_options (sslContext->sslctx, SSL_OP_SINGLE_DH_USE);
-
-    /* Temporary key callback required for 40-bit export browsers */
-    SSL_CTX_set_tmp_rsa_callback (sslContext->sslctx, IssueTmpRSAKey);
-
     /*
      * Insert the context into the linked list. Instead of wasting time looking
      * for the end of the list, we'll insert it at the front.
@@ -311,6 +291,443 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name)
 
     return sslContext;
 }
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextInit --
+ *
+ *	Take the information populating an SSL context structure and initialize
+ *	the SSL_CTX with that information.
+ *
+ * Results:
+ *	NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextInit (Ns_OpenSSLContext *sslContext) 
+{
+    /* Check the module directory */
+    /* XXX sslContext->moduleDir; (validate it exists, create it) */
+
+    /* Create an SSL_CTX structure */
+
+    if (sslContext->role == ROLE_SSL_SERVER) {
+        sslContext->sslctx = SSL_CTX_new (SSLv23_server_method());
+    } else {
+        sslContext->sslctx = SSL_CTX_new (SSLv23_client_method());
+    }
+
+    /* Load the cert file */
+    /* XXX sslContext->certFile; */
+
+    /* Load and validate the key file */
+
+    /* Load the CA file (optional) */
+
+    /* Set the CA directory (optional) */
+
+
+    /* Set the cipher suite */
+
+    /* Set the protocols */
+
+    /* Set peer verify */
+
+    /* Set peer verify depth */
+
+    /* Use session cache? */
+
+    /* Set size of session cache */
+
+    /* Set session cache timeout */
+
+    /* Turn on SSL handshake logging? */
+
+    
+    /* So we can get to SSL context pointer in an OpenSSL callback */
+    SSL_CTX_set_app_data (sslContext->sslctx, sslContext);
+
+    /* Enable SSL bug compatibility */
+    SSL_CTX_set_options (sslContext->sslctx, SSL_OP_ALL);
+
+    /* This apparently prevents some sort of DH attack. */
+    SSL_CTX_set_options (sslContext->sslctx, SSL_OP_SINGLE_DH_USE);
+
+    /* Temporary key callback required for 40-bit export browsers */
+    SSL_CTX_set_tmp_rsa_callback (sslContext->sslctx, IssueTmpRSAKey);
+
+    return NS_OK;
+}
+
+
+
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextModuleDirSet --
+ *
+ *       Set the module directory for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextModuleDirSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *moduleDir)
+{
+    /* XXX lock struct */
+    /* XXX validate that directory exists and is readable */
+    sslContext->moduleDir = moduleDir;
+    Ns_Log(Debug, "%s: %s: moduleDir set to %s", MODULE, server, moduleDir);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCertFileSet --
+ *
+ *       Point to the SSL certificate file.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextCertFileSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *certFile)
+{
+    sslContext->certFile = certFile;
+    Ns_Log(Debug, "%s: %s: certFile set to %s", MODULE, server, certFile);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextKeyFileSet --
+ *
+ *       Set the private key pathname for a particular SSL context, 
+ *       load the key and validate that it works with the certificate.
+ *       The key MUST NOT be passphrase-protected.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+/* XXX merge this with Ns_OpenSSLContextCertFileSet -- most code is duplicated */
+int
+Ns_OpenSSLContextKeyFileSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *keyFile)
+{
+    Ns_Log(Debug, "%s: %s: keyFile set to %s", MODULE, server, keyFile);
+    sslContext->keyFile = keyFile;
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCipherSuiteSet --
+ *
+ *       Set the cipher suite for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *cipherSuite)
+{
+    sslContext->cipherSuite = cipherSuite;
+    Ns_Log(Debug, "%s: %s: cipherSuite set to %s", MODULE, server, cipherSuite);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextProtocolsSet --
+ *
+ *       Set the protocols for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextProtocolsSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *protocols)
+{
+    /* XXX Need to ifdef out the protocols and ciphers that aren't compiled*/
+    /* XXX a particular instance of an OpenSSL library */
+    sslContext->protocols = protocols;
+    Ns_Log(Debug, "%s: %s: protocols set to %s", MODULE, server, protocols);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCAFileSet --
+ *
+ *       Set the CA file for a particular SSL context and load it.
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextCAFileSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *caFile)
+{
+    sslContext->caFile = caFile;
+    Ns_Log(Debug, "%s: %s: caFile set to %s", MODULE, server, caFile);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextCADirSet --
+ *
+ *       Set the CA directory for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextCADirSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, char *caDir)
+{
+    sslContext->caDir = caDir;
+    Ns_Log(Debug, "%s: %s: caDir set to %s", MODULE, server, caDir);
+    return NS_OK;
+}
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifySet --
+ *
+ *       Set whether peer verify is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextPeerVerifySet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int peerVerify)
+{
+    /* XXX lock struct */
+    sslContext->peerVerify = peerVerify;
+    Ns_Log(Debug, "%s: %s: peerVerify set to %d", MODULE, server, peerVerify);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextPeerVerifyDepthSet --
+ *
+ *       Set the depth that a peer certificate can be chained for
+ *       validation purposes for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int peerVerifyDepth)
+{
+    /* XXX lock struct */
+    sslContext->peerVerifyDepth = peerVerifyDepth;
+    Ns_Log(Debug, "%s: %s: peerVerifyDepth set to %d", MODULE, server, peerVerifyDepth);
+    return NS_OK;
+}
+
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheSet --
+ *
+ *       Set whether session caching is on or off for a particular SSL
+ *       context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextSessionCacheSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int sessionCache)
+{
+    /* XXX lock struct */
+    sslContext->sessionCache = sessionCache;
+    Ns_Log(Debug, "%s: %s: sessionCache set to %d", MODULE, server, sessionCache);
+    return NS_OK;
+}
+
+
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheSizeSet --
+ *
+ *       Set the size of a session cache for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int sessionCacheSize)
+{
+    /* XXX lock struct */
+    sslContext->sessionCacheSize = sessionCacheSize;
+    Ns_Log(Debug, "%s: %s: sessionCacheSize set to %d", MODULE, server, sessionCacheSize);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextSessionCacheTimeoutSet --
+ *
+ *       Set the timeout for cache entries for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int sessionCacheTimeout)
+{
+    /* XXX lock struct */
+    sslContext->sessionCacheTimeout = sessionCacheTimeout;
+    Ns_Log(Debug, "%s: %s: sessionCacheTimeout set to %d", MODULE, server, sessionCacheTimeout);
+    return NS_OK;
+}
+
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextTraceSet --
+ *
+ *       Set SSL handshake tracing for a particular SSL context
+ *
+ * Results:
+ *       NS_OK or NS_ERROR
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+Ns_OpenSSLContextTraceSet(char *server, char *module, 
+    Ns_OpenSSLContext *sslContext, int trace)
+{
+    /* XXX lock struct */
+    sslContext->trace = trace;
+    Ns_Log(Debug, "%s: %s: trace set to %d", MODULE, server, trace);
+    return NS_OK;
+}
+
 
 
 /*
