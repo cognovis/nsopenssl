@@ -249,12 +249,12 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
 		set key [ns_set key $qsset $i]
 		set value [ns_set value $qsset $i]
-		append querystring "${boundary}\n"
-		append querystring "Content-Disposition: form-data; name=\"$key\"\n\n"
+		append querystring "${boundary}\r\n"
+		append querystring "Content-Disposition: form-data; name=\"$key\"\r\n\r\n"
 		append querystring "$value\n"
 	    }
-	    append querystring "${boundary}--"
-	    ns_log notice "QS that will be sent is\n$querystring\n"
+	    append querystring "${boundary}--\r\n"
+	    ns_log notice "QS that will be sent is\n$querystring\r\n"
 	    ns_set put $rqset "Content-length" [string length $querystring]
 	} else {
 	    ns_log notice "QS string is empty"

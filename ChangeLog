@@ -1,3 +1,9 @@
+2001-11-23  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
+
+	* https:tcl: Added carriage (\r) returns to the already-present
+	linefeeds in the ns_httpspost routine. Also added a CR LF to the
+	last boundary marker.
+
 2001-11-19  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: Fixed boundary problem when doing multpart form data
