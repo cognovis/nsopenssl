@@ -119,7 +119,7 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 	#
 	# First write the request, then the headers if they exist.
 	#
-	
+
 	_ns_https_puts $timeout $wfd "$method $uri HTTP/1.0\r"
 	
 	if {$rqset != ""} {
@@ -213,13 +213,21 @@ ServerHostname or ServerAddress in the configuration file for nsopenssl"
 # Side effects:
 #
 
-proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
+proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30}} {
     #
     # Build the request. Since we're posting, we have to set
     # content-type and content-length ourselves. We'll add these to
     # rqset, overwriting if they already existed, which they
     # shouldn't.
     #
+
+    #
+    # Handle the case where the user puts "" to indicate the default timeout
+    #
+
+    if {$timeout == ""} {
+	set timeout 30
+    }
 
     set boundary "-----------------rc029340985544hg24309nto8899o9"
 
@@ -245,6 +253,17 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     set querystring ""
 
     if {$type == "multipart/form-data"} {
+
+	#
+	# Default to no content at all
+	#
+
+	set querystring ""
+
+	#
+	# Set the standard POST form parameters
+	#
+
 	if {![string match "" $qsset]} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
 		set key [ns_set key $qsset $i]
@@ -252,12 +271,56 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 		append querystring "--${boundary}\r\n"
 		append querystring "Content-Disposition: form-data; name=\"$key\"\r\n\r\n"
 		append querystring "$value\r\n"
+
+	# XXX Do we ever have multiple parameters for post elements that aren't files?
+	#	append querystring "Content-Disposition: form-data; "
+	#	foreach dispositionlist [ns_set key $qsset $i] {
+ 	#		append querystring "[lindex $dispositionlist 0]=\"[lindex $dispositionlist 1]\"; "
+	#	}
+	#	regsub {;\s+$} querystring "" $querystring
+	#	append querystring "\r\n\r\n"
+	#	append querystring "[ns_set value $qsset $i]\r\n"
 	    }
-	    append querystring "--${boundary}--\n"
-	    ns_set put $rqset "Content-length" [string length $querystring]
-	} else {
-	    ns_set put $rqset "Content-length" "0"
 	}
+
+	#
+	# Add files to POST request, if any
+	#
+	# filesets is a list of ns_sets that contains the needed information to
+	# include files in the post. Each file represents one ns_set in the list
+	# Each ns_set consists of four keys:
+	#
+	#	name:         the name of the form element for this file
+	#	filename:     the name of the file
+	#	content:      the actual contents of the file
+	#	content-type: the type of contents in the file, such as text/plain
+	#
+	# filesets are only used with multipart/form-data
+	#
+
+	# XXX tmp
+	ns_log notice "QUERYSTRING:\n$querystring"
+	ns_log notice "*** FILESET == $filesets"
+
+	if {![string match "" $filesets]} {
+	    ns_log notice "*** S1"
+	    foreach file $filesets {
+		ns_log notice "*** S2"
+		append querystring "--${boundary}\r\n"
+		append querystring "Content-Disposition: form-data; name=\"[ns_set iget $file name]\"; filename=\"[ns_set iget $file filename]\"\r\n"
+		append querystring "Content-Type: [ns_set iget $file content-type]\r\n\r\n"
+		append querystring "[ns_set iget $file content]\r\n"
+	    }
+
+	}
+
+	#
+	# Finish POST request
+	#
+
+	append querystring "--${boundary}--\n"
+	ns_set put $rqset "Content-length" [string length $querystring]
+
     } else {
 	if {![string match "" $qsset]} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
@@ -496,5 +559,6 @@ proc _ns_https_puts {timeout sock string} {
     }
     puts $sock $string
 }
+
 
 

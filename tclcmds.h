@@ -50,10 +50,7 @@ extern Tcl_CmdProc NsTclSSLSockSetNonBlockingCmd;
 extern Tcl_CmdProc NsTclSSLSockCallbackCmd;
 extern Tcl_CmdProc NsTclSSLSockListenCallbackCmd;
 
-#if 0 /* not yet implemented */
+#if 0				/* not yet implemented */
 extern Tcl_CmdProc NsTclSSLSocketPairCmd;
 extern Tcl_CmdProc NsTclSSLGetByCmd;
 #endif
-
-
-

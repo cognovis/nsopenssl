@@ -33,5 +33,4 @@
 
 /* @(#) $Header$ */
 
-extern int NsOpenSSLInitThreads(void);
-
+extern int NsOpenSSLInitThreads (void);
