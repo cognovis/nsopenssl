@@ -400,7 +400,7 @@ Ns_OpenSSLContextCertFileSet(char *server, char *module, Ns_OpenSSLContext *sslc
         sslcontext->certFile = Ns_DStringExport(&ds);
         Ns_DStringFree(&ds);
     }
-    //Ns_Log(Debug, "*** SSLContext->certFile = %s", sslcontext->certFile);
+    Ns_Log(Debug, "*** setting cert to = %s", sslcontext->certFile);
     return NS_OK;
 }
 
@@ -1036,19 +1036,19 @@ Ns_OpenSSLContextCreate(char *server, char *module)
 #endif
 
     sslcontext = ns_calloc(1, sizeof(*sslcontext));
-    sslcontext->server              = server;
-    sslcontext->module              = module;
-    sslcontext->readonly            = NS_FALSE;
-    sslcontext->bufsize             = DEFAULT_BUFFER_SIZE;
-    sslcontext->timeout             = DEFAULT_TIMEOUT;
-    sslcontext->peerVerify          = DEFAULT_PEER_VERIFY;
-    sslcontext->peerVerifyDepth     = DEFAULT_PEER_VERIFY_DEPTH;
-    sslcontext->protocols           = DEFAULT_PROTOCOLS;
-    sslcontext->cipherSuite         = DEFAULT_CIPHER_LIST;
-    sslcontext->sessionCache        = DEFAULT_SESSION_CACHE;
-    sslcontext->sessionCacheSize    = DEFAULT_SESSION_CACHE_SIZE;
+    sslcontext->server = server;
+    sslcontext->module = module;
+    sslcontext->readonly = NS_FALSE;
+    sslcontext->bufsize = DEFAULT_BUFFER_SIZE;
+    sslcontext->timeout = DEFAULT_TIMEOUT;
+    sslcontext->peerVerify = DEFAULT_PEER_VERIFY;
+    sslcontext->peerVerifyDepth = DEFAULT_PEER_VERIFY_DEPTH;
+    sslcontext->protocols = DEFAULT_PROTOCOLS;
+    sslcontext->cipherSuite = DEFAULT_CIPHER_LIST;
+    sslcontext->sessionCache = DEFAULT_SESSION_CACHE;
+    sslcontext->sessionCacheSize = DEFAULT_SESSION_CACHE_SIZE;
     sslcontext->sessionCacheTimeout = DEFAULT_SESSION_CACHE_TIMEOUT;
-    sslcontext->trace               = DEFAULT_TRACE;
+    sslcontext->trace = DEFAULT_TRACE;
 
     /* 
      * WARNING: session cache ids are global to the OpenSSL library. This means
@@ -1171,11 +1171,24 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
      * Failure in one of these will cause SSL context to be left uninitialized.
      */
 
+    /*
+     * WARNING!: InitKeyFile *must* be called before InitCertFile; not doing so
+     * will cause subsequent calls to InitCertFile to fail with File Not Found
+     * error if you're using the same certificate and key for multiple driver
+     * instances. I believe this is a bug in OpenSSL, as the error returned
+     * comes from that library after the SSL_CTX_use_certificate_chain_file
+     * call.
+     * XXX I need to research the warning above and find out why that's
+     * so.
+     * XXX I could store certs in memory and check to see if the same cert
+     * is already in memory and use if from there instead.
+     */
+
     if ( 
             InitCiphers(sslcontext)  == NS_ERROR
             || InitProtocols(sslcontext) == NS_ERROR
-            || InitCertFile(sslcontext) == NS_ERROR
             || InitKeyFile(sslcontext) == NS_ERROR
+            || InitCertFile(sslcontext) == NS_ERROR
             || ValidateCertKey(sslcontext) == NS_ERROR
        ) {
         return NS_ERROR;
@@ -1216,11 +1229,16 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
 static int
 InitCertFile(Ns_OpenSSLContext *sslcontext)
 {
+    char *error;
+
     if (sslcontext->certFile == NULL ||
             SSL_CTX_use_certificate_chain_file(sslcontext->sslctx, sslcontext->certFile) == 0
        ) {
         Ns_Log(Error, "%s: %s: error loading certificate '%s'",
                 sslcontext->server, MODULE, sslcontext->certFile);
+        error = ERR_reason_error_string(ERR_get_error());
+        Ns_Log(Error, "%s: %s: OpenSSL reports: %s",
+                sslcontext->server, MODULE, error);
         if ((access(sslcontext->certFile, F_OK) != 0) || (access(sslcontext->certFile, R_OK) != 0))
             Ns_Log(Error, "%s: %s: '%s' certificate file is not readable or does not exist", 
                     sslcontext->server, MODULE, sslcontext->name);
