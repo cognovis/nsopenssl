@@ -73,12 +73,8 @@ OBJS     =  nsopenssl.o init.o ssl.o tclcmds.o
 #
 HDRS     =  nsopenssl.h
 
-#
-# Turn on debugging in nsopenssl module
-#
-ifdef DEBUG
-    CFLAGS += -DNSOPENSSL_DEBUG
-endif
+# XXX take out the -g for production
+CFLAGS += -g
 
 #
 # Extra libraries required by your module (-L and -l go here)
@@ -96,7 +92,7 @@ endif
 #
 # Compiler flags required by your module (-I for external headers goes here)
 #
-CFLAGS   +=  -I$(OPENSSL)/include
+CFLAGS   += -I$(OPENSSL)/include
 
 #
 # Tcl modules to install

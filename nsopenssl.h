@@ -36,7 +36,6 @@
 /* XXX remove from production */
 #define NSOPENSSL_DEBUG
 #define where() "__FUNCTION__, __FILE__, __LINE__"
-extern void DEBUG(char *where);
 
 
 /* Required for Tcl channels to work */
@@ -149,14 +148,17 @@ typedef struct Ns_OpenSSLContext {
     SSL_CTX           *sslctx;
 } Ns_OpenSSLContext;
 
+/*
+ * Used to manage SSL drivers on top of the AOLserver comm drivers.
+ */
+
 typedef struct NsOpenSSLDriver {
     char                     *server;      
     char                     *module;      
-    struct Ns_Driver         *driver;        /* Huh? */
+    struct Ns_Driver         *driver;        /* the aolserver conn driver */
     struct NsOpenSSLDriver   *next;          /* pointer to next driver */
-    struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
     struct Ns_OpenSSLContext *context;       /* SSL context assoc with this driver */ 
-    int                       refcnt;        /* Don't ns_free() unless this is 0 */
+    struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
     char                     *configPath;
     char                     *dir;
     char                     *location;
@@ -164,25 +166,33 @@ typedef struct NsOpenSSLDriver {
     char                     *bindaddr;
     SOCKET                    lsock;
     int                       port;
+    int                       refcnt;        /* Don't ns_free() unless this is 0 */
     Ns_Mutex                  lock;
+    int                       bufsize;
+    int                       timeout;
 } NsOpenSSLDriver;
+
+/*
+ * Used for both core-driven and C/Tcl API-driven conns
+ */
 
 typedef struct Ns_OpenSSLConn {
     char                   *server;
     char                   *module;
-    struct Ns_OpenSSLConn  *next;      /* next conn */
+    int                     role;
     struct NsOpenSSLDriver *driver;    /* the driver this conn belongs to */
-    Ns_Mutex                lock;
-    int                     refcnt;    /* don't ns_free() unless this is 0 */
-    int                     conntype;  /* server, sockserver or sockclient */
+    struct Ns_OpenSSLConn  *next;      /* next conn */
+    int                     type;      /* server = 0; client = 1 */
     int                     peerport;  /* port number of remote side */
     char                    peer[16];  /* peer's name */
-    SOCKET                  sock;
-    SOCKET                  wsock;
+    X509                   *peercert;  /* peer's cert in PEM format */
     SSL_CTX                *context;   /* XXX SSL context associated with conn */
     SSL                    *ssl;       /* initialized SSL instance itself */
     BIO                    *io;        /* block i/o */
-    X509                   *peercert;  /* peer's cert in PEM format */
+    SOCKET                  sock;
+    SOCKET                  wsock;
+    Ns_Mutex                lock;
+    int                     refcnt;    /* don't ns_free() unless this is 0 */
 } Ns_OpenSSLConn;
 
 /*
@@ -193,8 +203,6 @@ typedef struct SessionCacheId {
     Ns_Mutex lock;
     int id;
 } SessionCacheId;
-
-SessionCacheId *nextSessionCacheId;
 
 /*
  * Tcl Commands 
@@ -215,20 +223,8 @@ typedef struct SSLTclCmd {
 #define DEFAULT_PORT                   443
 #define DEFAULT_PROTOCOL               "https"
 
-/*
- * Used to determine whether the connection is going
- * through the comm API or not.
- */
-
-#define CONNTYPE_SERVER                0
-#define CONNTYPE_SOCKSERVER            1
-#define CONNTYPE_SOCKCLIENT            2
-
-/* XXX remove */
-#define CLIENT_ROLE                    0
-#define ROLE_SSL_CLIENT                0
-#define SERVER_ROLE                    1
-#define ROLE_SSL_SERVER                1
+#define ROLE_SERVER                    0
+#define ROLE_CLIENT                    1
 
 #define DEFAULT_PROTOCOLS              "All"
 #define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
@@ -263,9 +259,10 @@ typedef struct SSLTclCmd {
  * ssl.c
  */
 
-extern Ns_OpenSSLConn *NsOpenSSLCreateConn (SOCKET sock,
-		NsOpenSSLDriver *driver, int role, int conntype);
-extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn *conn);
+extern Ns_OpenSSLConn *NsOpenSSLConnCreate (SOCKET sock, NsOpenSSLDriver *driver,
+        int role);
+extern void NsOpenSSLConnDestroy (Ns_OpenSSLConn *conn);
+
 extern int NsOpenSSLFlush (Ns_OpenSSLConn *conn);
 
 extern int NsOpenSSLRecv (Ns_OpenSSLConn *conn, void *buffer, int toread);
@@ -311,14 +308,15 @@ extern Tcl_CmdProc NsTclSSLGetByCmd;
 
 extern NsOpenSSLModuleInit(char *server, char *module);
 
-extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *name, char *host, 
+/* XXX need to have SSL contexts tied to each via sslctx's name */
+extern Ns_OpenSSLConn *Ns_OpenSSLSockConnect (char *host, 
 		int port, int async, int timeout);
 
-extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (char *name, SOCKET sock);
+extern Ns_OpenSSLConn *Ns_OpenSSLSockAccept (SOCKET sock);
 
-extern SOCKET Ns_OpenSSLSockListen (char *name, char *addr, int port);
+extern SOCKET Ns_OpenSSLSockListen (char *addr, int port);
 
-extern int Ns_OpenSSLSockCallback (char *name, SOCKET sock, 
+extern int Ns_OpenSSLSockCallback (SOCKET sock, 
 		Ns_SockProc *proc, void *arg, int when);
 
 extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
@@ -328,7 +326,7 @@ extern Ns_OpenSSLContext *NsOpenSSLContextSockServerDefault (void);
 extern Ns_OpenSSLContext *NsOpenSSLContextSockClientDefault (void);
 
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
-		char *module, char *name, char *type);
+		char *module);
 extern int Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *context);
 
 extern int Ns_OpenSSLContextInit(char *server, char *module, 
@@ -379,6 +377,7 @@ extern int Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module,
 extern int Ns_OpenSSLContextPeerVerifyDepthGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
 
+extern int NsOpenSSLSessionCacheInit(void);
 extern int Ns_OpenSSLContextSessionCacheSet(char *server, char *module, 
         Ns_OpenSSLContext *context, int sessionCache);
 extern int Ns_OpenSSLContextSessionCacheGet(char *server, char *module, 
@@ -404,19 +403,4 @@ extern NsOpenSSLDriver *NsOpenSSLDriverCreate(char *server, char *module,
 extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *driver);
 
 
-/* XXX TMP */
-/*
- *----------------------------------------------------------------------
- *
- * DEBUG --
- *
- *     XXX Temporary debug logging function
- *
- *----------------------------------------------------------------------
- */
-void
-DEBUG(char *where)
-{
-    Ns_Log(Debug, "%s", where);
-}
 

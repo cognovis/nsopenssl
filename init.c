@@ -76,14 +76,6 @@ static Ns_OpenSSLContext *ConfigSSLContextLoad (char *server, char *module,
 static NsOpenSSLDriver *ConfigSSLDriverLoad (char *server, char *module,
         char *name);
 	
-/*
- * SSL Operations on active connections
- */
- 
-static RSA *IssueTmpRSAKey (SSL *ssl, int export, int keylen);	
-
-NS_EXPORT int Ns_ModuleVersion = 1;
-
 
 /*
  *----------------------------------------------------------------------
@@ -116,7 +108,7 @@ NsOpenSSLModuleInit (char *server, char *module)
 
     if (!globalInit) {
         if (InitOpenSSL() == NS_ERROR) {
-	        Ns_Log(Error, MODULE, ": OpenSSL failed to initialize");
+	        Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
 	        return NS_ERROR;
         }
         globalInit = 1;
@@ -134,7 +126,7 @@ NsOpenSSLModuleInit (char *server, char *module)
 		    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
 	    }
 	} else {
-	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	    Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
 	}
 
     /*
@@ -150,7 +142,7 @@ NsOpenSSLModuleInit (char *server, char *module)
             ConfigSSLDriverLoad(server, module, Ns_SetKey(drivers, i));
 	    }
 	} else {
-	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	    Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
 	}
 #if 0
     /* XXX loop through defined drivers and initialize them */
@@ -213,12 +205,30 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
 
     path = Ns_ConfigGetPath(server, module, name, NULL);
     role = Ns_ConfigGetValue(path, "role");
-
-    context = Ns_OpenSSLContextCreate(server, module, name, role);
+    context = Ns_OpenSSLContextCreate(server, module);
     if (context == NULL) {
-        Ns_Log(Error, MODULE, ": SSL context came back NULL in ConfigSSLContextLoad");
+        Ns_Log(Error, "%s: SSL context came back NULL in ConfigSSLContextLoad",
+                MODULE);
 	    return NULL;
     }
+
+    /* XXX role is mandatory - refactor this code */
+    role = Ns_ConfigGetValue(path, "role");
+    if (role != NULL) {
+        if (STREQ(role, "server")) {
+            context->role = ROLE_SERVER;
+        } else if (STREQ(role, "client")) {
+            context->role = ROLE_CLIENT;
+        } else {
+            Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context",
+                    MODULE, server);
+        }
+    } else {
+        Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context",
+                MODULE, server);
+    }
+   
+    context->name = name;
 
     /*
      * A default module directory is automatically set when the SSL context was
@@ -334,8 +344,8 @@ ConfigSSLDriverLoad (char *server, char *module, char *name)
 
     driver = NsOpenSSLDriverCreate(server, module, name);
     if (driver == NULL) {
-        Ns_Log(Error, MODULE, ": %s: SSL driver came back NULL in ConfigSSLDriverLoad",
-                server);
+        Ns_Log(Error, "%s: %s: SSL driver came back NULL in ConfigSSLDriverLoad",
+                MODULE, server);
 	    return NULL;
     }
 
@@ -371,7 +381,8 @@ InitOpenSSL (void)
      */
 
     if (CRYPTO_set_mem_functions (Ns_Malloc, Ns_Realloc, Ns_Free) == 0)
-        Ns_Log (Warning, MODULE ": OpenSSL memory callbacks failed in InitOpenSSL");
+        Ns_Log (Warning, "%s: OpenSSL memory callbacks failed in InitOpenSSL",
+                MODULE);
 
     num_locks = CRYPTO_num_locks ();
     locks = Ns_Calloc (num_locks, sizeof(*locks));
@@ -398,34 +409,29 @@ InitOpenSSL (void)
 
     while (! RAND_status () && seedcnt < 3) {
 	    seedcnt++;
-	    Ns_Log (Notice, MODULE, ": Seeding OpenSSL's PRNG");
+	    Ns_Log (Notice, "%s: Seeding OpenSSL's PRNG", MODULE);
 	    SeedPRNG ();
     }
 
     if (! RAND_status ()) {
-	    Ns_Log (Warning, MODULE, 
-			    ": PRNG fails to have enough entropy after %d tries", 
-			    seedcnt);
+	    Ns_Log (Warning, "%s: PRNG fails to have enough entropy after %d tries", 
+			    MODULE, seedcnt);
     } else {
-	    Ns_Log (Notice, MODULE, ": PRNG is seeded properly"); 
+	    Ns_Log (Notice, "%s: PRNG is seeded properly", MODULE); 
     }
 
     /*
      * Initialize the session cache id number generator.
      */
 
-    nextSessionCacheId = (SessionCacheId *) ns_calloc (1, sizeof(*nextSessionCacheId));
-    if (nextSessionCacheId == NULL) {
-	    Ns_Log (Error, MODULE,
-			    ": Failed to allocate memory for session id generator");
-	    return NS_ERROR;
+    if (NsOpenSSLSessionCacheInit() == NS_ERROR) { 
+        Ns_Log (Error, "%s: Failed to allocate memory for session id generator",
+                MODULE);
+        /* XXX need to turn off session caching here if this failed, but */
+        /* XXX let the server continue to run */
+        return NS_ERROR;
     }
 
-    Ns_MutexLock(&nextSessionCacheId->lock);
-    Ns_MutexSetName2(&nextSessionCacheId->lock, MODULE, "sessioncacheid");
-    nextSessionCacheId->id = 1;
-    Ns_MutexUnlock(&nextSessionCacheId->lock);
-    
     return NS_OK;
 }
 
@@ -463,7 +469,7 @@ SeedPRNG (void)
     if (RAND_status ()) 
 	return NS_TRUE;
 
-    Ns_Log (Notice, MODULE, ": Seeding OpenSSL's PRNG");
+    Ns_Log (Notice, "%s: Seeding OpenSSL's PRNG", MODULE);
 
     path = Ns_ConfigGetPath(MODULE, NULL);
 
@@ -481,20 +487,21 @@ SeedPRNG (void)
 
     if (randomFile != NULL && access (randomFile, F_OK) == 0) {
     	if ((readBytes = RAND_load_file (randomFile, maxBytes))) {
-	        Ns_Log (Notice, MODULE, ": Obtained %d random bytes from %s",
-		        readBytes, randomFile);
+	        Ns_Log (Notice, "%s: Obtained %d random bytes from %s",
+		        MODULE, readBytes, randomFile);
 	    } else {
-	        Ns_Log (Warning, MODULE, ": Unable to retrieve any random data from %s",
-		        randomFile);
+	        Ns_Log (Warning, "%s: Unable to retrieve any random data from %s",
+		        MODULE, randomFile);
 	    }
     } else {
-        Ns_Log(Warning, MODULE, ": No randomFile set and/or found");
+        Ns_Log(Warning, "%s: No randomFile set and/or found", MODULE);
     }
 
     if (RAND_status ()) 
 	    return NS_TRUE;
 
-    Ns_Log (Notice, MODULE, ": PRNG seeding from file failed; let's try Ns_DRand()");
+    Ns_Log (Notice, "%s: PRNG seeding from file failed; let's try Ns_DRand()",
+            MODULE);
 
     /*
      * Use Ns_DRand(); I have no idea how to measure the amount of entropy, so for
@@ -515,53 +522,14 @@ SeedPRNG (void)
     Ns_Free (buf_ptr);
 
     if (RAND_status ()) {
-        Ns_Log (Notice, MODULE, ": PRNG successfully seeded with %d bytes from Ns_DRand",
-	    seedBytes);
+        Ns_Log (Notice, "%s: PRNG successfully seeded with %d bytes from Ns_DRand",
+	    MODULE, seedBytes);
     } else {
-        Ns_Log (Warning, MODULE, ": PRNG failed to be seeded with Ns_DRand");
+        Ns_Log (Warning, "%s: PRNG failed to be seeded with Ns_DRand", MODULE);
         return NS_FALSE;
     }
 
     return NS_TRUE;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IssueTmpRSAKey --
- *
- *       Give out the temporary key when needed. This is a callback function
- *       used by OpenSSL and is required for 40-bit browsers.
- *
- * Results:
- *       Returns a pointer to the new temporary key.
- *
- * Side effects:
- *       None
- *
- *----------------------------------------------------------------------
- */
-
-static RSA *
-IssueTmpRSAKey (SSL * ssl, int export, int keylen)
-{
-    Ns_OpenSSLConn *conn;
-    NsOpenSSLDriver *driver;
-    static RSA *rsa_tmp = NULL;
-
-    conn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
-    driver = conn->driver;
-
-	rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
-
-    if (rsa_tmp == NULL) {
-        Ns_Log(Error, MODULE, ": Temporary RSA key generation failed");
-    } else {
-	    Ns_Log (Notice, MODULE, ": Generated %d-bit temporary RSA key", 
-                keylen);
-    }
-
-	return rsa_tmp;
 }
 
 /*

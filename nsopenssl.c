@@ -30,7 +30,7 @@
  * Copyright (C) 2000 Rob Mayoff
  * Copyright (C) 2000 Freddie Mendoza
  * Copyright (C) 1999 Stefan Arentz
- */
+ *
 
 /*
  * nsopenssl.c --
@@ -52,6 +52,8 @@ static char *GetModuleDir (char *server, char *module);
 #endif
 static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int SessionCacheIdGetNext (void);
+static SessionCacheId *nextSessionCacheId;
+
 
 /*
  * Driver initialization/destruction
@@ -89,10 +91,7 @@ NsOpenSSLDriver    *firstSSLDriver;
 Ns_OpenSSLContext  *sockClientContext;
 Ns_OpenSSLContext  *sockServerContext;
 
-
-
 NS_EXPORT int Ns_ModuleVersion = 1;
-
 
 /*
  *----------------------------------------------------------------------
@@ -114,7 +113,6 @@ NS_EXPORT int Ns_ModuleVersion = 1;
 NS_EXPORT int
 Ns_ModuleInit (char *server, char *module)
 {
-    DEBUG(where());
     NsOpenSSLModuleInit(server, module);
 }
 
@@ -136,8 +134,6 @@ Ns_ModuleInit (char *server, char *module)
 int
 NsOpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *driver)
 {
-    DEBUG(where());
-
     /*
      * Maintain the drivers in a single linked-list. You can find out what
      * server a particular driver serves by looking at driver->server.
@@ -154,8 +150,8 @@ NsOpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *driver)
 
     if (Ns_DriverInit (server, module, MODULE, OpenSSLProc, driver, NS_DRIVER_SSL)
 		    != NS_OK) {
-	    Ns_Log(Error, MODULE, ": driver for server %s failed to initialize",
-		    server);
+	    Ns_Log(Error, "%s: driver for server %s failed to initialize",
+		    MODULE, server);
         return NS_ERROR;
     }
 
@@ -188,7 +184,8 @@ NsOpenSSLDriverCreate (char *server, char *module, char *name)
     driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(*driver));
 
     if (driver == NULL) {
-	    Ns_Log(Error, MODULE, ": %s: Failed to create driver structure", server);
+	    Ns_Log(Error, "%s: %s: Failed to create driver structure", 
+                    MODULE, server);
 	    return NULL;
     }
 
@@ -202,7 +199,7 @@ NsOpenSSLDriverCreate (char *server, char *module, char *name)
     Ns_MutexSetName(&driver->lock, module);
 
     if (InitLocation(driver) == NS_ERROR) {
-        Ns_Log(Error, MODULE, ": %s: InitLocation failed", server);
+        Ns_Log(Error, "%s: %s: InitLocation failed", MODULE, server);
 	    NsOpenSSLDriverDestroy(driver);
 	    return NULL;
     }
@@ -312,7 +309,7 @@ NsOpenSSLDriverDestroy (NsOpenSSLDriver *driver)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
+Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
 {
     Ns_OpenSSLConn *conn;
     SOCKET sock;
@@ -326,9 +323,8 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
     if (sock == INVALID_SOCKET)
 	    return NULL;
 
-    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriver, 
-             ROLE_SSL_CLIENT, CONNTYPE_SOCKCLIENT)) == NULL) {
-	return NULL;
+    if ((conn = NsOpenSSLConnCreate(sock, NULL, ROLE_CLIENT)) == NULL) {
+	    return NULL;
     }
 
     /*
@@ -364,17 +360,15 @@ Ns_OpenSSLSockConnect (char *name, char *host, int port, int async, int timeout)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockAccept (char *name, SOCKET sock)
+Ns_OpenSSLSockAccept (SOCKET sock)
 {
     Ns_OpenSSLConn *conn = NULL;
 
     if (sock == INVALID_SOCKET)
         return NULL;
 
-    /* XXX these args must be changed */
-    if ((conn = NsOpenSSLCreateConn(sock, firstSSLDriver, 
-	ROLE_SSL_SERVER, CONNTYPE_SOCKSERVER)) == NULL) {
-	return NULL;
+    if ((conn = NsOpenSSLConnCreate(sock, NULL, ROLE_SERVER)) == NULL) {
+	    return NULL;
     }
 
     Ns_SockSetNonBlocking (conn->sock);
@@ -407,7 +401,7 @@ Ns_OpenSSLSockAccept (char *name, SOCKET sock)
  */
 
 SOCKET
-Ns_OpenSSLSockListen (char *name, char *addr, int port)
+Ns_OpenSSLSockListen (char *addr, int port)
 {
     return Ns_SockListen (addr, port);
 }
@@ -444,7 +438,7 @@ Ns_OpenSSLSockListen (char *name, char *addr, int port)
 /* XXX so the developer using the API won't have to */
 
 int
-Ns_OpenSSLSockCallback (char *name, SOCKET sock, Ns_SockProc *proc, void *arg, int when)
+Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc *proc, void *arg, int when)
 {
 	/* XXX need to handle SSL wrapping here somehow... */
 	return Ns_SockCallback (sock, proc, arg, when);
@@ -644,20 +638,22 @@ Ns_OpenSSLContextCertFileSet(char *server, char *module, Ns_OpenSSLContext *cont
     context->certFile = certFile;
 
     if (access(certFile, F_OK) != 0) {
-        Ns_Log(Error, MODULE, ": %s: certificate file does not exist: %s", server, certFile);
+        Ns_Log(Error, "%s: %s: certificate file does not exist: %s", 
+                MODULE, server, certFile);
         return NS_ERROR;
     }
 
     if (access(certFile, R_OK) != 0) {
-        Ns_Log(Error, MODULE, ": %s: certificate file is not readable: %s", server, certFile);
+        Ns_Log(Error, "%s: %s: certificate file is not readable: %s", 
+                MODULE, server, certFile);
         return NS_ERROR;
     }
 
     rc = SSL_CTX_use_certificate_chain_file (context->sslctx, certFile);
 
     if (rc == 0) {
-	    Ns_Log (Error, MODULE, ": %s: error loading certificate \"%s\"", 
-                server, certFile);
+	    Ns_Log (Error, "%s: %s: error loading certificate \"%s\"", 
+                MODULE, server, certFile);
         return NS_ERROR;
     }
 
@@ -715,20 +711,20 @@ Ns_OpenSSLContextKeyFileSet(char *server, char *module, Ns_OpenSSLContext *conte
     context->keyFile = keyFile;
 
     if (access(keyFile, F_OK) != 0) {
-        Ns_Log(Error, MODULE, ": %s: key file does not exist: %s", server, keyFile);
+        Ns_Log(Error, "%s: %s: key file does not exist: %s", MODULE, server, keyFile);
         return NS_ERROR;
     }
 
     if (access(keyFile, R_OK) != 0) {
-        Ns_Log(Error, MODULE, ": %s: key file is not readable: %s", server, keyFile);
+        Ns_Log(Error, "%s: %s: key file is not readable: %s", MODULE, server, keyFile);
         return NS_ERROR;
     }
 
     rc = SSL_CTX_use_PrivateKey_file(context->sslctx, keyFile, SSL_FILETYPE_PEM);
 
     if (rc == 0) {
-	    Ns_Log (Error, MODULE, ": %s: error loading private key \"%s\"", 
-                server, keyFile);
+	    Ns_Log (Error, "%s: %s: error loading private key \"%s\"", 
+                MODULE, server, keyFile);
         return NS_ERROR;
     }
 
@@ -737,7 +733,8 @@ Ns_OpenSSLContextKeyFileSet(char *server, char *module, Ns_OpenSSLContext *conte
      */
 
     if (SSL_CTX_check_private_key(context->sslctx) == 0) {
-	    Ns_Log (Error, MODULE, ": %s: private key does not match certificate", server);
+	    Ns_Log (Error, "%s: %s: private key does not match certificate", 
+                    MODULE, server);
 	    return NS_ERROR;
     }
 
@@ -793,7 +790,8 @@ Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, Ns_OpenSSLContext *c
     rc = SSL_CTX_set_cipher_list(context->sslctx, cipherSuite);
 
     if (rc == 0) {
-	    Ns_Log(Error, MODULE, ": %s: error setting cipher suite to \"%s\"", server, cipherSuite);
+	    Ns_Log(Error, "%s: %s: error setting cipher suite to \"%s\"", 
+                    MODULE, server, cipherSuite);
 	    return NS_ERROR;
     }
 
@@ -851,8 +849,8 @@ Ns_OpenSSLContextProtocolsSet(char *server, char *module, Ns_OpenSSLContext *con
     context->protocols = protocols;
 
     if (protocols == NULL) {
-    	Ns_Log (Notice, MODULE, ": %s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
-                server);
+    	Ns_Log (Notice, "%s: %s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
+                MODULE, server);
 	    bits = 1;
     } else {
 	    lprotocols = Ns_StrDup(protocols);
@@ -860,23 +858,21 @@ Ns_OpenSSLContextProtocolsSet(char *server, char *module, Ns_OpenSSLContext *con
 
 	    if (strstr (lprotocols, "all") != NULL) {
 	        bits = 1;
-	        Ns_Log (Notice, MODULE, ": %s: using all protocols: SSLv2, SSLv3 and TLSv1",
-                    server);
+	        Ns_Log (Notice, "%s: %s: using all protocols: SSLv2, SSLv3 and TLSv1",
+                    MODULE, server);
 	    } else {
 	        if (strstr (protocols, "sslv2") != NULL) {
-		        bits &= ~SSL_OP_NO_SSLv2;
-		        Ns_Log (Notice, MODULE, ": %s: Using SSLv2 protocol",
-                        server);
+                    bits &= ~SSL_OP_NO_SSLv2;
+                    Ns_Log (Notice, "%s: %s: Using SSLv2 protocol", MODULE, server);
 	        }
 	        if (strstr (protocols, "sslv3") != NULL) {
-		        bits &= ~SSL_OP_NO_SSLv3;
-		        Ns_Log (Notice, MODULE, ": %s: Using SSLv3 protocol",
-                        server);
+                    bits &= ~SSL_OP_NO_SSLv3;
+                    Ns_Log (Notice, "%s: %s: Using SSLv3 protocol", MODULE, server);
 	        }
 	        if (strstr (protocols, "tlsv1") != NULL) {
-		        bits &= ~SSL_OP_NO_TLSv1;
-		        Ns_Log (Notice, MODULE, ": %s: Using TLSv1 protocol",
-                        server);
+                    bits &= ~SSL_OP_NO_TLSv1;
+                    Ns_Log (Notice, "%s: %s: Using TLSv1 protocol",
+                        MODULE, server);
 	        }
         }
 
@@ -937,23 +933,23 @@ Ns_OpenSSLContextCAFileSet(char *server, char *module, Ns_OpenSSLContext *contex
     context->caFile = caFile;
 
     if (access(caFile, F_OK) != 0) { 
-        Ns_Log(Error, MODULE, ": %s: certificate authority file does not exist: %s",
-                server, caFile);
+        Ns_Log(Error, "%s: %s: certificate authority file does not exist: %s",
+                MODULE, server, caFile);
         return NS_ERROR;
     }
 
     
     if (access(caFile, R_OK) != 0) { 
-        Ns_Log(Error, MODULE, ": %s: certificate authority file is not readable: %s", 
-                server, caFile);
+        Ns_Log(Error, "%s: %s: certificate authority file is not readable: %s", 
+                MODULE, server, caFile);
         return NS_ERROR;
     }
 
 	rc = SSL_CTX_load_verify_locations(context->sslctx, caFile, NULL);
 
 	if (rc == 0) {
-	    Ns_Log(Error, MODULE, ": %s: error loading CA certificate file %s", 
-                server, caFile);
+	    Ns_Log(Error, "%s: %s: error loading CA certificate file %s", 
+                MODULE, server, caFile);
 	    return NS_ERROR;
     }
 
@@ -1010,8 +1006,8 @@ Ns_OpenSSLContextCADirSet(char *server, char *module, Ns_OpenSSLContext *context
 
     dirfp = opendir(caDir);
     if (dirfp == NULL) {
-	    Ns_Log (Notice, MODULE, ": %s: Cannot open CA certificate directory %s",
-		    server, caDir);
+	    Ns_Log (Notice, "%s: %s: Cannot open CA certificate directory %s",
+		    MODULE, server, caDir);
         return NS_ERROR;
     }
     closedir(dirfp);
@@ -1019,8 +1015,8 @@ Ns_OpenSSLContextCADirSet(char *server, char *module, Ns_OpenSSLContext *context
 	rc = SSL_CTX_load_verify_locations (context->sslctx, NULL, caDir);
 
 	if (rc == 0) {
-	    Ns_Log (Error, MODULE, ": %s: error using CA directory: %s", 
-                server, caDir);
+	    Ns_Log (Error, "%s: %s: error using CA directory: %s", 
+                MODULE, server, caDir);
 	    return NS_ERROR;
     }
 
@@ -1076,6 +1072,13 @@ Ns_OpenSSLContextPeerVerifySet(char *server, char *module, Ns_OpenSSLContext *co
     /* XXX handle default case where peerVerify is NULL */
     context->peerVerify = peerVerify;
 
+    if (peerVerify) {
+        SSL_CTX_set_verify(context->sslctx, (SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE),
+                PeerVerifyCallback);
+    } else {
+        SSL_CTX_set_verify(context->sslctx, SSL_VERIFY_NONE, NULL);
+    }
+
     return NS_OK;
 }
 
@@ -1129,6 +1132,14 @@ Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, Ns_OpenSSLContex
     /* XXX how do I handle the default case? with varargs in func call? */
     /* XXX ah, no, preset all the default values in Ns_OpenSSLContextCreate */
     context->peerVerifyDepth = peerVerifyDepth;
+
+    if (peerVerifyDepth >= 0) {
+        SSL_CTX_set_verify_depth(context->sslctx, peerVerifyDepth);
+    } else {
+        Ns_Log(Warning, "%s: %s: Peer verify parameter invalid - defaulting to %d",
+                MODULE, server, DEFAULT_PEER_VERIFY_DEPTH);
+        SSL_CTX_set_verify_depth(context->sslctx, DEFAULT_PEER_VERIFY_DEPTH);
+    }
 
     return NS_OK;
 }
@@ -1401,7 +1412,7 @@ Ns_OpenSSLContextTraceGet(char *server, char *module, Ns_OpenSSLContext *context
  */
 
 Ns_OpenSSLContext *
-Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
+Ns_OpenSSLContextCreate (char *server, char *module)
 {
     Ns_OpenSSLContext *context = NULL;
     Ns_DString ds;
@@ -1421,24 +1432,8 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
 
     context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof(*context));
     if (context == NULL) {
-        Ns_Log(Error, MODULE, ": Failed to create SSL context: %s, %s, %s", 
-                server, name, role);
-        return NULL;
-    }
-
-    Ns_MutexLock(&context->lock);
-
-    Ns_MutexSetName2(&context->lock, MODULE, name);
-
-    if (STREQ(role, "server")) {
-        context->role = SERVER_ROLE;
-    } else if (STREQ(role, "client")) {
-        context->role = CLIENT_ROLE;
-    } else {
-        Ns_Log(Error, MODULE, ": SSL context has an invalid role: %s, %s, %s",
-                server, name, role);
-        Ns_MutexUnlock(&context->lock);
-        Ns_Free(context);
+        Ns_Log(Error, "%s: %s: Failed to create SSL context", 
+                MODULE, server);
         return NULL;
     }
 
@@ -1449,7 +1444,6 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
 
     context->server         = server;
     context->module         = module;
-    context->name           = name;
     context->sessionCacheId = SessionCacheIdGetNext();
 
     /*
@@ -1499,7 +1493,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
      * (i.e. these are not configurable via nsd.tcl or Ns_OpenSSL* calls).
      */
 
-    if (context->role == SERVER_ROLE) {
+    if (context->role == ROLE_SERVER) {
         /* XXX should I select this by looking at protocols? */
         context->sslctx = SSL_CTX_new(SSLv23_server_method());
     } else {
@@ -1554,7 +1548,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
 	    firstSSLContext = context;
     }
 
-    Ns_MutexUnlock(&context->lock);
+    //Ns_MutexUnlock(&context->lock);
 
     return context;
 }
@@ -1615,8 +1609,8 @@ InitLocation (NsOpenSSLDriver *driver)
 	    lookupHostname = (hostname != NULL) ? hostname : Ns_InfoHostname ();
 	    Ns_DStringInit (&ds);
 	    if (Ns_GetAddrByHost (&ds, lookupHostname) == NS_ERROR) {
-	        Ns_Log (Error, MODULE, ": %s: failed to resolve '%s': %s",
-		        driver->server, lookupHostname, strerror (errno));
+	        Ns_Log (Error, "%s: %s: failed to resolve '%s': %s",
+		        MODULE, driver->server, lookupHostname, strerror (errno));
 	        return NS_ERROR;
 	    }
 	    driver->address = Ns_DStringExport (&ds);
@@ -1627,8 +1621,8 @@ InitLocation (NsOpenSSLDriver *driver)
     if (hostname == NULL) {
 	    Ns_DStringInit (&ds);
 	    if (Ns_GetHostByAddr (&ds, driver->address) == NS_ERROR) {
-	        Ns_Log (Warning, MODULE, ": %s: failed to reverse resolve '%s': %s",
-		        driver->server, driver->address, strerror (errno));
+	        Ns_Log (Warning, MODULE, "%s: %s: failed to reverse resolve '%s': %s",
+		        MODULE, driver->server, driver->address, strerror (errno));
 	        hostname = ns_strdup (driver->address);
 	    } else {
 	        hostname = Ns_DStringExport (&ds);
@@ -1636,14 +1630,14 @@ InitLocation (NsOpenSSLDriver *driver)
     }
 
     if (Ns_ConfigGetInt(driver->configPath, "port", &driver->port) == NS_FALSE) {
-        Ns_Log(Warning, MODULE, ": %s: No port set for driver", driver->server);
+        Ns_Log(Warning, "%s: %s: No port set for driver", MODULE, driver->server);
         /* XXX this should be a mandatory setting */
         driver->port = DEFAULT_PORT;
     }
     if (driver->location != NULL) {
 	    driver->location = ns_strdup (driver->location);
     } else {
-        Ns_Log(Notice, MODULE, ": %s: location not set; defaulting", driver->server);
+        Ns_Log(Notice, "%s: %s: location not set; defaulting", MODULE, driver->server);
 	    Ns_DStringInit (&ds);
 	    Ns_DStringVarAppend (&ds, DEFAULT_PROTOCOL "://", hostname, NULL);
 	    if (driver->port != DEFAULT_PORT) {
@@ -1651,7 +1645,7 @@ InitLocation (NsOpenSSLDriver *driver)
 	    }
 	    driver->location = Ns_DStringExport (&ds);
     }
-    Ns_Log (Notice, MODULE, ": %s: location %s", driver->server, driver->location);
+    Ns_Log (Notice, "%s: %s: location %s", MODULE, driver->server, driver->location);
 
     return NS_OK;
 }
@@ -1681,10 +1675,48 @@ PeerVerifyCallback (int preverify_ok, X509_STORE_CTX * x509_ctx)
 {
     return 1;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * IssueTmpRSAKey --
+ *
+ *       Give out the temporary key when needed. This is a callback function
+ *       used by OpenSSL and is required for 40-bit browsers.
+ *
+ * Results:
+ *       Returns a pointer to the new temporary key.
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
 
+static RSA *
+IssueTmpRSAKey (SSL * ssl, int export, int keylen)
+{
+    Ns_OpenSSLConn *conn;
+    NsOpenSSLDriver *driver;
+    static RSA *rsa_tmp = NULL;
+
+    conn = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
+    driver = conn->driver;
+
+    rsa_tmp = RSA_generate_key (keylen, RSA_F4, NULL, NULL);
+    if (rsa_tmp == NULL) {
+        Ns_Log(Error, "%s: %s: Temporary RSA key generation failed",
+                MODULE, conn->driver->server);
+    } else {
+        Ns_Log (Notice, "%s: %s: Generated %d-bit temporary RSA key",
+                MODULE, conn->driver->server, keylen);
+    }
+
+    return rsa_tmp;
+}
+
 /* XXX merge with Ns_OpenSSLContextModuleDirSet ??? */
 #if 0
-
 /*
  *----------------------------------------------------------------------
  *
@@ -1779,8 +1811,7 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 #if 0
 	    sock->arg = NsOpenSSLCreateConn(sock->sock, n, driver->arg);
 #endif
-        /* XXX driver is supposed to be of type Ns_OpenSSLDriver ... fix */
-	    sock->arg = NsOpenSSLCreateConn(sock->sock, driver->arg, ROLE_SSL_SERVER, CONNTYPE_SERVER);
+	    sock->arg = NsOpenSSLConnCreate(sock->sock, driver->arg, ROLE_SERVER);
 	    if (sock->arg == NULL) {
     		return -1;
 	    }
@@ -1792,7 +1823,7 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 	    conn = ns_calloc (1, sizeof (*conn));
 
 	    if (conn == NULL) {
-	       Ns_Log(Error, MODULE, ":unable to allocate memory");
+	       Ns_Log(Error, ":unable to allocate memory", MODULE);
 	       return NS_ERROR;
 	    }
 	    
@@ -1816,9 +1847,9 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 	total = 0;
 	do {
 	    if (cmd == DriverSend) {
-		n = NsOpenSSLSend (sock->arg, bufs->iov_base, bufs->iov_len);
+		n = NsOpenSSLSend (sock->arg, bufs->iov_base, (int) bufs->iov_len);
 	    } else {
-		n = NsOpenSSLRecv (sock->arg, bufs->iov_base, bufs->iov_len);
+		n = NsOpenSSLRecv (sock->arg, bufs->iov_base, (int) bufs->iov_len);
 	    }
 	    if (n < 0 && total > 0) {
 		/* NB: Mask error if some bytes were read. */
@@ -1841,16 +1872,49 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
     case DriverClose:
 	    if (sock->arg != NULL) {
 	        (void) NsOpenSSLFlush (sock->arg);
-	        NsOpenSSLDestroyConn (sock->arg);
+	        NsOpenSSLConnDestroy (sock->arg);
 	        sock->arg = NULL;
 	    }
 	    n = 0;
 	    break;
 
     default:
-    	Ns_Log(Error, MODULE, ": Unsupported driver command encountered");
+    	Ns_Log(Error, "%s: Unsupported driver command encountered", MODULE);
 	    n = -1;
 	    break;
     }
     return n;
+}
+
+/*            
+ *----------------------------------------------------------------------
+ *
+ * NsInitSessionCache --
+ *
+ *      Initialize the session cache.
+ *
+ * Results:   
+ *      Session cache number sequence initialized.
+ *
+ * Side effects:
+ *      None. 
+ *            
+ *----------------------------------------------------------------------
+ */
+
+int
+NsOpenSSLSessionCacheInit (void)
+{
+    nextSessionCacheId = (SessionCacheId *) ns_calloc (1, sizeof(*nextSessionCacheId));
+    if (nextSessionCacheId == NULL) {
+        Ns_Log (Error, "%s: Failed to allocate memory for session id generator",
+                MODULE);
+        return NS_ERROR;
+    } 
+    Ns_MutexLock(&nextSessionCacheId->lock);
+    Ns_MutexSetName2(&nextSessionCacheId->lock, MODULE, "sessioncacheid");
+    nextSessionCacheId->id = 1;
+    Ns_MutexUnlock(&nextSessionCacheId->lock);
+
+    return NS_OK;
 }
