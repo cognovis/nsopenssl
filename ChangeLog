@@ -1,3 +1,12 @@
+2002-02-18  Scott S. Goodwin  <scott@scottg.net>
+
+	* tclcmds.c: added ns_openssl port command. It returns the
+	scPtr->port value, which happens to be the local port the conn is
+	using, not the port the server is listening on. I need to do a
+	query on the port the server is listening on by grabbing the port
+	number from the nsd.tcl based on the module name (as you may have
+	multiple instances of nsopenssl up and running).
+
 2002-02-15  Scott S. Goodwin  <scott@scottg.net>
 
 	* ssl.c: I was decrementing towrite by rc bytes. Problem is that

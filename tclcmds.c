@@ -239,6 +239,10 @@ NsTclOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 
         Tcl_SetResult(interp, string, TCL_VOLATILE);
 
+    } else if (STREQ(argv[1], "port")) {
+
+        sprintf(interp->result, "%d", scPtr->port);
+
     } else if (STREQ(argv[1], "cipher")) {
 
         cipher = SSL_get_current_cipher(scPtr->ssl);
