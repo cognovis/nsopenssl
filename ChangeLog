@@ -1,3 +1,14 @@
+2003-05-08  Scott S. Goodwin  <scott@scottg.net>
+
+        * ssl.c: fixed problem where if an nsopenssl connection was broken
+        during a file upload or other POST request, the thread would
+        continue trying to read from the socket. Thanks to Wayport Inc's
+        John Wright, Matthew Krenzer and to Arena Inc's Eric Larkin, and to
+        Simos Gabrielidis for both identifying the problem and helping me
+        duplicate it so I could fix it. Special thanks to Wayport for
+        hammering it under a tremendous load to see if it would break (it
+        didn't).
+
 2002-02-13  Scott S. Goodwin  <scott@scottg.net>
 
 	* ssl.c: The nonblocking socket fix in RunServerSSLHandshake fixed

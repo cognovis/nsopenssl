@@ -196,33 +196,15 @@ NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer, int toread)
 {
     int rc;
 
-    /*
-     * Check the socket to see if it's still alive. If the client
-     * aborts the connection during a file upload, the BIO read will
-     * loop forever, using cpu cycles, but reading no further
-     * data. Note that checking to see if sock is INVALID_SOCKET
-     * doesn't always work here.
-     */
-
-    if (send(ccPtr->sock, NULL, 0, 0) != 0) {
-	Ns_Log(Notice, "%s: %s: connection reset by peer",
-	    ccPtr->module, ccPtr->type);
-	return NS_ERROR;
-    }
-
-#ifndef NS_MAJOR_VERSION
     do {
 	rc = BIO_read(ccPtr->io, buffer, toread);
-    } while (rc < 0 && BIO_should_retry(ccPtr->io));
-#else
-    rc = BIO_read(ccPtr->io, buffer, toread);
-    if (rc < 0
-        && BIO_should_retry(ccPtr->io)
-        && Ns_SockWait(ccPtr->sock, NS_SOCK_READ, 2) == NS_OK) {
-            rc = BIO_read(ccPtr->io, buffer, toread);
-    }
-    Ns_Log(Debug, "read: %d %d\n", toread, rc);
-#endif
+        /* Check to see if connection has closed */
+        if (rc <= 0 && !BIO_should_retry(ccPtr->io)) {
+            Ns_Log(Error, "%s: %s: connection closed by peer",
+                    ccPtr->module, ccPtr->type);
+            return NS_ERROR;
+        }
+    } while (rc < 0);
 
     return rc;
 }
@@ -248,127 +230,12 @@ NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer, int toread)
 int
 NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 {
-
-#if 0
-    /* XXX how it was done in nsopenssl 1.1c */
-    return SSL_write(ccPtr->ssl, buffer, towrite);
-#endif
-
-
     int rc;
-    int total;
-
-    total = towrite;
+    int total = towrite;
 
     do {
 	rc = SSL_write(ccPtr->ssl, buffer, towrite);
 	towrite -= rc;
-
-
-#if 0
-	/*
-         * XXX On my Debian Linux box, the ns_openssl_socklisten (1) | connect test
-         * always generates a SSL_ERROR_SYSCALL. I think that's because I close
-         * the FD's on the server-side test too soon. The thing works anyway, but I need to
-         * debug this and make whatever changes necessary to get a clean closure
-         * for both ends.
-         */
-
-	if (rc <= 0) {
-	    switch (SSL_get_error(ccPtr->ssl, rc))
-		{
-		case SSL_ERROR_NONE:
-		    /* Perform operations */
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_NONE", rc);
-		    break;
-		case SSL_ERROR_SSL:
-		    /* Perform operations */
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_SSL", rc);
-		    break;
-		    /*
-		     * The next four options are used with
-		     * non-blocking semantics. This may not be
-		     * applicable, depending on the underlying
-		     * socket/BIO 
-		     */
-		case SSL_ERROR_WANT_READ:
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_READ", rc);
-		    /*
-		     * Read failed because there was no data to read
-		     * and the process/thread was blocked waiting for
-		     * input. Recall SSL_read when data is
-		     * available. The select(2) system call is
-		     * normally used.
-		     */
-		    break;
-		case SSL_ERROR_WANT_WRITE:
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_WRITE", rc);
-		    /*
-		     * Same as above for write. Because an SSL_read
-		     * occurs does not mean a .WANT_WRITE. error
-		     * will not appear as the SSL protocol involves
-		     * message exchange.
-		     */
-		    break;
-		case SSL_ERROR_WANT_CONNECT:
-		    Ns_Log(Error, "SSL_write failure(%d): SSL_ERROR_WANT_CONNECT", rc);
-		    /*
-		     * If the application is using a connect BIO 
-		     * eg. BIO_new_connect(), this error can be
-		     * returned. Under Win32, it is possible to
-		     * detect a completing connection. This is not
-		     * as applicable under Unix.
-		     */
-		    break;
-		case SSL_ERROR_WANT_X509_LOOKUP:
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_WANT_X509_LOOKUP", rc);
-		    /*
-		     * This option is only returned if an application
-		     * callback (used to retrieve a certificate)
-		     * sets this condition for failure. The
-		     * application must recall SSL_read() when the
-		     * callback is able to find a certificate.
-		     */
-		    break;
-		case SSL_ERROR_SYSCALL:
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_SYSCALL", rc);
-		    /*
-		     * Call failed because an operating system
-		     * dependent function failed. This is normally
-		     * fatal.  Use SSL_get_error for further
-		     * information.
-		     */
-
-		    if (errno == EINTR)
-			continue;
-		    if (errno > 0)
-			Ns_Log(Error, "SSL handshake interrupted by system (Stop button pressed in browser?)");
-		    else
-			Ns_Log(Error, "Spurious SSL handshake interrupt (Usually just one of those OpenSSL confusions)");
-
-		    break;
-		case SSL_ERROR_ZERO_RETURN:
-		    Ns_Log(Error, "SSL_write failure (%d): SSL_ERROR_ZERO_RETURN", rc);
-		    /*
-		     * Low level operating system call to read/write data
-		     * returned 0. For most operating systems, when using
-		     * sockets, this implies the other end of the socket
-		     * was closed.
-		     */
-		    break;
-		}
-	} else {
-	    towrite -= rc;
-	    Ns_Log(Notice, "NsOpenSSLSend: bytes written to client on this pass: %d of %d", rc, total);
-	    if (towrite == 0) {
-		return rc;
-	    } else if (towrite < 0) {
-		Ns_Log(Error, "NsOpenSSLSend: %d bytes left to write, but rc went negative (%d), meaning an error occurred", towrite, rc);
-		return rc;
-	    }
-	}
-#endif
-
     } while (BIO_should_retry(ccPtr->ssl->wbio) &&
 	     BIO_should_write(ccPtr->ssl->wbio));
 

@@ -38,7 +38,7 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #include "nsopenssl.h"
 #include "thread.h"
 
-#ifndef OPENSSL_THREAD_DEFINES || THREADS
+#ifndef OPENSSL_THREADS
 #error "OpenSSL was not compiled with thread support!"
 #endif
 
