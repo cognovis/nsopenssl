@@ -1217,7 +1217,7 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
         return NS_ERROR;
     }
 
-    certFile = strdup(sslcontext->certFile);
+    certFile = ns_strdup(sslcontext->certFile);
     if (!Ns_PathIsAbsolute(certFile)) {
         Ns_DStringInit(&ds);
         Ns_MakePath(&ds, sslcontext->moduleDir, certFile, NULL);
@@ -1249,7 +1249,7 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
         return NS_ERROR;
     }
 
-    keyFile = strdup(sslcontext->keyFile);
+    keyFile = ns_strdup(sslcontext->keyFile);
     if (!Ns_PathIsAbsolute(keyFile)) {
         Ns_DStringInit(&ds);
         Ns_MakePath(&ds, sslcontext->moduleDir, keyFile, NULL);
@@ -1282,8 +1282,7 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
      * Load the cipher suite list.
      */
 
-    rc = SSL_CTX_set_cipher_list(sslcontext->sslctx, 
-            sslcontext->cipherSuite);
+    rc = SSL_CTX_set_cipher_list(sslcontext->sslctx, sslcontext->cipherSuite);
     if (rc == 0) {
             Ns_Log(Error, "%s: %s: '%s' error setting cipher suite to '%s'",
                     server, MODULE, sslcontext->name, sslcontext->cipherSuite);
@@ -1337,13 +1336,15 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
      * Load CA file
      */
 
-    caFile = strdup(sslcontext->caFile);
+    caFile = ns_strdup(sslcontext->caFile);
+
     if (!Ns_PathIsAbsolute(caFile)) {
         Ns_DStringInit(&ds);
         Ns_MakePath(&ds, sslcontext->moduleDir, caFile, NULL);
         caFile = Ns_DStringExport(&ds);
         Ns_DStringFree(&ds);
     }
+    Ns_Log(Debug, "*** caFile == %p", caFile);
 
     rc = SSL_CTX_load_verify_locations(sslcontext->sslctx, caFile, NULL);
     if (rc == 0) {
@@ -1361,7 +1362,7 @@ Ns_OpenSSLContextInit(char *server, char *module, Ns_OpenSSLContext *sslcontext)
      */
 
     /* XXX this code segment is duplicated about four times; move into static func */
-    caDir = strdup(sslcontext->caDir);
+    caDir = ns_strdup(sslcontext->caDir);
     if (!Ns_PathIsAbsolute(caDir)) {
         Ns_DStringInit(&ds);
         Ns_MakePath(&ds, sslcontext->moduleDir, caDir, NULL);
