@@ -334,9 +334,8 @@ Ns_ModuleInit (char *server, char *module)
 
     config->ciphersuite = Ns_ConfigGetValue (path, CONFIG_CIPHERSUITE);
     if (config->ciphersuite == NULL) {
-	Ns_Log (Notice,
-		"Using default ciphersuite: %s; see CipherSuite parameter in config file",
-		DEFAULT_CIPHERSUITE);
+	Ns_Log (Notice,	"Using default ciphersuite: %s", DEFAULT_CIPHERSUITE);
+	Ns_Log (Notice, "See CipherSuite parameter in config file");
 	Ns_DStringTrunc (&ds, 0);
 	Ns_DStringAppend (&ds, DEFAULT_CIPHERSUITE);
 	config->ciphersuite = Ns_DStringExport (&ds);
@@ -352,26 +351,15 @@ Ns_ModuleInit (char *server, char *module)
 
     protocol_list = Ns_ConfigGetValue (path, CONFIG_PROTOCOL_LIST);
     if (protocol_list == NULL) {
-	Ns_Log (Notice,
-		"Using default protocols: %s; see Protocols parameter in config file",
-		DEFAULT_PROTOCOL_LIST);
+	Ns_Log (Notice,	"Using default protocols: %s", DEFAULT_PROTOCOL_LIST);
+	Ns_Log (Notice, "See Protocols parameter in config file");
 	Ns_DStringTrunc (&ds, 0);
 	Ns_DStringAppend (&ds, DEFAULT_PROTOCOL_LIST);
 	protocol_list = Ns_DStringExport (&ds);
     } else {
 	protocol_list = Ns_StrDup (protocol_list);
     }
-
-    /* TODO: BUG: if no protocol parameter is specified in the config
-     * file, then the default is taken. When that happens, the server
-     * "dies" after printing this with no error message. It's a string
-     * thing, I'm sure. Track it down later.
-     */
-
-    Ns_Log (Notice, "SSL Protocols = '%s'\n", protocol_list);
-
-    /* Let's not care whether the admin used upper, lower or mixed case */
-
+    Ns_Log (Notice, "SSL Protocols = '%s'", protocol_list);
     protocol_list = Ns_StrToLower (protocol_list);
 
     /* Extract the protocols specified */
@@ -382,7 +370,7 @@ Ns_ModuleInit (char *server, char *module)
 	++count;
 	++p;
     }
-    name = Ns_Malloc (sizeof (char *) * count);
+    name = ns_malloc (sizeof (char *) * count);
     for (i = 0; i < count; ++i) {
 	p = strchr (protocol_list, ',');
 	if (p != NULL) {
@@ -393,8 +381,6 @@ Ns_ModuleInit (char *server, char *module)
 	protocol_list = p;
     }
 
-    config->protocols = SSL_PROTOCOL_NONE;
-
     /*
      * Extract each protocol type from the text list. Apache allows
      * you to specify protocols as "SSLv2 -SSLv3 +TLSv1", but are the
@@ -403,6 +389,7 @@ Ns_ModuleInit (char *server, char *module)
      * revisit this.
      */
 
+    config->protocols = SSL_PROTOCOL_NONE;
     for (i = 0; i < count; ++i) {
 	if (STREQ (name[i], "sslv2")) {
 	    Ns_Log (Debug, "Protocol = '%s'", name[i]);
@@ -422,7 +409,7 @@ Ns_ModuleInit (char *server, char *module)
 	    return NS_ERROR;
 	}
     }
-    Ns_Free (name);
+    ns_free (name);
 
     /* Check to be sure we really do have protocols set... */
 
@@ -432,24 +419,9 @@ Ns_ModuleInit (char *server, char *module)
 	return NS_ERROR;
     }
 
-    /*
-     * Determine the CAs
-     */
-
-    /* TODO: Feature: add check here to see if no CAs specified yet
-       client verification is mandatory */
-
-    /* TODO: Feature: add a default set of CAs, including Verisign et
-       al. */
-
-    /* TODO: Feature: run make in the ssl.ca directory at server start time? */
-
-    /* TODO: add DEFAULT_CACERTPATH and DEFAULT_CACERTFILE ... */
-
     /* Path to CA Certificate directory */
 
     config->cacertpath = Ns_ConfigGetValue (path, CONFIG_CACERTPATH);
-
     if (config->cacertpath != NULL) {
 	if (Ns_PathIsAbsolute (config->cacertpath) == 0) {
 	    Ns_DStringTrunc (&ds, 0);
@@ -485,13 +457,11 @@ Ns_ModuleInit (char *server, char *module)
 	    config->cacertpath = NULL;
 	}
     }
-
     Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTPATH, config->cacertpath);
 
     /* Path to a CA Certificate file */
 
     config->cacertfile = Ns_ConfigGetValue (path, CONFIG_CACERTFILE);
-
     if (config->cacertfile != NULL) {
 	if (Ns_PathIsAbsolute (config->cacertfile) == 0) {
 	    Ns_DStringTrunc (&ds, 0);
@@ -528,12 +498,7 @@ Ns_ModuleInit (char *server, char *module)
 	    config->cacertfile = NULL;
 	}
     }
-
     Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTFILE, config->cacertfile);
-
-    /*
-     * Figure out how the server should deal with client certificates
-     */
 
     /*
      * Set client verification mode. Affects the SSL handshake
@@ -568,9 +533,6 @@ Ns_ModuleInit (char *server, char *module)
 
         /* Get verification depth */
 
-        /* TODO: how do I point to the address of an int type inside
-        of a structure, so I can get rid of the tmp variable? */
-
 	config->clientverifydepth = DEFAULT_CLIENTVERIFYDEPTH;
 	tmp = 0;
 	if (Ns_ConfigGetInt (path, CONFIG_CLIENTVERIFYDEPTH, &tmp) == NS_TRUE) {
@@ -578,17 +540,16 @@ Ns_ModuleInit (char *server, char *module)
 	}
 	Ns_Log (Notice, "Client verify depth is set to %d", config->clientverifydepth);
 
-	/* Get client verify default */
-
-	/* The idea behind this is that if a client has no certificate
-           or their certificate is invalid, we might not simply want
-           to abort the connection, but instead set a couple of flags
-           in SSLConnection struct and continue processing. This
-           effectively passes the decision of what to do to from
-           nsopenssl to the application's code. e.g. you might want to
-           offer the end user a nice error page instead of chopping
-           him off at the knees -- he might not know his cert is
-           invalid. */
+	/* Get client verify default. The idea behind this is that if
+         * a client has no certificate or their certificate is
+         * invalid, we might not simply want to abort the connection,
+         * but instead set a couple of flags in SSLConnection struct
+         * and continue processing. This effectively passes the
+         * decision of what to do to from nsopenssl to the
+         * application's code. e.g. you might want to offer the end
+         * user a nice error page instead of chopping him off at the
+         * knees -- he might not know his cert is invalid.
+	 */
 
 	config->clientverifydefault = NS_FALSE;
         tmp = NS_FALSE;
@@ -607,16 +568,16 @@ Ns_ModuleInit (char *server, char *module)
         Ns_Log (Notice, "Client certificate processing is turned off");
     }
 
-    /* If no cacertfile and no cacertpath and clientverify is set, then warn */
-    /* TODO: BUG: you're not checking the clientverify here yet... */
-    if (config->cacertpath == NULL && config->cacertfile == NULL && (config->clientverifymode & SSL_VERIFY_PEER)) {
+    /* Warn if client verification is on but no CAs loaded */
+
+    if (config->cacertpath == NULL && config->cacertfile == NULL
+	&& (config->clientverifymode & SSL_VERIFY_PEER)) {
 	Ns_Log (Notice,
 		"No CAs loaded, which means you will not be able to verify client certificates");
     }
 
     /*
-     * Create a new SSL server with the characteristics from the
-     * config file.
+     * Create a new SSL server.
      */
 
     sdPtr->server = NsSSLCreateServer (config);
@@ -624,9 +585,7 @@ Ns_ModuleInit (char *server, char *module)
 	ns_free (sdPtr);
 	return NS_ERROR;
     }
-
     sdPtr->bufsize = 0;
-
     sdPtr->refcnt = 1;
     sdPtr->lsock = INVALID_SOCKET;
     sdPtr->name = module;

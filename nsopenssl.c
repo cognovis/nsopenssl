@@ -546,13 +546,13 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 		subject =
 		    X509_NAME_oneline (X509_get_subject_name
 				       (conPtr->clientcert), NULL, 0);
-		Ns_Log (Notice, "Subject name: %s", subject);
+		Ns_Log (Debug, "Subject name: %s", subject);
 		issuer =
 		    X509_NAME_oneline (X509_get_issuer_name
 				       (conPtr->clientcert), NULL, 0);
-		Ns_Log (Notice, "Issuer name: %s", issuer);
+		Ns_Log (Debug, "Issuer name: %s", issuer);
 	    } else {
-		Ns_Log (Notice, "No client certificate");
+		Ns_Log (Debug, "No client certificate");
 	    }
 
 #if 0

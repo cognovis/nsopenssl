@@ -63,3 +63,7 @@ Scott S. Goodwin - scott@scottg.net
   both MSIE and Netscape ask me which certificate I'd like to use each
   time I connect, even though I have only one client certificate in
   the browser.
+
+- Have 'make' automatically run at server start time in the ssl.ca
+  directory.
+
