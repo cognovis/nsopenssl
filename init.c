@@ -514,6 +514,10 @@ LoadKey(NsOpenSSLDriver *sdPtr)
     if (rc == 0) {
 	Ns_Log(Error, "%s: error loading private key file \"%s\"",
 	    sdPtr->module, file);
+	Ns_Log(Error, "%s: maybe your private key is encrypted with a passphrase?",
+	    sdPtr->module);
+	Ns_Log(Error, "%s: you can try taking off the passphrase with 'openssl rsa -in key1.pem -out key2.pem'",
+	    sdPtr->module);
     }
 
     ns_free(file);
