@@ -96,6 +96,14 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
                 MODULE, sslcontext->server);
         return NULL;
     }
+    Ns_Log(Debug, "NsOpenSSLConnCreate(%p)", sslconn);
+
+    /*
+     * Default is a core-driven connection. Connections created by nsopenssl's
+     * Tcl API are responsible for setting this value to TCLAPI.
+     */
+
+    sslconn->type            = CORE;
 
     /*
      * Set connection structure initial values.
@@ -213,6 +221,8 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     int i  = 0;
     int rc = 0;
 
+    Ns_Log(Debug, "NsOpenSSLConnDestroy(%p)", sslconn);
+
     if (sslconn == NULL) {
 	return;
     }
@@ -225,6 +235,16 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     if (sslconn->refcnt > 0) {
 	return;
     }
+
+
+        /*
+         * Shutdown the Tcl channel wrapped around the socket, if there is one.
+         */
+
+//        if (sslconn->chan != NULL) {
+//            Ns_Log(Debug, "*** CHAN: DESTROYING: %s", Tcl_GetChannelName(sslconn->chan));
+//            Tcl_UnregisterChannel(NULL, sslconn->chan);
+//        }
 
     /*
      * Shutdown the SSL connection and free the SSL structure.
@@ -239,16 +259,18 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     }
 
     /*
-     * Shutdown and close the socket itself, but only if it's not a socket
-     * managed by the core AOLserver driver. In that case we leave the socket
-     * to be shutdown there.
+     * Shutdown and close the socket itself, but only if it's an nsopenssl Tcl
+     * API-created socket. If the core server is driving the socket, we leave
+     * it alone and let the core driver do what it wants with it.
      */
 
-    if (sslconn->socket != INVALID_SOCKET) {
-	shutdown(sslconn->socket, SHUT_RDWR);
-        ns_sockclose(sslconn->socket);
-        sslconn->socket = INVALID_SOCKET;
-    }
+    //if (sslconn->type == TCLAPI) {
+    //    if (sslconn->socket != INVALID_SOCKET) {
+//	    shutdown(sslconn->socket, SHUT_RDWR);
+//            ns_sockclose(sslconn->socket);
+//            sslconn->socket = INVALID_SOCKET;
+//        }
+//    }
     ns_free(sslconn);
     sslconn = NULL;
 
@@ -304,6 +326,7 @@ Ns_OpenSSLSockConnect(char *server, char *host, int port, int async, int timeout
      */
 
     sslconn = NsOpenSSLConnCreate(socket, sslcontext);
+    sslconn->type = TCLAPI;
     if (sslconn != NULL) {
         sslconn->refcnt++;
         if (async) {
@@ -353,6 +376,7 @@ Ns_OpenSSLSockAccept(SOCKET sock, NsOpenSSLContext *sslcontext)
      */
 
     sslconn = NsOpenSSLConnCreate(sock, sslcontext);
+    sslconn->type = TCLAPI;
     if (sslconn != NULL) {
         sslconn->refcnt++;
         Ns_SockSetNonBlocking(sslconn->socket);

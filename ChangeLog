@@ -1,3 +1,9 @@
+2004-04-14  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.h, ssl.c, tclcmd.c: Restructured Tcl channel process; now
+      uses ChanInfo structs to maintain state and to ensure proper closure and
+      freeing of sockets, channels and structures.
+
 2004-04-13  Scott Goodwin  <scott@scottg.net>
 
       * x509.c: Added x509.c to hold certificate management functions.

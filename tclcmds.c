@@ -37,6 +37,17 @@ static const char *RCSID =
 
 #include "nsopenssl.h"
 
+/*
+ * Used to track both conn info and which chan to close.
+ */
+
+typedef struct ChanInfo {
+    NsOpenSSLConn   *sslconn;
+    SOCKET           socket;
+    Tcl_Channel      chan;
+    void            *otherchaninfo;
+} ChanInfo;
+
 static int 
 CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp);
 
@@ -76,8 +87,10 @@ EnterSock(Tcl_Interp *interp, SOCKET sock);
 static int
 EnterDup(Tcl_Interp *interp, SOCKET sock);
 
+#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock);
+#endif
 
 static int
 GetSet(Tcl_Interp *interp, char *flist, int write, fd_set **setPtrPtr,
@@ -94,7 +107,8 @@ static Ns_SockProc
 SSLSockCallbackProc;
 
 /*
- * Define a Tcl channel so we can use standard Tcl commands to read and write on the connection.
+ * Define a Tcl channel so we can use standard Tcl commands to read and write
+ * on the connection.
  */
 
 static Tcl_ChannelType opensslChannelType = {
@@ -117,7 +131,6 @@ static Tcl_ChannelType opensslChannelType = {
 static Ns_TclInterpInitProc 
 AddCmds;
 
-/* XXX check that all are here */
 extern Tcl_ObjCmdProc
     NsTclOpenSSLObjCmd,
     NsTclOpenSSLSockAcceptObjCmd,
@@ -147,11 +160,10 @@ static Cmd nsopensslCmds[] = {
     {"ns_openssl_socklisten",         NULL,                              NsTclOpenSSLSockListenObjCmd           },
     {"ns_openssl_sockcallback",       NULL,                              NsTclOpenSSLSockCallbackObjCmd         },
     {"ns_openssl_socklistencallback", NULL,                              NsTclOpenSSLSockListenCallbackObjCmd   },
-/* XXX following are untested, perhaps unused ? */
-//  {"ns_openssl_socknread",          NsTclOpenSSLSockNReadCmd,          NULL                                   },
-//  {"ns_openssl_sockselect",         NsTclOpenSSLSockSelectCmd,         NULL                                   },
-//  {"ns_openssl_sockcheck",          NsTclOpenSSLSockCheckCmd,          NULL                                   },
 #if 0  /* these ns_openssl_sock* commands are not implemented */
+    {"ns_openssl_socknread",          NsTclOpenSSLSockNReadCmd,          NULL                                   },
+    {"ns_openssl_sockselect",         NsTclOpenSSLSockSelectCmd,         NULL                                   },
+    {"ns_openssl_sockcheck",          NsTclOpenSSLSockCheckCmd,          NULL                                   },
     {"ns_openssl_socketpair",         NsTclSSLSocketPairCmd,             NULL                                   },
     {"ns_openssl_hostbyaddr",         NsTclSSLGetByCmd,                  NULL                                   },
     {"ns_openssl_addrbyhost",         NsTclSSLGetByCmd,                  (ClientData) 1                         },
@@ -1291,6 +1303,7 @@ EnterDup(Tcl_Interp *interp, SOCKET sock)
     return EnterSock(interp, sock);
 }
 
+#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
 {
@@ -1300,6 +1313,7 @@ EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
     }                    
     return TCL_OK;
 }   
+#endif
 
 
 /*
@@ -1460,29 +1474,83 @@ PEMCertificate(X509 *peercert)
 static int
 CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
 {
-    Tcl_Channel chan = NULL;
-    Tcl_DString ds;
+    ChanInfo    *getschan = NULL;
+    ChanInfo    *putschan = NULL;
+    Tcl_DString  ds;
     char channelName[16 + TCL_INTEGER_SPACE];
 
     Tcl_DStringInit(&ds);
-    sprintf(channelName, "openssl%d", sslconn->socket);
-    chan = Tcl_CreateChannel(
+
+    /* 
+     * The ns_sock API in AOLserver passes back a separate read and write fds
+     * to work with. In our case, we're using the same socket underneath both,
+     * but to maintain consistency we also create two separate channels and
+     * pass back two separate fds to the caller.
+     */
+
+    getschan = ns_calloc(1, sizeof(ChanInfo));
+    getschan->sslconn = sslconn;
+
+    putschan = ns_calloc(1, sizeof(ChanInfo));
+    putschan->sslconn = sslconn;
+
+    getschan->otherchaninfo = (void *) putschan;
+    putschan->otherchaninfo = (void *) getschan;
+
+    /*
+     * Set up the read channel.
+     */
+
+    getschan->socket = sslconn->socket;
+    sprintf(channelName, "openssl%d", getschan->socket);
+    getschan->chan = Tcl_CreateChannel(
             &opensslChannelType,
             channelName,
-            (ClientData) sslconn,
+            (ClientData) getschan,
             (TCL_READABLE | TCL_WRITABLE)
             );
-    if (chan == (Tcl_Channel) NULL) {
+    if (getschan->chan == (Tcl_Channel) NULL) {
         Ns_Log(Error, "%s: %s: could not create new Tcl channel",
                 MODULE, sslconn->server);
         Tcl_AppendResult (interp, "could not create new Tcl channel", NULL);
         return TCL_ERROR;
     }
-    sslconn->chan = chan;
-    Tcl_SetChannelBufferSize(chan, BUFSIZ);
-    Tcl_SetChannelOption(interp, chan, "-translation", "binary");
-    Tcl_RegisterChannel(interp, chan);
-    Tcl_DStringAppendElement(&ds, Tcl_GetChannelName (chan));
+    Tcl_SetChannelBufferSize(getschan->chan, BUFSIZ);
+    Tcl_SetChannelOption(interp, getschan->chan, "-translation", "binary");
+    Tcl_RegisterChannel(interp, getschan->chan);
+
+    /*
+     * Set up the write channel.
+     */
+
+    putschan->socket = ns_sockdup(sslconn->socket);
+    sprintf(channelName, "openssl%d", putschan->socket);
+    putschan->chan = Tcl_CreateChannel(
+            &opensslChannelType,
+            channelName,
+            (ClientData) putschan,
+            (TCL_READABLE | TCL_WRITABLE)
+            );
+    if (putschan->chan == (Tcl_Channel) NULL) {
+        Ns_Log(Error, "%s: %s: could not create new Tcl channel",
+                MODULE, sslconn->server);
+        Tcl_AppendResult (interp, "could not create new Tcl channel", NULL);
+        return TCL_ERROR;
+    }
+    Tcl_SetChannelBufferSize(putschan->chan, BUFSIZ);
+    Tcl_SetChannelOption(interp, putschan->chan, "-translation", "binary");
+    Tcl_RegisterChannel(interp, putschan->chan);
+
+    /*
+     * Append the fd names to the result.
+     */
+
+    Tcl_DStringAppendElement(&ds, Tcl_GetChannelName(getschan->chan));
+    Tcl_DStringAppendElement(&ds, Tcl_GetChannelName(putschan->chan));
+
+    Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(getschan->chan));
+    Ns_Log(Debug, "*** CHAN CREATE: %s", Tcl_GetChannelName(putschan->chan));
+
     Tcl_DStringResult(interp, &ds);
 
     return TCL_OK;
@@ -1509,11 +1577,10 @@ static int
 ChanOutputProc(ClientData arg, char *buf, int towrite,
 		int *errorCodePtr)
 {
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
-    int            rc      = 0;
+    ChanInfo *chaninfo = (ChanInfo *) arg;
+    int       rc       = 0;
 
-    //rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
-    rc = NsOpenSSLConnOp(sslconn->ssl, (void *) buf, towrite, NSOPENSSL_SEND);
+    rc = NsOpenSSLConnOp(chaninfo->sslconn->ssl, (void *) buf, towrite, NSOPENSSL_SEND);
 
     return rc;
 }
@@ -1541,11 +1608,10 @@ static int
 ChanInputProc(ClientData arg, char *buf, int bufSize,
 	       int *errorCodePtr)
 {
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
-    int            rc      = 0;
+    ChanInfo *chaninfo = (ChanInfo *) arg;
+    int       rc       = 0;
 
-    //rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
-    rc = NsOpenSSLConnOp(sslconn->ssl, (void *) buf, bufSize, NSOPENSSL_RECV);
+    rc = NsOpenSSLConnOp(chaninfo->sslconn->ssl, (void *) buf, bufSize, NSOPENSSL_RECV);
 
     return rc;
 }
@@ -1576,10 +1642,21 @@ ChanInputProc(ClientData arg, char *buf, int bufSize,
 static int
 ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 {
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
+    ChanInfo *chaninfo      = (ChanInfo *) arg;
+    ChanInfo *otherchaninfo = NULL;
 
-    Tcl_UnregisterChannel(interp, sslconn->chan);
-    NsOpenSSLConnDestroy(sslconn);
+    Ns_Log(Debug, "*** CHAN DESTROY: %s", Tcl_GetChannelName(chaninfo->chan));
+    Tcl_UnregisterChannel(interp, chaninfo->chan);
+    ns_sockclose(chaninfo->socket);
+    chaninfo->socket = INVALID_SOCKET;
+    otherchaninfo = (ChanInfo *) chaninfo->otherchaninfo;
+
+    if (otherchaninfo->socket == INVALID_SOCKET) {
+    Ns_Log(Debug, "*** SSL DESTROY");
+        ns_free(otherchaninfo);
+        NsOpenSSLConnDestroy(chaninfo->sslconn);
+        ns_free(chaninfo);
+    }
 
     return TCL_OK;
 }
@@ -1604,9 +1681,10 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 static int
 ChanFlushProc (ClientData arg)
 {
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
+    ChanInfo *chaninfo = (ChanInfo *) arg;
 
-    NsOpenSSLConnFlush(sslconn);
+    Ns_Log(Debug, "ChanFlushProc %s", Tcl_GetChannelName(chaninfo->chan));
+    NsOpenSSLConnFlush(chaninfo->sslconn);
 
     return TCL_OK;
 }
@@ -1631,9 +1709,9 @@ ChanFlushProc (ClientData arg)
 static int
 ChanGetHandleProc(ClientData arg, int direction, ClientData *handlePtr)
 {
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
+    ChanInfo *chaninfo = (ChanInfo *) arg;
 
-    *handlePtr = (ClientData) sslconn->socket;
+    *handlePtr = (ClientData) chaninfo->sslconn->socket;
 
     return TCL_OK;
 }
@@ -1688,34 +1766,35 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     Tcl_DString          script;
     Tcl_Obj             *listPtr   = NULL;
     Tcl_Obj            **objv      = NULL;
-    int                  status    = TCL_ERROR;
+    int                  result    = TCL_ERROR;
     int                  objc      = 0;
 
-Ns_Log(Debug, "*** SockListenCallbackProc running");
+    Ns_Log(Debug, "*** SockListenCallbackProc running");
+
     interp  = Ns_TclAllocateInterp(lcbPtr->server);
     sslconn = Ns_OpenSSLSockAccept(sock, lcbPtr->sslcontext);
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
         return TCL_ERROR;
     }
-    status = CreateTclChannel(sslconn, interp);
-    if (status == TCL_OK) {
+    Ns_Log(Debug, "*** SockListenCallbackProc running 2");
+    result = CreateTclChannel(sslconn, interp);
+    if (result == TCL_OK) {
+        Ns_Log(Debug, "*** SockListenCallbackProc running 3");
         listPtr = Tcl_GetObjResult(interp);
         if (Tcl_ListObjGetElements(interp, listPtr, &objc, &objv) == TCL_OK && objc == 1) {
             Tcl_DStringInit(&script);
             Tcl_DStringAppend(&script, lcbPtr->script, -1);
             Tcl_DStringAppendElement(&script, Tcl_GetString(objv[0]));
-            /* XXX shouldn't we use TCL_EVAL_DIRECT or TCL_EVAL_GLOBAL as flag? */
-            status = Tcl_EvalEx(interp, script.string, script.length, 0);
-            if (status != TCL_OK) {
-                Ns_Log(Debug, "*** script STATUS not TCL_OK: %d", status);
-            }
+            result = Tcl_EvalEx(interp, script.string, script.length, 0);
             Tcl_DStringFree(&script);
         }
-    } else {
+        Ns_Log(Debug, "*** SockListenCallbackProc running 4");
+    }
+    if (result != TCL_OK) {
+        Ns_Log(Debug, "*** SockListenCallbackProc running 5");
         Ns_TclLogError(interp);
     }
-Ns_Log(Debug, "*** Before Dealloc");
     Ns_TclDeAllocateInterp(interp);
 
     return NS_TRUE;

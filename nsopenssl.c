@@ -1074,7 +1074,7 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
         case DriverSend:
 
             /* 
-             * Create the SSL layer on first I/O and run SSL handshake.
+             * If first connection, wrap SSL around the socket.
              */
 
             if (sslconn == NULL) {
@@ -1094,9 +1094,6 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 #endif
 
                 sslconn = NsOpenSSLConnCreate(sock->sock, ssldriver->sslcontext);
-                if (sslconn == NULL) {
-                    return NS_ERROR;
-                }
                 sslconn->refcnt++;
                 sslconn->peerport  = ssldriver->port;
                 sslconn->recvwait  = sock->driver->recvwait;

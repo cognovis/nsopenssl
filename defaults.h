@@ -32,3 +32,6 @@
 #define CONFIG_SEEDBYTES               "SeedBytes"
 #define NSOPENSSL_RECV                 0
 #define NSOPENSSL_SEND                 1
+
+#define CORE                           0
+#define TCLAPI                         1
