@@ -94,14 +94,14 @@ NsOpenSSLCreateConn (SOCKET sock, NsOpenSSLDriver * driver, int role, int connty
 
     DEBUG(where());
 
-    conn = (Ns_OpenSSLConn *) ns_calloc (1, sizeof *conn);
+    conn = (Ns_OpenSSLConn *) ns_calloc (1, sizeof(*conn));
 
     if (conn == NULL) {
         Ns_Log(Error, "Failed to create conn structure");
 	return NULL;
     }
 
-    memset (conn, 0, sizeof *conn);
+    memset (conn, 0, sizeof(*conn));
 
     conn->nextPtr           = NULL;
     conn->driver             = NULL;
@@ -321,7 +321,7 @@ NsOpenSSLRecv (Ns_OpenSSLConn * conn, void *buffer, int toread)
  */
 
 int
-NsOpenSSLSend (Ns_OpenSSLConn * conn, void *buffer, int towrite)
+NsOpenSSLSend (Ns_OpenSSLConn *conn, void *buffer, int towrite)
 {
     DEBUG(where());
 

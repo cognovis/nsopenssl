@@ -186,6 +186,17 @@ typedef struct Ns_OpenSSLConn {
 } Ns_OpenSSLConn;
 
 /*
+ * Session cache id management
+ */
+
+typedef struct SessionCacheId {
+    Ns_Mutex lock;
+    int id;
+} SessionCacheId;
+
+SessionCacheId *nextSessionCacheId;
+
+/*
  * Tcl Commands 
  */
 
@@ -245,30 +256,33 @@ typedef struct SSLTclCmd {
 
 #define CONFIG_SEEDBYTES               "SeedBytes"
 #define DEFAULT_SEEDBYTES              1024
+#define DEFAULT_MAXBYTES               1024000
 
 
 /*
  * ssl.c
  */
 
-extern Ns_OpenSSLConn * NsOpenSSLCreateConn (SOCKET sock,
-		NsOpenSSLDriver * driver, int role, int conntype);
-extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn * conn);
-extern int NsOpenSSLFlush (Ns_OpenSSLConn * conn);
-extern int NsOpenSSLRecv (Ns_OpenSSLConn * conn, void *buffer, int toread);
-extern int NsOpenSSLSend (Ns_OpenSSLConn * conn, void *buffer, int towrite);
-extern int Ns_OpenSSLFetchPage (Ns_DString * dsPtr, char *url, char *server);
-extern int Ns_OpenSSLFetchURL (Ns_DString * dsPtr, char *url,
-		Ns_Set * headers);
-extern void NsOpenSSLTrace (SSL * ssl, int where, int rc);
-extern int NsOpenSSLShutdown (SSL * ssl);
-extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * conn);
+extern Ns_OpenSSLConn *NsOpenSSLCreateConn (SOCKET sock,
+		NsOpenSSLDriver *driver, int role, int conntype);
+extern void NsOpenSSLDestroyConn (Ns_OpenSSLConn *conn);
+extern int NsOpenSSLFlush (Ns_OpenSSLConn *conn);
+
+extern int NsOpenSSLRecv (Ns_OpenSSLConn *conn, void *buffer, int toread);
+extern int NsOpenSSLSend (Ns_OpenSSLConn *conn, void *buffer, int towrite);
+
+extern int Ns_OpenSSLFetchPage (Ns_DString *dsPtr, char *url, char *server);
+extern int Ns_OpenSSLFetchURL (Ns_DString *dsPtr, char *url,
+		Ns_Set *headers);
+extern void NsOpenSSLTrace (SSL *ssl, int where, int rc);
+extern int NsOpenSSLShutdown (SSL *ssl);
+extern int Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn *conn);
 
 /*
  * tclcmds.c
  */
 
-extern int NsOpenSSLCreateCmds (Tcl_Interp * interp, void *arg);
+extern int NsOpenSSLCreateCmds (Tcl_Interp *interp, void *arg);
 
 extern Ns_TclInterpInitProc NsOpenSSLCreateCmds;
 extern Tcl_CmdProc NsTclOpenSSLCmd;
@@ -335,9 +349,14 @@ extern int Ns_OpenSSLContextKeyFileSet(char *server, char *module,
 extern char *Ns_OpenSSLContextKeyFileGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
 
-extern int Ns_OpenSSLContextProtocolSet(char *server, char *module, 
+extern int Ns_OpenSSLContextProtocolsSet(char *server, char *module, 
         Ns_OpenSSLContext *context, char *protocols);
-extern char *Ns_OpenSSLContextProtocolGet(char *server, char *module, 
+extern char *Ns_OpenSSLContextProtocolsGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *cipherSuite);
+extern char *Ns_OpenSSLContextCipherSuiteGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
 
 extern int Ns_OpenSSLContextCAFileSet(char *server, char *module, 
@@ -380,7 +399,8 @@ extern int Ns_OpenSSLContextTraceSet(char *server, char *module,
 extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
         Ns_OpenSSLContext *context);
 
-extern NsOpenSSLDriver *NsOpenSSLDriverCreate(char *server, char *module);
+extern NsOpenSSLDriver *NsOpenSSLDriverCreate(char *server, char *module, 
+        char *name);
 extern void NsOpenSSLDriverDestroy(NsOpenSSLDriver *driver);
 
 

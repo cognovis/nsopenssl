@@ -71,8 +71,10 @@ static void ThreadDynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
  * Get information from the config file
  */
  
-static Ns_OpenSSLContext *ConfigGetSSLContext (char *server, char *module, 
-	char *name, char *desc, char *type);
+static Ns_OpenSSLContext *ConfigSSLContextLoad (char *server, char *module,
+        char *name);
+static NsOpenSSLDriver *ConfigSSLDriverLoad (char *server, char *module,
+        char *name);
 	
 /*
  * SSL Operations on active connections
@@ -103,32 +105,65 @@ NS_EXPORT int Ns_ModuleVersion = 1;
 extern int
 NsOpenSSLModuleInit (char *server, char *module)
 {
-    NsOpenSSLDriver *driver;
     static int globalInit = 0;
+	Ns_Set *drivers;
+	Ns_Set *contexts;
+	int i = 0;
 
     /*
      * Things to initialize first time this module is loaded
      */
 
-    if (!globalInit && InitOpenSSL () == NS_ERROR) {
-	    Ns_Log(Error, MODULE, ": OpenSSL failed to initialize");
-	    return NS_ERROR;
+    if (!globalInit) {
+        if (InitOpenSSL() == NS_ERROR) {
+	        Ns_Log(Error, MODULE, ": OpenSSL failed to initialize");
+	        return NS_ERROR;
+        }
+        globalInit = 1;
     }
-    globalInit = 1;
  
+	/*
+     * Each virtual server can define multiple, named SSL contexts. Each
+     * context defines the characteristics for connections that use the
+     * context.
+	 */
+
+	contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
+	if (contexts != NULL) {
+	    for (i = 0; i < Ns_SetSize(contexts); ++i) {
+		    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	}
+
     /*
-     * A virtual server can have any number of SSL contexts in the nsd.tcl file
+     * Start up the driver(s) for this virtual server.  Each driver is tied to
+     * a specific, named SSL context.  A driver manages one SSL port; to get
+     * multiple SSL ports in one virtual server, you define a driver for each
+     * port in the virtual server's config area.
      */
 
-    if (SSLContextsInit(server, module) == NS_ERROR)
-        return NS_ERROR;
+	drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
+	if (drivers != NULL) {
+	    for (i = 0; i < Ns_SetSize(drivers); ++i) {
+            ConfigSSLDriverLoad(server, module, Ns_SetKey(drivers, i));
+	    }
+	} else {
+	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
+	}
+#if 0
+    /* XXX loop through defined drivers and initialize them */
+    if drivers exist
+        foreach driver:
+            NsOpenSSLDriverCreate;
+            NsOpenSSLDriverInit;
+            if error
+                NsOpenSSLDriverDestroy;
 
-    /*
-     * Start up the driver(s) for this virtual server
-     */
-
-    if (SSLDriversInit(server, module) == NS_ERROR)
+    if ((driver = NsOpenSSLDriverCreate (server, module)) == NULL)
         return NS_ERROR;
+#endif
 
     /*
      * Create the Tcl commands for this virtual server's interps
@@ -138,114 +173,6 @@ NsOpenSSLModuleInit (char *server, char *module)
 	    return NS_ERROR;
 
     return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * SSLContextsInit --
- *
- *      Load and initialize SSL contexts that are defined in the configuration
- *      file for the given virtual server.
- *
- * Results:
- *      NS_OK or NS_ERROR
- *
- * Side effects:
- *      NsOpenSSLContext structures are created
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SSLContextsInit(char *server, char *module)
-{
-	Ns_Set *contexts;
-	int i = 0;
-
-	/*
-     * Each virtual server can define multiple, named SSL contexts. Each
-     * context defines the characteristics for connections that use the
-     * context.
-	 */
-
-	contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
-
-	if (contexts != NULL) {
-	    for (i = 0; i < Ns_SetSize(contexts); ++i) {
-		    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
-	    }
-	} else {
-	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
-	}
-
-	return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * SSLDriversInit --
- *
- *      Start all drivers defined in the configuration file for the given
- *      virtual server.
- *
- * Results:
- *      NS_OK or NS_ERROR
- *
- * Side effects:
- *      None
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SSLDriversInit(char *server, char *module)
-{
-	Ns_Set *drivers;
-	char *key = NULL;
-	int i = 0;
-
-	/*
-	 * Each driver is tied to a specific, named SSL context.
-	 */
-
-	drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
-
-	if (drivers != NULL) {
-	    for (i = 0; i < Ns_SetSize(drivers); ++i) {
-		    key = Ns_SetKey(drivers, i);
-            NsOpenSSLDriverCreate(server, module, key, Ns_SetGet(drivers, key), "server");
-	    }
-	} else {
-	    Ns_Log (Notice, MODULE, ": No SSL contexts defined for server %s", server);
-	}
-
-	return NS_OK;
-
-    /*
-     * A driver manages one SSL port; to get multiple SSL ports in one virtual
-     * server, you define a driver for each port in the virtual server's config
-     * area.
-     */
-
-#if 0
-
-    /* XXX loop through defined drivers and initialize them */
-    if drivers exist
-        foreach driver:
-            NsOpenSSLDriverCreate;
-            NsOpenSSLDriverInit;
-            if error
-                NsOpenSSLDriverDestroy;
-
-
-    if ((driver = NsOpenSSLDriverCreate (server, module)) == NULL)
-        return NS_ERROR;
-
-
-#endif
 }
 
 /*
@@ -283,7 +210,6 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     int   sessionCacheSize;
     int   sessionCacheTimeout;
     int   trace;
-    Ns_DString ds;
 
     path = Ns_ConfigGetPath(server, module, name, NULL);
     role = Ns_ConfigGetValue(path, "role");
@@ -368,16 +294,52 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     if (Ns_ConfigGetBool(path, "sessioncache", &sessionCache) == NS_TRUE)
         Ns_OpenSSLContextSessionCacheSet(server, module, context, sessionCache);
 
-    if (Ns_ConfigGetInt(path, "sessioncachesize", &sessionsCacheSize) == NS_TRUE)
+    if (Ns_ConfigGetInt(path, "sessioncachesize", &sessionCacheSize) == NS_TRUE)
         Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize);
 
-    if (Ns_ConfigGetInt(path, "sessioncachetimeout", sessionCacheTimeout) == NS_TRUE)
+    if (Ns_ConfigGetInt(path, "sessioncachetimeout", &sessionCacheTimeout) == NS_TRUE)
         Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTimeout);
 
     if (Ns_ConfigGetBool(path, "trace", &trace) == NS_TRUE)
         Ns_OpenSSLContextTraceSet(server, module, context, trace);
 
     return context;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * ConfigSSLDriverLoad --
+ *
+ *       Load values for a given SSL context from the configuration file.
+ *
+ * Results:
+ *       Pointer to SSL Driver or NULL
+ *
+ * Side effects:
+ *       Memory is allocated
+ *
+ *----------------------------------------------------------------------
+ */
+
+static NsOpenSSLDriver *
+ConfigSSLDriverLoad (char *server, char *module, char *name)
+{
+    NsOpenSSLDriver *driver = NULL;
+    char *path         = NULL;
+    char *role         = NULL;
+
+    path = Ns_ConfigGetPath(server, module, name, NULL);
+    role = Ns_ConfigGetValue(path, "role");
+
+    driver = NsOpenSSLDriverCreate(server, module, name);
+    if (driver == NULL) {
+        Ns_Log(Error, MODULE, ": %s: SSL driver came back NULL in ConfigSSLDriverLoad",
+                server);
+	    return NULL;
+    }
+
+    return driver;
 }
 
 /*
@@ -400,8 +362,8 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
 static int
 InitOpenSSL (void)
 {
-    int i;
-    int num_locks;
+    int i, seedcnt = 0;
+    size_t num_locks;
     char buf[100];
 
     /*
@@ -412,7 +374,7 @@ InitOpenSSL (void)
         Ns_Log (Warning, MODULE ": OpenSSL memory callbacks failed in InitOpenSSL");
 
     num_locks = CRYPTO_num_locks ();
-    locks = Ns_Calloc (num_locks, sizeof *locks);
+    locks = Ns_Calloc (num_locks, sizeof(*locks));
     for (i = 0; i < num_locks; i++) {
         sprintf (buf, "openssl-%d", i);
         Ns_MutexSetName2 (locks + i, MODULE, buf);
@@ -452,8 +414,7 @@ InitOpenSSL (void)
      * Initialize the session cache id number generator.
      */
 
-    nextSessionCacheId = (SessionCacheId *) ns_calloc (1, sizeof *nextSessionCacheId);
-
+    nextSessionCacheId = (SessionCacheId *) ns_calloc (1, sizeof(*nextSessionCacheId));
     if (nextSessionCacheId == NULL) {
 	    Ns_Log (Error, MODULE,
 			    ": Failed to allocate memory for session id generator");
@@ -495,30 +456,39 @@ SeedPRNG (void)
     int i;
     double *buf_ptr = NULL;
     double *bufoffset_ptr = NULL;
+    char *path, *randomFile;
     size_t size;
-    int seedBytes;
-    int readBytes;
+    int seedBytes, readBytes, maxBytes;
 
     if (RAND_status ()) 
 	return NS_TRUE;
 
     Ns_Log (Notice, MODULE, ": Seeding OpenSSL's PRNG");
 
-    if (Ns_ConfigGetInt(path, "seedBytes", &seedBytes) == NS_FALSE) 
+    path = Ns_ConfigGetPath(MODULE, NULL);
+
+    if (Ns_ConfigGetInt(path, "seedbytes", &seedBytes) == NS_FALSE) 
 	    seedBytes = DEFAULT_SEEDBYTES;
+
+    if (Ns_ConfigGetInt(path, "maxbytes", &maxBytes) == NS_FALSE) 
+	    maxBytes = DEFAULT_MAXBYTES;
+
+    randomFile = Ns_ConfigGetValue(path, "randomfile");
 
     /*
      * Try to use the file specified by the user.
      */
 
     if (randomFile != NULL && access (randomFile, F_OK) == 0) {
-	if ((readBytes = RAND_load_file (randomFile, maxbytes))) {
-	    Ns_Log (Notice, MODULE, ": Obtained %d random bytes from %s",
-		    readBytes, randomFile);
-	} else {
-	    Ns_Log (Warning, MODULE, ": Unable to retrieve any random data from %s",
-		    randomFile);
-	}
+    	if ((readBytes = RAND_load_file (randomFile, maxBytes))) {
+	        Ns_Log (Notice, MODULE, ": Obtained %d random bytes from %s",
+		        readBytes, randomFile);
+	    } else {
+	        Ns_Log (Warning, MODULE, ": Unable to retrieve any random data from %s",
+		        randomFile);
+	    }
+    } else {
+        Ns_Log(Warning, MODULE, ": No randomFile set and/or found");
     }
 
     if (RAND_status ()) 
@@ -532,7 +502,7 @@ SeedPRNG (void)
      * buffer is used. It's on my list of research topics.
      */
 
-    size          = sizeof (double) * seedBytes;
+    size          = sizeof(double) * seedBytes;
     buf_ptr       = Ns_Malloc (size);
     bufoffset_ptr = buf_ptr;
 
@@ -541,7 +511,7 @@ SeedPRNG (void)
 	bufoffset_ptr++;
     }
 
-    RAND_add (buf_ptr, seedBytes, (long) seedBytes);
+    RAND_add (buf_ptr, seedBytes, (double) seedBytes);
     Ns_Free (buf_ptr);
 
     if (RAND_status ()) {
@@ -664,7 +634,7 @@ ThreadDynlockCreateCallback (char *file, int line)
     Ns_Mutex *lock;
     Ns_DString ds;
 
-    lock = ns_calloc (1, sizeof *lock);
+    lock = ns_calloc (1, sizeof(*lock));
 
     Ns_DStringInit (&ds);
     Ns_DStringVarAppend (&ds, "openssl: ", file, ": ");

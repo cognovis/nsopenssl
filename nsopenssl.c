@@ -54,17 +54,6 @@ static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
 static int SessionCacheIdGetNext (void);
 
 /*
- * Session cache id management
- */
-
-typedef struct SessionCacheId {
-    Ns_Mutex lock;
-    int id;
-} SessionCacheId;
-
-static SessionCacheId *nextSessionCacheId;
-
-/*
  * Driver initialization/destruction
  */
 
@@ -180,7 +169,7 @@ NsOpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *driver)
  * NsOpenSSLDriverCreate --
  *
  *       Create an SSL driver. There will be one driver for each virtual
- *       server/port comibination.
+ *       server/port combination.
  *
  * Results:
  *       An NsOpenSSLDriver* or NULL.
@@ -192,14 +181,14 @@ NsOpenSSLDriverInit(char *server, char *module, NsOpenSSLDriver *driver)
  */
 
 NsOpenSSLDriver *
-NsOpenSSLDriverCreate (char *server, char *module)
+NsOpenSSLDriverCreate (char *server, char *module, char *name)
 {
     NsOpenSSLDriver *driver = NULL;
 
-    driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof *driver);
+    driver = (NsOpenSSLDriver *) ns_calloc (1, sizeof(*driver));
 
     if (driver == NULL) {
-	    Ns_Log(Error, "%s: Failed to create driver structure", module);
+	    Ns_Log(Error, MODULE, ": %s: Failed to create driver structure", server);
 	    return NULL;
     }
 
@@ -209,10 +198,11 @@ NsOpenSSLDriverCreate (char *server, char *module)
     driver->module     = module;
     driver->configPath = Ns_ConfigGetPath(server, module, NULL);
 
+    /* XXX mutex names can't be name of module anymore */
     Ns_MutexSetName(&driver->lock, module);
 
     if (InitLocation(driver) == NS_ERROR) {
-        Ns_Log(Error, MODULE, ": InitLocation failed");
+        Ns_Log(Error, MODULE, ": %s: InitLocation failed", server);
 	    NsOpenSSLDriverDestroy(driver);
 	    return NULL;
     }
@@ -1429,7 +1419,7 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *role)
     }
 #endif
 
-    context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof *context);
+    context = (Ns_OpenSSLContext *) ns_calloc (1, sizeof(*context));
     if (context == NULL) {
         Ns_Log(Error, MODULE, ": Failed to create SSL context: %s, %s, %s", 
                 server, name, role);
@@ -1771,7 +1761,6 @@ static int
 OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 {
     Ns_Driver *driver = sock->driver;
-    Ns_OpenSSLConn *conn;
     int n, total;
 
     switch (cmd) {
@@ -1784,14 +1773,14 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 
 	if (sock->arg == NULL) {
 	    n = driver->recvwait;
-	    if (n > driver->sendwait) {
+	    if (n > driver->sendwait) 
     		n = driver->sendwait;
-	    }
+	   
 #if 0
 	    sock->arg = NsOpenSSLCreateConn(sock->sock, n, driver->arg);
 #endif
         /* XXX driver is supposed to be of type Ns_OpenSSLDriver ... fix */
-	    sock->arg = NsOpenSSLCreateConn(sock->sock, driver, "server", CONNTYPE_SERVER);
+	    sock->arg = NsOpenSSLCreateConn(sock->sock, driver->arg, ROLE_SSL_SERVER, CONNTYPE_SERVER);
 	    if (sock->arg == NULL) {
     		return -1;
 	    }
@@ -1864,4 +1853,4 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
 	    break;
     }
     return n;
-
+}
