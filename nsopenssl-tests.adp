@@ -94,13 +94,8 @@
 
 </table>
 
-<p>Client certificate support in nsopenssl brought to you by <a href="mailto:scott@scottg.net">Scott
-S. Goodwin</a>, <a href="http://scottg.net">http://scottg.net</a>. <a
-href="mailto:mayoff@arsdigita.com">Rob Mayoff</a> refactored the code
-and added some extra client cert support.
-
 <p>Copyright &copy; 2000 by Scott S. Goodwin
-<p>Send feedback, bugs and comments to <a href="mailto:scott@scottg.net">me</a>. Enjoy!!!
+<p>Send feedback, bugs and comments to <a href="mailto:scott@scottg.net">me</a>.
 
 </font>
 
