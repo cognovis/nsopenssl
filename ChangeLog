@@ -1,3 +1,8 @@
+2003-12-27  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.c, nsopenssl.h: Added changes from Jamie Rasmussen for
+      Windows build.
+
 2003-12-24  Scott Goodwin  <scott@scottg.net>
 
       * all: Lots of cleanup, initializing function variables.

@@ -791,9 +791,9 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     //}
 
     if (sslcontext == NULL) {
-        Tcl_SetResult(interp, "failed to use either named or default client SSL context", 
-                TCL_STATIC);
-        return TCL_ERROR;
+	Tcl_SetResult(interp, "failed to use either named or default client SSL context",
+		TCL_STATIC);
+	return TCL_ERROR;
     }
 
     sslconn = Ns_OpenSSLSockAccept(socket, sslcontext);
@@ -831,7 +831,7 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
  *
  * NsTclOpenSSLGetUrlObjCmd --
  *
- *      Implements ns_geturl.
+ *      Implements ns_openssl_geturl.
  *
  * Results:
  *      Tcl result.
@@ -870,16 +870,13 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
 
     url = Tcl_GetString(objv[1]);
 
-    if (url == '/') {
-
+    if (url[1] == '/') {
         if (Ns_FetchPage(&ds, url, Ns_TclInterpServer(interp)) != NS_OK) {
             Tcl_AppendResult(interp, "Could not get contents of URL \"",
                     url, "\"", NULL);
             goto done;
         }
-
     } else {
-
         /* Figure out which SSL context to use in creating the SSL connection */
         /* XXX update API to accept last arg of sslcontext */
         //if (sslctx) {
@@ -889,6 +886,13 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
         sslcontext = NsOpenSSLContextClientDefaultGet(thisServer->server);
         //}
 
+	if (sslcontext == NULL) {
+	    Tcl_SetResult(interp, 
+		    "failed to use either named or default client SSL context",
+		    TCL_STATIC);
+	    goto done;
+	}
+
         if (Ns_OpenSSLFetchUrl(thisServer->server, &ds, url, headers, sslcontext) != NS_OK) {
             Tcl_AppendResult(interp, "Could not get contents of URL \"",
                     url, "\"", NULL);
@@ -897,7 +901,6 @@ NsTclOpenSSLGetUrlObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *
             }
             goto done;
         }
-
     }
 
     if (objc == 3) {
@@ -1355,6 +1358,15 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
     } else {
         lcbPtr->sslcontext = NsOpenSSLContextServerDefaultGet(thisServer->server);
     }
+
+/* XXX check lcbPtr->sslcontext: if NULL, fail with error message !!! */
+#if 0
+    if (sslcontext == NULL) {
+	Tcl_SetResult(interp, "failed to use either named or default client SSL context",
+		TCL_STATIC);
+	return TCL_ERROR;
+    }
+#endif
 
 #if 0
     Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: sslcontext = (%p)", lcbPtr->sslcontext);

@@ -1,40 +1,43 @@
-nsopenssl
+TODO for nsopenssl:
 
-- Create OpenSSLCmd library (OpenSSLVerifyCert, ...); use for nsopenssl, nshttps, nsencrypt
-- Fix log messages: add MODULE, server; remove useless messages
+nsopenssl 3.0 release:
+  - Ensure sslcontexts are not NULL before accessing (mostly tclcmds.c)
+  - Remove all debug statements
+  - Clean up log messages; ditch ones that are not really useful
+  - Ensure clean shutdown operations (destroying all conns, then drivers, ...)
+  - Validate client disconnect doesn't tie up reader thread
+  - Ensure locking around structs is happening properly
+  - Review session cache code
+  - Clean up compiler warnings
+
+nsopenssl 3.1 release:
+  - Add client IP address to log messages
+  - Fix OpenSSL version reporting
+  - Review any commands that can be converted to TclObjs
+  - Automate the testing via wget, openssl command line
+
+nsopenssl 4.0 release:
+  - Revamp Tcl API -- major overhaul will require changing of Tcl proc names
+  - Add ability to introspect on Tcl API in/out socket conns; currently can
+    only do this with core driver conns.
+  - Change version number scheme to match AOLserver
+  - Review PRNG code
+  - Ignore any ciphers or protocols listed in config that weren't compiled into OpenSSL library
+  - Add benchmarking/performance testing
+
+
+General Wish List:
+  - Move https.tcl into C
+  - Give nsopenssl the ability to perform certificate operations so it can be
+    used to drive a CA process.
+  - Add CRL support
+  - Add OCSP support
+  - Add C and Tcl API for generation of CA / Client / Server cert
+  - Add ability to wrap other module conns with an Ns_OpenSSLWrap C API function
+  - Add ability to wrap ns_ldap conns
+  - Add SSL session cache capability across multiple servers
+  - Allow Tcl API sockcallbacks to be specified in config file (?)
+  - Create pool of reusable conn structures
 
 
 
-Goals:
-
-- Make nsopenssl handle multiple virtual servers with multiple ports per
-  virtual server while only loading nsopenssl.so once for AOLserver 4.x.
-
-- Give nsopenssl the ability to perform certificate operations so it can be
-  used to drive a CA process.
-
-TODO:
-
-- use NsOpenSSLServers hash to manage drivers on a per-server basis in OpenSSLDriverInit
-- validate driver init, operation, shutdown and free'ing
-- validate SSL context load, init, locking, use of, shutdown and free'ing operations
-- fix SSL handshake tracing
-- test accessing named SSL contexts for a particular virtual server
-- make sure struct locking is done where needed
-- set up session cache contexts and/or use 'nsopenssl-' prefix in session cache ids
-- extract global C API calls into libnsopenssl.so.
-- review Ns_Log statements for accuracy
-- ignore any ciphers or protocols listed in config that weren't compiled into OpenSSL library
-- fix OpenSSL version reporting
-- convert to TclObj commands
-- add IP address for logged events
-- allow for Tcl API sock servers/clients to have C or Tcl callback set via nsd.tcl
-- update Tcl API to allow for dynamically creating / using new SSL contexts
-- create pool of reusable conn structures
-- create Ns_OpenSSLWrap C API functions
-- update C and Tcl API to allow for generation of CA / Client / Server cert
-- add CRL support
-- add Online Certificate Status Protocol (OCSP) support.
-- create 'dup' function that can dup a named SSL context struct
-- clean up codebase to be completely consistent with AOLserver coding conventions
-- validate PRNG functioning

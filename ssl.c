@@ -35,6 +35,10 @@ static const char *RCSID =
     "@(#) $Header$, compiled: "
     __DATE__ " " __TIME__;
 
+#ifdef _WIN32
+#define SHUT_WR SD_SEND
+#endif
+
 #include "nsopenssl.h"
 
 #define BUFSIZE 2048
