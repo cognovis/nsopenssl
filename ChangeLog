@@ -1,5 +1,12 @@
 2001-08-20  Scott S. Goodwin  <scott@scottg.net>
 
+	* https.tcl: changed ns_httpsopen such that when it's passed a url
+	that does not begin with "https://", it will first try to prepend
+	the ServerLocation param, then the ServerHostname param, then the
+	ServerAddress param. If all of them fail, it will log an error,
+	but continue processing. Should probably make it a fatal error for
+	nsopenssl to load if one or more of these parameters are not set.
+
 	* ssl.c: bug fix: trying to use module and type from ccPtr after
 	ccPtr had been destroyed.
 

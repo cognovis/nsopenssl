@@ -60,14 +60,24 @@
 
 proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
     #
-    # Determine if url is local; prepend site address if so
+    # Determine if url is local; prepend site address if so. Not
+    # pretty but it'll do for now.
     #             
 
     if [string match /* $url] {
 	if {$module == ""} {
 	    set module "nsopenssl"
 	}
-        set host "https://[ns_config ns/server/[ns_info server]/module/$module ServerHostname]"
+	if {"[ns_config ns/server/[ns_info server]/module/$module ServerLocation]" != ""} {
+	    set host [ns_config ns/server/[ns_info server]/module/$module ServerLocation]
+	} elseif {"[ns_config ns/server/[ns_info server]/module/$module ServerHostname]" != ""} {
+	    set host "https://[ns_config ns/server/[ns_info server]/module/$module ServerHostname]"
+	} elseif {"[ns_config ns/server/[ns_info server]/module/$module ServerAddress]" != ""} {
+	    set host "https://[ns_config ns/server/[ns_info server]/module/$module ServerAddress]"
+	} else {
+	    ns_log error "ns_httpsopen: you need to set ServerLocation, \
+ServerHostname or ServerAddress in the configuration file for nsopenssl"
+	}
         set port [ns_config ns/server/[ns_info server]/module/$module ServerPort]   
         if { $port != 443 } {
             append host ":$port"
