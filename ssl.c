@@ -138,6 +138,22 @@ NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr)
 #endif
 
     if (ccPtr != NULL) {
+
+	/*
+	 * We disallow sending through the socket,
+	 * since BIO_free_all triggers SSL_shutdown,
+	 * which is sending something (2 bytes).
+	 * It confuses Win32 clients, since they automatically
+	 * close socket on FIN packet
+	 * only if there is no waiting received bytes
+	 * (it gives "connection reset" message in MSIE when
+	 * socket is freed by keepalive thread).
+	 */
+
+        if (ccPtr->sock != INVALID_SOCKET) {
+            shutdown(ccPtr->sock, SHUT_WR);
+        }
+
 	if (ccPtr->peercert != NULL) {
 	    X509_free (ccPtr->peercert);
 	    ccPtr->peercert = NULL;

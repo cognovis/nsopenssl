@@ -1,3 +1,11 @@
+2002-05-27  Scott Goodwin  <scott@scottg.net>
+
+	* ssl.c: in NsOpenSSLDestroyConn, if socket is valid, we shut it
+	down before freeing the ccPtr datastructures. Apparently, the
+	BIO_free_all causes two bytes to be sent over the socket that
+	confuses Win32 clients. Thanks to Piotr Szuca
+	<pszuca@radix.com.pl> for this addition.
+
 2002-04-23  Scott Goodwin  <scott@localhost.localdomain>
 
 	* Makefile: added 'install: all' directive that overrides the
