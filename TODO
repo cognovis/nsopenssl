@@ -46,3 +46,6 @@ Scott S. Goodwin - scott@scottg.net
 
 - Compilation against OpenSSL 0.9.6.
 
+- Load problems: last time I tested, nsopenssl could handle lots of
+  small files (< 100k) fairly well; but 1MB file downloads put the
+  server into deadlock. Same thing happens with nsssl module as well.
