@@ -1131,8 +1131,10 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
                     return NS_ERROR;
                 }
                 sslconn->refcnt++;
-                sslconn->peerport = ssldriver->port;
-                sock->arg         = (void *) sslconn;
+                sslconn->peerport  = ssldriver->port;
+                sslconn->recvwait  = sock->driver->recvwait;
+                sslconn->sendwait  = sock->driver->sendwait;
+                sock->arg          = (void *) sslconn;
             }
 
             /* 
@@ -1142,12 +1144,23 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             total = 0;
             do {
                 if (cmd == DriverSend) {
-		            //Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
+                    //Ns_Log(Debug, "OpenSSLProc: DriverSend: towrite = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    //    if (n < 0
+                    //            && ns_sockerrno == EWOULDBLOCK
+                    //            && Ns_SockWait(sock->sock, NS_SOCK_WRITE, sock->driver->sendwait) == NS_OK) {
+                    //        n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    //    }
                 } else {
-		            //Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
+                    //Ns_Log(Debug, "OpenSSLProc: DriverRecv: toread = %d", (int) bufs->iov_len);
                     n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    //if (n < 0
+                    //        && ns_sockerrno == EWOULDBLOCK
+                    //        && Ns_SockWait(sock->sock, NS_SOCK_READ, sock->driver->recvwait) == NS_OK) {
+                    //    n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    //}
                 }
+
                 if (n < 0 && total > 0) {
                     /* NB: Mask error if some bytes were read. */
                     n = 0;

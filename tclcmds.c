@@ -552,11 +552,6 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         return TCL_ERROR;
     }
 
-    // XXX first   = 1;
-    // XXX async   = 0;
-    // XXX sslctx  = 0;
-    // XXX timeout = -1;
-
     if (STREQ(Tcl_GetString(objv[1]), "-nonblock")) {
 
         if (objc == 4) {
@@ -626,7 +621,6 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     /*
      * Perform the connection.
      */
-
     sslconn = Ns_OpenSSLSockConnect(
             thisServer->server,
             Tcl_GetString(objv[first]),

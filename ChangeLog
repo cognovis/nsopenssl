@@ -1,3 +1,9 @@
+2004-02-29  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.h, nsopenssl.c, ssl.c: Added code to wait on sockets that
+      have nothing ready to read or write. Stops these conns from hogging the
+      CPU.
+
 2004-02-16  Scott Goodwin  <scott@scottg.net>
 
       * nsopenssl.h, ssl.c: Fixed SSL read loop problem; improved processing
