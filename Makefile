@@ -21,7 +21,7 @@ NSHOME   =  ../aolserver
 ifndef OPENSSL
 all:
 	@echo "** "
-	@echo "** OPNESSL variable not set."
+	@echo "** OPENSSL variable not set."
 	@echo "** nsopenssl.so will not be built."
 	@echo "** "
 install:   all
