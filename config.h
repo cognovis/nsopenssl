@@ -49,8 +49,9 @@
 #define CONFIG_CLIENT_CIPHERSUITE          "ClientCipherSuite"
 #define DEFAULT_CIPHERSUITE                SSL_DEFAULT_CIPHER_LIST
 
-#define	CONFIG_SERVER_PROTOCOL             "ServerProtocol"
-#define	CONFIG_CLIENT_PROTOCOL             "ClientProtocol"
+#define	CONFIG_SERVER_PROTOCOLS            "ServerProtocols"
+#define	CONFIG_CLIENT_PROTOCOLS            "ClientProtocols"
+#define DEFAULT_PROTOCOLS                  "ALL"
 
 #define CONFIG_SERVER_CERTFILE             "ServerCertFile"
 #define DEFAULT_SERVER_CERTFILE            "servercert.pem"
@@ -117,6 +118,12 @@
 /* If PRNG fails to seed, up this number in your nsd.tcl */
 #define CONFIG_SEEDBYTES                   "SeedBytes"
 #define DEFAULT_SEEDBYTES                  1024
+
+/* XXX are these defined in openssl somewhere */
+#define SSL_PROTOCOL_NONE  (0)
+#define SSL_PROTOCOL_SSLV2 (1<<0)
+#define SSL_PROTOCOL_SSLV3 (1<<1)
+#define SSL_PROTOCOL_TLSV1 (1<<2)
 
 char *ConfigStringDefault(char *module, char *path, char *name,
     char *def);

@@ -44,18 +44,6 @@ static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 #include "config.h"
 #include "thread.h"
 
-static struct {
-    char *name;
-    int bits;
-} protocolMap[] = {
-    { "sslv2", SSL_OP_NO_SSLv2 },
-    { "sslv3", SSL_OP_NO_SSLv3 },
-    { "tlsv1", SSL_OP_NO_TLSv1 },
-    /* If you add another protocol, don't forget to add it to bits below. */
-    { "all",   ~0              },
-    { NULL, 0 }
-};
-
 /* What happens if we run multiple copies of nsopenssl in the same server? */
 /* XXX test this -- set them to the same # and see if conflicts develop */
 /* XXX also, go look in OpenSSL sources to see how this is used */
@@ -71,9 +59,8 @@ static int MakeModuleDir(char *server, char *module, char **dirp);
  * Functions common to both client and server SSL
  */
 
-static int SetProtocols(NsOpenSSLContext *pdPtr, char *configLabel);
-static int SetCipherSuite(NsOpenSSLContext *pdPtr, char *configLabel,
-			  char *defaultValue);
+static int SetProtocols(NsOpenSSLContext *pdPtr);
+static int SetCipherSuite(NsOpenSSLContext *pdPtr);
 static int LoadAndCheckCertificate(NsOpenSSLContext *pdPtr);
 static int LoadCertificate(NsOpenSSLContext *pdPtr);
 static int LoadKey(NsOpenSSLContext *pdPtr);
@@ -259,6 +246,12 @@ NsServerSSLCreateDriver(char *server, char *module,
     sdPtr->keyfile =  ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_KEYFILE, sdPtr->module->dir, DEFAULT_SERVER_KEYFILE);
 
+    sdPtr->protocols = ConfigStringDefault(sdPtr->module->name, sdPtr->module->configPath,
+                          CONFIG_SERVER_PROTOCOLS, DEFAULT_PROTOCOLS);
+
+    sdPtr->cipherSuite = ConfigStringDefault(sdPtr->module->name, sdPtr->module->configPath,
+                          CONFIG_SERVER_CIPHERSUITE, DEFAULT_CIPHERSUITE);
+
     sdPtr->cafile = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_CAFILE, sdPtr->module->dir, DEFAULT_SERVER_CAFILE);
 
@@ -271,33 +264,18 @@ NsServerSSLCreateDriver(char *server, char *module,
     sdPtr->cacheSize = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_SESSIONCACHESIZE, DEFAULT_SERVER_SESSIONCACHESIZE);
 
-    sdPtr->timeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
+    sdPtr->cacheTimeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_SESSIONTIMEOUT, DEFAULT_SERVER_SESSIONTIMEOUT);
 
 
     if (
-	   ServerMakeContext(sdPtr)
- 	   == NS_ERROR
-
-	|| SetProtocols((NsOpenSSLContext *) sdPtr,
-	       CONFIG_SERVER_PROTOCOL)
-	   == NS_ERROR
-
-	|| SetCipherSuite((NsOpenSSLContext *) sdPtr,
-	       CONFIG_SERVER_CIPHERSUITE, DEFAULT_CIPHERSUITE)
-	   == NS_ERROR
-
-	|| LoadAndCheckCertificate((NsOpenSSLContext *) sdPtr)
-	   == NS_ERROR
-
-	|| LoadCACerts((NsOpenSSLContext *) sdPtr)
-	   == NS_ERROR
-
-        || InitSessionCache((NsOpenSSLContext *) sdPtr)
-           == NS_ERROR
-
-	|| ServerInitLocation(sdPtr)
-	   == NS_ERROR
+	   ServerMakeContext(sdPtr)                                == NS_ERROR
+	|| SetProtocols((NsOpenSSLContext *) sdPtr)                == NS_ERROR
+	|| SetCipherSuite((NsOpenSSLContext *) sdPtr)	           == NS_ERROR
+	|| LoadAndCheckCertificate((NsOpenSSLContext *) sdPtr)	   == NS_ERROR
+	|| LoadCACerts((NsOpenSSLContext *) sdPtr)	           == NS_ERROR
+        || InitSessionCache((NsOpenSSLContext *) sdPtr)            == NS_ERROR
+	|| ServerInitLocation(sdPtr)	                           == NS_ERROR
 
     ) {
 	NsServerSSLFreeDriver(sdPtr);
@@ -366,12 +344,17 @@ NsClientSSLCreateDriver(char *server, char *module,
     cdPtr->refcnt = 1;
     cdPtr->lsock = INVALID_SOCKET;
 
-    /* XXX need to check for NS_ERRORs from these */
     cdPtr->certfile = ConfigPathDefault(cdPtr->module->name, cdPtr->module->configPath,
 			  CONFIG_CLIENT_CERTFILE, cdPtr->module->dir, DEFAULT_CLIENT_CERTFILE);
 
     cdPtr->keyfile =  ConfigPathDefault(cdPtr->module->name, cdPtr->module->configPath,
 			  CONFIG_CLIENT_KEYFILE, cdPtr->module->dir, DEFAULT_CLIENT_KEYFILE);
+
+    cdPtr->protocols = ConfigStringDefault(cdPtr->module->name, cdPtr->module->configPath,
+                          CONFIG_CLIENT_PROTOCOLS, DEFAULT_PROTOCOLS);
+
+    cdPtr->cipherSuite = ConfigStringDefault(cdPtr->module->name, cdPtr->module->configPath,
+                          CONFIG_CLIENT_CIPHERSUITE, DEFAULT_CIPHERSUITE);
 
     cdPtr->cafile = ConfigPathDefault(cdPtr->module->name, cdPtr->module->configPath,
 			  CONFIG_CLIENT_CAFILE, cdPtr->module->dir, DEFAULT_CLIENT_CAFILE);
@@ -379,26 +362,22 @@ NsClientSSLCreateDriver(char *server, char *module,
     cdPtr->cadir = ConfigPathDefault(cdPtr->module->name, cdPtr->module->configPath,
 			  CONFIG_CLIENT_CADIR, cdPtr->module->dir, DEFAULT_CLIENT_CADIR);
 
+    cdPtr->cacheEnabled = ConfigBoolDefault(cdPtr->module->name, cdPtr->module->configPath,
+                          CONFIG_CLIENT_SESSIONCACHE, DEFAULT_CLIENT_SESSIONCACHE);
+
+    cdPtr->cacheSize = ConfigIntDefault(cdPtr->module->name, cdPtr->module->configPath,
+			  CONFIG_CLIENT_SESSIONCACHESIZE, DEFAULT_CLIENT_SESSIONCACHESIZE);
+
+    cdPtr->cacheTimeout = (long) ConfigIntDefault(cdPtr->module->name, cdPtr->module->configPath,
+			  CONFIG_CLIENT_SESSIONTIMEOUT, DEFAULT_CLIENT_SESSIONTIMEOUT);
+
     if (
-	   ClientMakeContext(cdPtr)
-	   == NS_ERROR
-
-	|| SetProtocols((NsOpenSSLContext *) cdPtr,
-	       CONFIG_CLIENT_PROTOCOL)
-	   == NS_ERROR
-
-	|| SetCipherSuite((NsOpenSSLContext *) cdPtr,
-	       CONFIG_CLIENT_CIPHERSUITE, DEFAULT_CIPHERSUITE)
-	   == NS_ERROR
-
-	|| LoadAndCheckCertificate((NsOpenSSLContext *) cdPtr)
-	   == NS_ERROR
-
-        || LoadCACerts((NsOpenSSLContext *) cdPtr)
-	   == NS_ERROR
-
-        || InitSessionCache((NsOpenSSLContext *) cdPtr)
-	   == NS_ERROR
+	   ClientMakeContext(cdPtr)                                == NS_ERROR
+	|| SetProtocols((NsOpenSSLContext *) cdPtr)                == NS_ERROR
+	|| SetCipherSuite((NsOpenSSLContext *) cdPtr)              == NS_ERROR
+	|| LoadAndCheckCertificate((NsOpenSSLContext *) cdPtr)	   == NS_ERROR
+        || LoadCACerts((NsOpenSSLContext *) cdPtr)                 == NS_ERROR
+        || InitSessionCache((NsOpenSSLContext *) cdPtr)            == NS_ERROR
 
     ) {
 	NsClientSSLFreeDriver(cdPtr);
@@ -453,6 +432,7 @@ NsServerSSLFreeDriver(NsServerSSLDriver *sdPtr)
     if (sdPtr != NULL) {
 	while ((scPtr = sdPtr->firstFreePtr) != NULL) {
 	    sdPtr->firstFreePtr = scPtr->nextPtr;
+            /* XXX shouldn't this be freeing scPtr piece by piece? */
 	    ns_free(scPtr);
 	}
 	Ns_MutexDestroy(&sdPtr->lock);
@@ -700,18 +680,15 @@ ClientMakeContext(NsClientSSLDriver *cdPtr)
  */
 
 static int
-SetCipherSuite(NsOpenSSLContext *pdPtr, char *configLabel,
-	       char *defaultValue)
+SetCipherSuite(NsOpenSSLContext *pdPtr)
 {
     int rc;
-    char *value = ConfigStringDefault(pdPtr->module->name, pdPtr->module->configPath,
-	configLabel, defaultValue);
 
-    rc = SSL_CTX_set_cipher_list(pdPtr->context, value);
+    rc = SSL_CTX_set_cipher_list(pdPtr->context, pdPtr->cipherSuite);
 
     if (rc == 0) {
 	Ns_Log(Error, "%s: error configuring %s cipher suite to \"%s\"",
-	    pdPtr->module->name, pdPtr->type, pdPtr->type, value);
+	    pdPtr->module->name, pdPtr->type, pdPtr->type, pdPtr->cipherSuite);
 	return NS_ERROR;
     }
 
@@ -736,51 +713,49 @@ SetCipherSuite(NsOpenSSLContext *pdPtr, char *configLabel,
  */
 
 static int
-SetProtocols(NsOpenSSLContext *pdPtr, char *configLabel)
+SetProtocols(NsOpenSSLContext *pdPtr)
 {
-    Ns_Set *config;
-    int     i, j, l;
-    char   *value;
+    char   *protocols;
     int     bits;
-    int     foundConfig;
 
-    foundConfig = 0;
     bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
 
-    config = Ns_ConfigGetSection(pdPtr->module->configPath);
-    if (config != NULL) {
-	for (i = 0, l = Ns_SetSize(config); i < l; i++) {
-	    if (!STRIEQ(Ns_SetKey(config, i), configLabel)) {
-		continue;
-	    }
+    protocols = ns_strdup(pdPtr->protocols);
+    protocols = Ns_StrToLower(protocols);
 
-	    value = Ns_SetValue(config, i);
+    if (strstr(protocols, "all") != NULL) {
 
-	    for (j = 0; protocolMap[j].name != NULL; j++) {
-		if (STRIEQ(value, protocolMap[j].name)) {
-		    bits &= ~protocolMap[j].bits;
-		    foundConfig = 1;
-		    break;
-		}
-	    }
+	Ns_Log(Notice, "%s: using all %s protocols SSLv2, SSLv3 and TLSv1",
+	       pdPtr->module->name, pdPtr->type);
+	bits = 1;
 
-	    if (protocolMap[j].name == NULL) {
-		Ns_Log(Error, "%s: unknown protocol for %s:\"%s\"",
-		    pdPtr->module->name, pdPtr->type, value);
-		return NS_ERROR;
-	    } else {
-		Ns_Log(Notice, "%s: Protocol '%s' turned on for %s",
-		    pdPtr->module->name, protocolMap[j].name, pdPtr->type);
-	    }
+    } else {
+	
+	if (strstr(protocols, "sslv2") != NULL) {
+	    Ns_Log(Notice, "%s: using %s protocol SSLv2",
+		   pdPtr->module->name, pdPtr->type);
+	    bits &= ~SSL_OP_NO_SSLv2;
+	}
+	
+	if (strstr(protocols, "sslv3") != NULL) {
+	    Ns_Log(Notice, "%s: using %s protocol SSLv3",
+		   pdPtr->module->name, pdPtr->type);
+	    bits &= ~SSL_OP_NO_SSLv3;
+	}
+	
+	if (strstr(protocols, "tlsv1") != NULL) {
+	    Ns_Log(Notice, "%s: using %s protocol TLSv1",
+		   pdPtr->module->name, pdPtr->type);
+	    bits &= ~SSL_OP_NO_TLSv1;
 	}
     }
+    
+    SSL_CTX_set_options(pdPtr->context, bits);
 
-    if (foundConfig) {
-	SSL_CTX_set_options(pdPtr->context, bits);
-    }
-
+    ns_free(protocols);
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -805,7 +780,7 @@ InitSessionCache(NsOpenSSLContext *pdPtr)
 {
     if (pdPtr->cacheEnabled) {
 
-	if (strcmp(pdPtr->type, SERVER_STRING) == 0) {
+	if (STREQ(pdPtr->type, SERVER_STRING)) {
 
 	    SSL_CTX_set_session_cache_mode(pdPtr->context,
 		SSL_SESS_CACHE_SERVER);
@@ -861,7 +836,7 @@ LoadAndCheckCertificate(NsOpenSSLContext *pdPtr)
 {
     if (pdPtr->certfile == NULL) {
 
-	if (strcmp(pdPtr->type, SERVER_STRING) == 0) {
+	if (STREQ(pdPtr->type, SERVER_STRING)) {
 	    Ns_Log(Error, "%s: a server certificate is mandatory but is not set",
 		   pdPtr->module->name);
 	    return NS_ERROR;

@@ -1,3 +1,8 @@
+2001-06-23  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: rewrote SetProtocols to allow the protocols to be set on
+	one line in nsd.tcl. Added protocols and cipherSuite to structs.
+
 2001-06-16  Scott S. Goodwin  <scott@scottg.net>
 
 	* init.c, nsopenssl.h: cleaned up InitSessionCache.

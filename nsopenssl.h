@@ -103,6 +103,8 @@ typedef struct NsServerSSLDriver {
     SSL_CTX                      *context;
     char                         *certfile;
     char                         *keyfile;
+    char                         *protocols;
+    char                         *cipherSuite;
     char                         *cafile;
     char                         *cadir;
     int                          cacheEnabled;
@@ -146,6 +148,8 @@ typedef struct NsClientSSLDriver {
     SSL_CTX                      *context;
     char                         *certfile;
     char                         *keyfile;
+    char                         *protocols;
+    char                         *cipherSuite;
     char                         *cafile;
     char                         *cadir;
     int                          cacheEnabled;
@@ -183,6 +187,8 @@ typedef struct NsOpenSSLContext {
     SSL_CTX                      *context;
     char                         *certfile;
     char                         *keyfile;
+    char                         *protocols;
+    char                         *cipherSuite;
     char                         *cafile;
     char                         *cadir;
     int                          cacheEnabled;
