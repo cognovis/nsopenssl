@@ -1,22 +1,5 @@
 Todo List:
 
-* Figure out if this is really a problem with nsopenssl; if so, fix it:
-
-Scott,
-
-I just discovered last night that there are still experiencing some problems
-with large files in nsopenssl-2.1a4. One of our page developers decided
-they really needed a 32994 byte javascript for a menu system (shakes head).
-Anyway, when I transfer the file, it gets a little scrambled. At byte 32000,
-extra random data is inserted. Last night I was get back a file that was
-almost 42Kbytes. This morning I'm only getting an extra 100 or so bytes.
-
-I'm running with AOLserver 3.3+arsdigita patches on Solaris 8.
-
-
-Keith
-
-
 ---------------------------------------------------------------------
 
 * Should probably fix form.tcl to do the right thing.
