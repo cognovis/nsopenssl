@@ -1,4 +1,21 @@
-2002-10-28    <scott@scottg.net>
+2002-11-21  Scott Goodwin  <scott@scottg.net>
+
+	* Makefile: Add a definition for $(CP). AOLserver 4.x uses the
+	install program instead of CP like AOLserver 3.x. Need to update
+	nsopenssl to compile using the appropriate method for 3.x and 4.x.
+
+	* nsopenssl.h: Moved Ns_OpenSSLConn's 'struct NsOpenSSLDriver
+	sdPtr' so that it is used for both 3.x and 4.x
+
+	* nsopenssl.c: Moved declaration of 'static NsOpenSSLDriver
+	firstSSLDriverPtr' so it is compiled with both 3.x and 4.x. Moved
+	OpenSSLProc's conn initializer outside of the switch statement so
+	that it runs first (might be a problem as this should probably
+	only pertain to DriverSends and Receives. Changed OpenSSLProc to
+	use recvmsg and sendmsg the same way nssock's SockProc does.
+
+
+2002-10-28  Scott Goodwin  <scott@scottg.net>
 
 	* https.tcl: Added ability to pass multiple files with ns_httpspost:
 
@@ -21,7 +38,7 @@
 
 	Also modified ns_httpspost to accept "" to mean the default timeout.
 
-2002-10-18    <scott@scottg.net>
+2002-10-18  Scott Goodwin  <scott@scottg.net>
 
 	* ca, tests: Moved the tests and ca to a separate test
 	harness. Decided it would be best to keep all tests in the test
@@ -30,14 +47,14 @@
 	that time whether to integrate the testing framework into the core
 	and modules.
 
-2002-10-07    <scott@scottg.net>
+2002-10-07  Scott Goodwin  <scott@scottg.net>
 
 	* ca: Created the 'ca' directory to generate and hold test CA
 	certs, web server certs, and client certs.
 
 	* tests: Added more files to the tests directory.
 
-2002-10-04    <scott@scottg.net>
+2002-10-04  Scott Goodwin  <scott@scottg.net>
 
 	* TODO: Added back to the repository.
 
@@ -57,7 +74,7 @@
 	confuses Win32 clients. Thanks to Piotr Szuca
 	<pszuca@radix.com.pl> for this addition.
 
-2002-04-23  Scott Goodwin  <scott@localhost.localdomain>
+2002-04-23  Scott Goodwin  <scott@scottg.net>
 
 	* Makefile: added 'install: all' directive that overrides the
 	'install: all' directive in Makefile.module so that I can have the

@@ -33,11 +33,6 @@
 
 /* @(#) $Header$ */
 
-#if 0				/* XXX need to add version.h to AOLserver core */
-/* XXX set this to have nsopenssl compile with aolserver 4.x */
-#define NS_MAJOR_VERSION 4
-#endif
-
 /* Required for Tcl channels to work */
 #ifndef USE_TCL8X
 #define USE_TCL8X
@@ -45,8 +40,8 @@
 
 #include <ns.h>
 
+/* openssl and nsd both define closesocket */
 #ifdef closesocket
-/* openssl and nsd both define this */
 #undef closesocket
 #endif
 
@@ -85,6 +80,7 @@
 #define SSL_CRYPTO_LIBRARY_NAME     SSL_LIBRARY_NAME
 #define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION
 
+
 struct Ns_OpenSSLConn;
 
 typedef struct NsOpenSSLDriver {
@@ -97,11 +93,11 @@ typedef struct NsOpenSSLDriver {
     char    *server;		/* Server name */
     char    *module;		/* Module name */
     char    *configPath;	/* E.g. ns/server/s1/module/nsopenssl */
-    char    *dir;			/* Module directory (on disk) */
+    char    *dir;		/* Module directory (on disk) */
     char    *location;		/* E.g. https://example.com:8443 */
     char    *address;		/* Advertised address */
     char    *bindaddr;		/* Bind address - might be 0.0.0.0 */
-    int      port;			/* Bind port */
+    int      port;		/* Bind port */
     int      bufsize;
     int      timeout;
 
@@ -141,13 +137,14 @@ typedef struct Ns_OpenSSLConn {
     char     peer[16];		/* Not used by nsd server conns in 4.x API */
     int      peerport;		/* Not used by nsd server conns in 4.x API */
 
-#ifndef NS_MAJOR_VERSION
+    /* XXX These two used to be ifdef'd out of AOLserver 4.x compiles
+       need to reevaluate. */
     struct Ns_OpenSSLConn *nextPtr;
     struct NsOpenSSLDriver *sdPtr;
-#endif
 
 } Ns_OpenSSLConn;
 
+
 typedef struct SSLTclCmd {
 
     char *name;

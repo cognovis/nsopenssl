@@ -17,3 +17,17 @@ TODO and IDEAS:
   tag-release and file-release to automatically update the release number in the file.
 
 
+
+QUESTIONS
+
+- for AS 4.x how do I know what the module's name is? I get it from sdPtr
+  in AS3. See nsopenssl.c NsOpenSSLGetModuleName.
+
+
+NOTES ON C CODE:
+
+- Ns_Sock * is passed to OpenSSLProc for AOLserver 4.x. This is important,
+  because the first element in Ns_Sock is a pointer to the Ns_Driver struct,
+  which contains all the info needed to run the conn. (How do I use this
+  info within nsopenssl? I could add a pointer to the driver at first i/o
+  within OpenSSLProc, then have that available for the conn always...)

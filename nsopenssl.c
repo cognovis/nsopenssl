@@ -62,6 +62,13 @@ NS_EXPORT int Ns_ModuleInit (char *server, char *module);
  * Private symbols
  */
 
+/*
+ * Common between AOLserver 3.x and 4.x
+ */
+
+/* Linked list of all configured nsopenssl instances */
+static NsOpenSSLDriver *firstSSLDriverPtr;
+
 #ifndef NS_MAJOR_VERSION
 
 /*
@@ -88,8 +95,6 @@ static Ns_ConnHostProc SockHost;
 static Ns_ConnDriverNameProc SockName;
 static Ns_ConnInitProc SockInit;
 
-/* Linked list of all configured nsopenssl instances */
-static NsOpenSSLDriver *firstSSLDriverPtr;
 
 static Ns_DrvProc sockProcs[] = {
     {Ns_DrvIdStart, (void *) SockStart},
@@ -175,7 +180,7 @@ Ns_ModuleInit (char *server, char *module)
  *	Return a pointer to the name this module was loaded as.
  *
  * Results:
- *	Pointer to SSL_CTX.
+ *	Pointer to string.
  *
  * Side effects:
  *
@@ -185,19 +190,12 @@ Ns_ModuleInit (char *server, char *module)
 extern char *
 NsOpenSSLGetModuleName (void)
 {
+#ifndef NS_MAJOR_VERSION
     NsOpenSSLDriver *sdPtr;
 
-#ifndef NS_MAJOR_VERSION
-    /* XXX - this looks like a problem anyway: what if the first driver
-     * XXX - is not this driver? Then I'll be getting the name from the wrong driver
-     * XXX - (and other functions will get the wrong SSL_CTX and such. I need to
-     * XXX - check into this */
     sdPtr = firstSSLDriverPtr;
     return sdPtr->module;
 #else
-    /* XXX - for AS 4.x, how do I know what this module's name is if it's stored
-     * XXX - in the core server's driver pointer linked list? I'll need to store
-     * XXX - that info within this module's dataspace somehow. */
     return "nsopenssl";
 #endif
 }
@@ -840,66 +838,56 @@ SockInit (void *arg)
  */
 
 static int
-OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, Ns_Buf * bufs, int nbufs)
+OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, struct iovec * bufs, int nbufs)
 {
     Ns_OpenSSLConn *scPtr;
     Ns_Driver *driver = sock->driver;
-    int n, total;
+    struct msghdr msg;
+    int n;
+
+    /*          
+     * Initialize the connection context on the first I/O.
+     */
+    
+    scPtr = sock->arg;
+    if (scPtr == NULL) {
+	scPtr = ns_calloc (1, sizeof (*scPtr));
+	scPtr->role = ROLE_SSL_SERVER;
+	scPtr->conntype = CONNTYPE_SSL_NSD;
+	scPtr->type = STR_NSD_SERVER;
+	scPtr->sdPtr = driver->arg;
+	scPtr->module = scPtr->sdPtr->module;
+	scPtr->bufsize = scPtr->sdPtr->bufsize;
+	scPtr->timeout = scPtr->sdPtr->timeout;
+	scPtr->context = scPtr->sdPtr->context;
+	scPtr->refcnt = 0;	/* always 0 for nsdserver conns */
+	scPtr->sock = sock->sock;
+	sock->arg = scPtr;
+	
+	if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) scPtr) != NS_OK) {
+	    return NS_ERROR;
+	}
+    }
 
     switch (cmd) {
     case DriverRecv:
+	n = recvmsg(sock->sock, &msg, 0);
+        if (n < 0 && errno == EWOULDBLOCK
+            && Ns_SockWait(sock->sock, NS_SOCK_READ, sock->driver->recvwait) == NS_OK) {
+            n = recvmsg(sock->sock, &msg, 0);
+        }
+        break;
+
     case DriverSend:
-
-	/*          
-	 * On first I/O, initialize the connection context.
-	 */
-
-	scPtr = sock->arg;
-	if (scPtr == NULL) {
-	    scPtr = ns_calloc (1, sizeof (*scPtr));
-	    scPtr->role = ROLE_SSL_SERVER;
-	    scPtr->conntype = CONNTYPE_SSL_NSD;
-	    scPtr->type = STR_NSD_SERVER;
-	    scPtr->sdPtr = driver->arg;
-	    scPtr->module = scPtr->sdPtr->module;
-	    scPtr->bufsize = sdPtr->bufsize;
-	    scPtr->timeout = sdPtr->timeout;
-	    scPtr->context = sdPtr->context;
-	    scPtr->refcnt = 0;	/* always 0 for nsdserver conns */
-	    scPtr->sock = sock->sock;
-	    sock->arg = scPtr;
-
-	    if (NsOpenSSLCreateConn ((Ns_OpenSSLConn *) scPtr) != NS_OK) {
-		return NS_ERROR;
-	    }
-	}
-
-	/*
-	 * Process each buffer one at a time.
-	 */
-
-	total = 0;
-	do {
-	    if (cmd == DriverSend) {
-		n =
-		    NsOpenSSLSend ((Ns_OpenSSLConn *) sock->arg, bufs->ns_buf,
-				   bufs->ns_len);
-	    } else {
-		n =
-		    NsOpenSSLRecv ((Ns_OpenSSLConn *) sock->arg, bufs->ns_buf,
-				   bufs->ns_len);
-	    }
-	    if (n < 0 && total > 0) {
-		/* NB: Mask error if some bytes were read. */
-		n = 0;
-	    }
-	    ++bufs;
-	    total += n;
-	} while (n > 0 && --nbufs > 0);
-	n = total;
-	break;
+	n = sendmsg(sock->sock, &msg, 0);
+        if (n < 0 && errno == EWOULDBLOCK
+            && Ns_SockWait(sock->sock, NS_SOCK_WRITE, sock->driver->sendwait) == NS_OK) {
+            n = sendmsg(sock->sock, &msg, 0);
+        }
+        break;
 
     case DriverKeep:
+	/* XXX Revisit */
 	if (sock->arg != NULL && NsOpenSSLFlush (sock->arg) == NS_OK) {
 	    n = 0;
 	} else {
@@ -908,6 +896,7 @@ OpenSSLProc (Ns_DriverCmd cmd, Ns_Sock * sock, Ns_Buf * bufs, int nbufs)
 	break;
 
     case DriverClose:
+	/* Revisit */
 	if (sock->arg != NULL) {
 	    (void) NsOpenSSLFlush (sock->arg);
 	    NsOpenSSLDestroyConn (sock->arg);
