@@ -1,3 +1,8 @@
+2001-03-12  root  <scott@scottg.net>
+
+	* tclcmds.c: Replaced Ns_GetConn with Ns_TclGetConn. Latest
+	AOLserver 4.x no longer offers Ns_GetConn.
+
 2000-12-12  root  <scott@>
 
 	* nsopenssl.c: made it a fatal error to bind to a socket already

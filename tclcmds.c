@@ -43,7 +43,7 @@ static void SetResultToX509Name(Tcl_Interp *interp, X509_NAME *name);
 static void SetResultToObjectName(Tcl_Interp *interp, ASN1_OBJECT *obj);
 static char *ValidTime(ASN1_UTCTIME *tm);
 static char *PEMCertificate(X509 *clientcert);
-static NsOpenSSLConnection *NsOpenSSLGetConn(void);
+static NsOpenSSLConnection *NsOpenSSLGetConn(Tcl_Interp *interp);
 
 
 /*
@@ -116,7 +116,7 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 
     } else if (STREQ(argv[1], "clientcert")) {
 
-	scPtr = NsOpenSSLGetConn();
+	scPtr = NsOpenSSLGetConn(interp);
 	clientcert = (scPtr == NULL) ? NULL : scPtr->clientcert;
 
 	if (STREQ(argv[2], "exists")) {
@@ -299,13 +299,14 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
  */
 
 static NsOpenSSLConnection *
-NsOpenSSLGetConn(void)
+NsOpenSSLGetConn(Tcl_Interp *interp)
 {
     Ns_Conn             *conn;
     NsOpenSSLConnection *cdPtr;
     char                *name;
 
-    conn = Ns_GetConn();
+    /* conn = Ns_GetConn();  ** Ns_GetConn is gone */
+    conn = Ns_TclGetConn(interp);
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
 	if (name != NULL && STREQ (name, DRIVER_NAME)) {
