@@ -1,3 +1,8 @@
+2001-12-27  Scott S. Goodwin  <scott@scottg.net>
+
+	* https.tcl: cleaned up the ns_httpspost proc and got rid of the
+	debugging statements.
+
 2001-12-12  Scott S. Goodwin  <scott@scottg.net>
 
 	* https.tcl: form.tcl doesn't respect the fact that a boundary

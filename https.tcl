@@ -221,8 +221,7 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     # shouldn't.
     #
 
-    ns_log notice "TYPE=$type"
-    set boundary "simple boundary"
+    set boundary "-----------------rc029340985544hg24309nto8899o9"
 
     if {[string match "" $rqset]} { 
 	set rqset [ns_set new rqset]
@@ -255,15 +254,8 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 		append querystring "$value\r\n"
 	    }
 	    append querystring "--${boundary}--\n"
-	    ns_log notice "QUERYIS::\n$querystring\n"
 	    ns_set put $rqset "Content-length" [string length $querystring]
-
-	    for { set i 0 } { $i < [ns_set size $rqset] } { incr i } {
-		ns_log Notice "RQSET:: [ns_set key $rqset $i] = [ns_set value $rqset $i]"
-	    }
-
 	} else {
-	    ns_log notice "QS string is empty"
 	    ns_set put $rqset "Content-length" "0"
 	}
     } else {
@@ -276,10 +268,8 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 		}
 		append querystring "$key=[ns_urlencode $value]"
 	    }
-	    ns_log notice "QS that will be sent is\n$querystring\n"
 	    ns_set put $rqset "Content-length" [string length $querystring]
 	} else {
-	    ns_log notice "QS string is empty"
 	    ns_set put $rqset "Content-length" "0"
 	}
     }
