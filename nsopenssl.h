@@ -35,7 +35,7 @@
 
 /* XXX remove from production */
 #define NSOPENSSL_DEBUG
-#define where() "__FUNCTION__, __FILE__, __LINE__"
+#define LOC() __FUNCTION__, __FILE__, __LINE__
 
 
 /* Required for Tcl channels to work */

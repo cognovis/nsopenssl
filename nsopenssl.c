@@ -579,6 +579,7 @@ Ns_OpenSSLContextModuleDirSet(char *server, char *module, Ns_OpenSSLContext *con
 {
     /* XXX lock struct */
     /* XXX validate that directory exists and is readable */
+    Ns_Log(Debug, "%s: %s: moduleDir set to %s", MODULE, server, moduleDir);
     context->moduleDir = moduleDir;
 
     return NS_OK;
@@ -618,7 +619,12 @@ Ns_OpenSSLContextModuleDirGet(char *server, char *module, Ns_OpenSSLContext *con
  *       end of your certificate file and they'll be passed to the client at
  *       connection time. If no certs are appended, no cert chain will be
  *       passed to the client.
- *       (XXX I need to validate the above statements)
+ *
+ *       Warning: you should have already set the context's moduleDir if you
+ *       don't want the default. Alternatively, the certFile can be an absolute
+ *       path. If it is a relative path, that path will be prepended by the
+ *       whatever the moduleDir parameter is set to in your nsd.tcl file, or by
+ *       the default moduleDir path.
  *
  * Results:
  *       NS_OK or NS_ERROR
@@ -633,33 +639,54 @@ int
 Ns_OpenSSLContextCertFileSet(char *server, char *module, Ns_OpenSSLContext *context, 
         char *certFile)
 {
+    char *certFilePath;
     int rc;
+    Ns_DString ds;
+
+    Ns_Log(Debug, "%s: %s: certFile set to %s", MODULE, server, certFile);
+
+    if (context->certFile == NULL) {
+        Ns_Log(Error, "%s: %s: certFile is NULL", MODULE, server);
+        return NS_ERROR;
+    }
 
     context->certFile = certFile;
 
-    if (access(certFile, F_OK) != 0) {
+    if (Ns_PathIsAbsolute(context->certFile)) {
+        certFilePath = context->certFile;
+    } else {
+        Ns_DStringInit(&ds);
+        Ns_MakePath(&ds, context->moduleDir, certFile, NULL);
+#if 0
+        Ns_DStringVarAppend(&ds, dir, value, NULL);
+#endif
+        certFilePath = Ns_DStringExport(&ds);
+        Ns_DStringFree(&ds);
+    }
+
+
+    if (access(certFilePath, F_OK) != 0) {
         Ns_Log(Error, "%s: %s: certificate file does not exist: %s", 
-                MODULE, server, certFile);
+                MODULE, server, certFilePath);
         return NS_ERROR;
     }
 
-    if (access(certFile, R_OK) != 0) {
+    if (access(certFilePath, R_OK) != 0) {
         Ns_Log(Error, "%s: %s: certificate file is not readable: %s", 
-                MODULE, server, certFile);
+                MODULE, server, certFilePath);
         return NS_ERROR;
     }
 
-    rc = SSL_CTX_use_certificate_chain_file (context->sslctx, certFile);
+    rc = SSL_CTX_use_certificate_chain_file (context->sslctx, certFilePath);
 
     if (rc == 0) {
-	    Ns_Log (Error, "%s: %s: error loading certificate \"%s\"", 
-                MODULE, server, certFile);
+        Ns_Log (Error, "%s: %s: error loading certificate \"%s\"", 
+               MODULE, server, certFilePath);
         return NS_ERROR;
     }
 
     return NS_OK;
 }
-
 
 /*
  *----------------------------------------------------------------------
@@ -702,29 +729,51 @@ Ns_OpenSSLContextCertFileGet(char *server, char *module, Ns_OpenSSLContext *cont
  *----------------------------------------------------------------------
  */
 
+/* XXX merge this with Ns_OpenSSLContextCertFileSet -- most code is duplicated */
 int
 Ns_OpenSSLContextKeyFileSet(char *server, char *module, Ns_OpenSSLContext *context,
         char *keyFile)
 {
     int rc;
+    Ns_DString ds;
+    char *keyFilePath;
+
+    Ns_Log(Debug, "%s: %s: keyFile set to %s", MODULE, server, keyFile);
+
+    if (context->keyFile == NULL) {
+        Ns_Log(Error, "%s: %s: keyFile is NULL", MODULE, server);
+        return NS_ERROR;
+    }
 
     context->keyFile = keyFile;
 
-    if (access(keyFile, F_OK) != 0) {
-        Ns_Log(Error, "%s: %s: key file does not exist: %s", MODULE, server, keyFile);
+    if (Ns_PathIsAbsolute(context->keyFile)) {
+        keyFilePath = context->keyFile;
+    } else {
+        Ns_DStringInit(&ds);
+        Ns_MakePath(&ds, context->moduleDir, keyFile, NULL);
+#if 0
+        Ns_DStringVarAppend(&ds, dir, value, NULL);
+#endif
+        keyFilePath = Ns_DStringExport(&ds);
+        Ns_DStringFree(&ds);
+    }
+
+    if (access(keyFilePath, F_OK) != 0) {
+        Ns_Log(Error, "%s: %s: key file does not exist: %s", MODULE, server, keyFilePath);
         return NS_ERROR;
     }
 
-    if (access(keyFile, R_OK) != 0) {
-        Ns_Log(Error, "%s: %s: key file is not readable: %s", MODULE, server, keyFile);
+    if (access(keyFilePath, R_OK) != 0) {
+        Ns_Log(Error, "%s: %s: key file is not readable: %s", MODULE, server, keyFilePath);
         return NS_ERROR;
     }
 
-    rc = SSL_CTX_use_PrivateKey_file(context->sslctx, keyFile, SSL_FILETYPE_PEM);
+    rc = SSL_CTX_use_PrivateKey_file(context->sslctx, keyFilePath, SSL_FILETYPE_PEM);
 
     if (rc == 0) {
-	    Ns_Log (Error, "%s: %s: error loading private key \"%s\"", 
-                MODULE, server, keyFile);
+        Ns_Log (Error, "%s: %s: error loading private key \"%s\"", 
+                MODULE, server, keyFilePath);
         return NS_ERROR;
     }
 
@@ -784,6 +833,8 @@ Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, Ns_OpenSSLContext *c
         char *cipherSuite)
 {
     int rc;
+
+    Ns_Log(Debug, "%s: %s: cipherSuite set to %s", MODULE, server, cipherSuite);
 
     context->cipherSuite = cipherSuite;
 
@@ -846,6 +897,7 @@ Ns_OpenSSLContextProtocolsSet(char *server, char *module, Ns_OpenSSLContext *con
     /* XXX Need to ifdef out the protocols and ciphers that aren't compiled*/
     /* XXX a particular instance of an OpenSSL library */
 
+    Ns_Log(Debug, "%s: %s: protocols set to %s", MODULE, server, protocols);
     context->protocols = protocols;
 
     if (protocols == NULL) {
@@ -930,6 +982,7 @@ Ns_OpenSSLContextCAFileSet(char *server, char *module, Ns_OpenSSLContext *contex
 {
     int rc;
 
+    Ns_Log(Debug, "%s: %s: caFile set to %s", MODULE, server, caFile);
     context->caFile = caFile;
 
     if (access(caFile, F_OK) != 0) { 
@@ -1002,6 +1055,7 @@ Ns_OpenSSLContextCADirSet(char *server, char *module, Ns_OpenSSLContext *context
     DIR *dirfp;
     int rc;
 
+    Ns_Log(Debug, "%s: %s: caDir set to %s", MODULE, server, caDir);
     context->caDir = caDir;
 
     dirfp = opendir(caDir);
@@ -1070,6 +1124,7 @@ Ns_OpenSSLContextPeerVerifySet(char *server, char *module, Ns_OpenSSLContext *co
 {
     /* XXX lock struct */
     /* XXX handle default case where peerVerify is NULL */
+    Ns_Log(Debug, "%s: %s: peerVerify set to %d", MODULE, server, peerVerify);
     context->peerVerify = peerVerify;
 
     if (peerVerify) {
@@ -1131,6 +1186,7 @@ Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, Ns_OpenSSLContex
     /* XXX lock struct */
     /* XXX how do I handle the default case? with varargs in func call? */
     /* XXX ah, no, preset all the default values in Ns_OpenSSLContextCreate */
+    Ns_Log(Debug, "%s: %s: peerVerifyDepth set to %d", MODULE, server, peerVerifyDepth);
     context->peerVerifyDepth = peerVerifyDepth;
 
     if (peerVerifyDepth >= 0) {
@@ -1191,6 +1247,7 @@ Ns_OpenSSLContextSessionCacheSet(char *server, char *module, Ns_OpenSSLContext *
         int sessionCache)
 {
     /* XXX lock struct */
+    Ns_Log(Debug, "%s: %s: sessionCache set to %d", MODULE, server, sessionCache);
     context->sessionCache = sessionCache;
 
     /* XXX need to make this work well with Timeout, Size set/get funcs */
@@ -1262,6 +1319,7 @@ Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, Ns_OpenSSLConte
         int sessionCacheSize)
 {
     /* XXX lock struct */
+    Ns_Log(Debug, "%s: %s: sessionCacheSize set to %d", MODULE, server, sessionCacheSize);
     context->sessionCacheSize = sessionCacheSize;
 
     return NS_OK;
@@ -1313,6 +1371,7 @@ Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, Ns_OpenSSLCo
         int sessionCacheTimeout)
 {
     /* XXX lock struct */
+    Ns_Log(Debug, "%s: %s: sessionCacheTimeout set to %d", MODULE, server, sessionCacheTimeout);
     context->sessionCacheTimeout = sessionCacheTimeout;
 
     return NS_OK;
@@ -1364,6 +1423,7 @@ Ns_OpenSSLContextTraceSet(char *server, char *module, Ns_OpenSSLContext *context
         int trace)
 {
     /* XXX lock struct */
+    Ns_Log(Debug, "%s: %s: trace set to %d", MODULE, server, trace);
     context->trace = trace;
 
     return NS_OK;

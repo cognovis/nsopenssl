@@ -71,11 +71,10 @@ static void ThreadDynlockDestroyCallback (struct CRYPTO_dynlock_value *dynlock,
  * Get information from the config file
  */
  
-static Ns_OpenSSLContext *ConfigSSLContextLoad (char *server, char *module,
-        char *name);
+static void ConfigSSLContextLoad (char *server, char *module, char *name);
 static NsOpenSSLDriver *ConfigSSLDriverLoad (char *server, char *module,
         char *name);
-	
+
 
 /*
  *----------------------------------------------------------------------
@@ -98,9 +97,9 @@ extern int
 NsOpenSSLModuleInit (char *server, char *module)
 {
     static int globalInit = 0;
-	Ns_Set *drivers;
-	Ns_Set *contexts;
-	int i = 0;
+    Ns_Set *drivers;
+    Ns_Set *contexts;
+    int i = 0;
 
     /*
      * Things to initialize first time this module is loaded
@@ -108,26 +107,31 @@ NsOpenSSLModuleInit (char *server, char *module)
 
     if (!globalInit) {
         if (InitOpenSSL() == NS_ERROR) {
-	        Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
-	        return NS_ERROR;
+            Ns_Log(Error, "%s: OpenSSL failed to initialize", MODULE);
+            return NS_ERROR;
         }
         globalInit = 1;
     }
  
-	/*
-     * Each virtual server can define multiple, named SSL contexts. Each
-     * context defines the characteristics for connections that use the
-     * context.
-	 */
+   /*
+    * Each virtual server can define multiple, named SSL contexts. Each
+    * context defines the characteristics for connections that use the
+    * context.
+    */
 
-	contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
-	if (contexts != NULL) {
-	    for (i = 0; i < Ns_SetSize(contexts); ++i) {
-		    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
-	    }
-	} else {
-	    Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
-	}
+    contexts = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "contexts", NULL));
+    if (contexts != NULL) {
+        for (i = 0; i < Ns_SetSize(contexts); ++i) {
+            Ns_Log(Notice, "%s: %s: Loading SSL context '%s'", MODULE, server, 
+                    Ns_SetKey(contexts, i));
+	    ConfigSSLContextLoad(server, module, Ns_SetKey(contexts, i));
+        }
+    } else {
+        Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
+    }
+
+    /* XXX TEMPORARY */
+    return NS_OK;
 
     /*
      * Start up the driver(s) for this virtual server.  Each driver is tied to
@@ -136,14 +140,15 @@ NsOpenSSLModuleInit (char *server, char *module)
      * port in the virtual server's config area.
      */
 
-	drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
-	if (drivers != NULL) {
-	    for (i = 0; i < Ns_SetSize(drivers); ++i) {
-            ConfigSSLDriverLoad(server, module, Ns_SetKey(drivers, i));
-	    }
-	} else {
-	    Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
-	}
+    drivers = Ns_ConfigGetSection(Ns_ConfigGetPath(server, module, "drivers", NULL));
+    if (drivers != NULL) {
+        for (i = 0; i < Ns_SetSize(drivers); ++i) {
+               ConfigSSLDriverLoad(server, module, Ns_SetKey(drivers, i));
+        }
+    } else {
+        Ns_Log (Notice, "%s: No SSL contexts defined for server %s", MODULE, server);
+    }
+
 #if 0
     /* XXX loop through defined drivers and initialize them */
     if drivers exist
@@ -183,7 +188,7 @@ NsOpenSSLModuleInit (char *server, char *module)
  *----------------------------------------------------------------------
  */
 
-static Ns_OpenSSLContext *
+static void
 ConfigSSLContextLoad (char *server, char *module, char *name)
 {
     Ns_OpenSSLContext *context = NULL;
@@ -203,29 +208,36 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     int   sessionCacheTimeout;
     int   trace;
 
-    path = Ns_ConfigGetPath(server, module, name, NULL);
-    role = Ns_ConfigGetValue(path, "role");
-    context = Ns_OpenSSLContextCreate(server, module);
-    if (context == NULL) {
-        Ns_Log(Error, "%s: SSL context came back NULL in ConfigSSLContextLoad",
-                MODULE);
-	    return NULL;
+    path = Ns_ConfigGetPath(server, module, "context", name, NULL);
+    if (path == NULL) {
+        Ns_Log(Error, "%s: %s: Failed to find SSL context '%s' in nsd.tcl",
+                MODULE, server, name);
+        return;
     }
 
-    /* XXX role is mandatory - refactor this code */
     role = Ns_ConfigGetValue(path, "role");
-    if (role != NULL) {
-        if (STREQ(role, "server")) {
-            context->role = ROLE_SERVER;
-        } else if (STREQ(role, "client")) {
-            context->role = ROLE_CLIENT;
-        } else {
-            Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context",
-                    MODULE, server);
-        }
-    } else {
-        Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context",
+    if (role == NULL) {
+        Ns_Log(Error, "%s: %s: role parameter is not defined for SSL context '%s'",
+                MODULE, server, name);
+        return;
+    }
+
+    context = Ns_OpenSSLContextCreate(server, module);
+    if (context == NULL) {
+        Ns_Log(Error, "%s: %s: SSL context came back NULL in ConfigSSLContextLoad",
                 MODULE, server);
+	    return;
+    }
+
+    if (STREQ(role, "server")) {
+        context->role = ROLE_SERVER;
+    } else if (STREQ(role, "client")) {
+        context->role = ROLE_CLIENT;
+    } else {
+        Ns_Log(Error, "%s: %s: role parameter must be 'client' or 'server' for SSL context '%s'",
+                MODULE, server, name);
+        Ns_OpenSSLContextDestroy(context);
+        return;
     }
    
     context->name = name;
@@ -313,7 +325,7 @@ ConfigSSLContextLoad (char *server, char *module, char *name)
     if (Ns_ConfigGetBool(path, "trace", &trace) == NS_TRUE)
         Ns_OpenSSLContextTraceSet(server, module, context, trace);
 
-    return context;
+    return;
 }
 
 /*
@@ -414,10 +426,8 @@ InitOpenSSL (void)
     }
 
     if (! RAND_status ()) {
-	    Ns_Log (Warning, "%s: PRNG fails to have enough entropy after %d tries", 
-			    MODULE, seedcnt);
-    } else {
-	    Ns_Log (Notice, "%s: PRNG is seeded properly", MODULE); 
+        Ns_Log (Warning, "%s: PRNG fails to have enough entropy after %d tries", 
+                MODULE, seedcnt);
     }
 
     /*
