@@ -1,8 +1,14 @@
-2001-11-23  Goodwin Scott S Civ 96 CG/SCTOB  <scott@scottg.net>
+2001-11-29  Scott S. Goodwin  <scott@scottg.net>
+	
+	* https.tcl: Added '--' to prepend the boundary markers in
+	ns_httpspost. I should have read the MIME RFC, as a boundary
+	marker that is declared as
 
-	* https:tcl: Added carriage (\r) returns to the already-present
-	linefeeds in the ns_httpspost routine. Also added a CR LF to the
-	last boundary marker.
+	    --myboundarymarkerhere
+
+	looks like this when actually used:
+
+	    ----myboundarymarkerhere
 
 2001-11-19  Scott S. Goodwin  <scott@scottg.net>
 
