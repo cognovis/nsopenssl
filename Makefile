@@ -43,6 +43,9 @@ else
     MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
 endif
 
+# Add static compilation ability, per grax3272
+#MODLIBS  =  -L$(OPENSSL)/lib ../openssl-0.9.6g/libssl.a ../openssl-0.9.6g/libcrypto.a#-lssl -lcrypto
+
 #
 # Compiler flags required by your module (-I for external headers goes here)
 #
@@ -113,76 +116,8 @@ install: all
 	$(MKDIR) $(INSTTCL)
 	$(CP) $(TCLMOD) $(INSTTCL)
 
-## TEST FRAMEWORK (under development)  ####################################################
-
-#
-# Install test code
-#
-TESTNSD = \
-	nsd.tcl
-
-TESTMOD =
-
-#TESTMOD = \
-#	server1-cert.pem \
-#	server1-key.pem \
-#	server1-key-unsecure.pem \
-#	client1-cert.pem \
-#	client1-key.pem \
-#	client1-key-unsecure.pem \
-#	server-cafile.pem
-
-TESTTCLMOD = \
-	ns_openssl_sockcallback.tcl \
-	ns_openssl_socklistencallback.tcl \
-	ns_openssl_socklisten.tcl \
-	ns_openssl_socknread.tcl \
-	ns_openssl_sockopen.tcl
-
-TESTPAG = \
-	index.adp
-
-install-tests: install ca
-	@if [ ! -d "$(INST)/servers/test" ]; then \
-		echo "** $(CP) -r $(INST)/servers/server1 $(INST)/servers/test;  $(MKDIR)"; \
-		$(CP) -r $(INST)/servers/server1 $(INST)/servers/test; \
-	fi
-
-	@if [ -n "$(TESTNSD)" ]; then \
-		$(MKDIR) $(INST)/tests; \
-		for i in $(TESTNSD); do \
-			$(CP) tests/$$i $(INST)/tests/nsopenssl.tcl; \
-		done \
-	fi
-
-	@if [ -n "$(TESTMOD)" ]; then \
-		$(MKDIR) $(INST)/servers/test/modules/nsopenssl; \
-		for i in $(TESTMOD); do \
-			$(CP) tests/$$i $(INST)/servers/test/modules/nsopenssl; \
-		done \
-	fi
-
-	@if [ -n "$(TESTTCLMOD)" ]; then \
-		$(MKDIR) $(INST)/servers/test/modules/tcl/nsopenssl; \
-		for i in $(TESTTCLMOD); do \
-			$(CP) tests/$$i $(INST)/servers/test/modules/tcl/nsopenssl; \
-		done \
-	fi
-
-	@if [ -n "$(TESTPAG)" ]; then \
-		$(MKDIR) $(INST)/servers/test/pages/nsopenssl; \
-		for i in $(TESTPAG); do \
-			$(CP) tests/$$i $(INST)/servers/test/pages/nsopenssl; \
-		done \
-	fi
-
-	@if [ ! -d "ca/ca1" ]; then \
-		cd ca; \
-		$(MAKE) ca1; \
-	fi
 
 ## NOTES #################################################################################
-
 
 # Solaris users *might* need the following, 
 # but you'll need to modify it to point to where 

@@ -1,3 +1,12 @@
+2002-10-18    <scott@scottg.net>
+
+	* ca, tests: Moved the tests and ca to a separate test
+	harness. Decided it would be best to keep all tests in the test
+	harness rather that the module, at least until tests for all the
+	modules and the core server are written. A decision can be made at
+	that time whether to integrate the testing framework into the core
+	and modules.
+
 2002-10-07    <scott@scottg.net>
 
 	* ca: Created the 'ca' directory to generate and hold test CA
