@@ -76,10 +76,8 @@ EnterSock(Tcl_Interp *interp, SOCKET sock);
 static int
 EnterDup(Tcl_Interp *interp, SOCKET sock);
 
-#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock);
-#endif
 
 static int
 GetSet(Tcl_Interp *interp, char *flist, int write, fd_set **setPtrPtr,
@@ -386,22 +384,15 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
             }
             peercert = (sslconn == NULL) ? NULL : SSL_get_peer_certificate(sslconn->ssl);
             if (STREQ(Tcl_GetString(objv[2]), "exists")) {
-                Tcl_SetResult(interp, peercert == NULL ? "0" : "1",
-                        TCL_STATIC);
+                Tcl_SetResult(interp, peercert == NULL ? "0" : "1", TCL_STATIC);
             } else if (STREQ(Tcl_GetString(objv[2]), "version")) {
-                sprintf(interp->result, "%lu",
-                        peercert == NULL
-                        ? 0 : X509_get_version(peercert) + 1);
+                sprintf(interp->result, "%lu", peercert == NULL ? 0 : X509_get_version(peercert) + 1);
             } else if (STREQ(Tcl_GetString(objv[2]), "serial")) {
-                sprintf(interp->result, "%ld",
-                        peercert == NULL
-                        ? 0
-                        :
+                sprintf(interp->result, "%ld", peercert == NULL ? 0 :
                         ASN1_INTEGER_get(X509_get_serialNumber(peercert)));
             } else if (STREQ(Tcl_GetString(objv[2]), "subject")) {
                 if (peercert != NULL) {
-                    SetResultToX509Name(interp,
-                            X509_get_subject_name(peercert));
+                    SetResultToX509Name(interp, X509_get_subject_name(peercert));
                 }
             } else if (STREQ(Tcl_GetString(objv[2]), "issuer")) {
                 if (peercert != NULL) {
@@ -410,9 +401,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
             } else if (STREQ(Tcl_GetString(objv[2]), "notbefore")) {
                 if (peercert != NULL) {
                     string = ValidTime(X509_get_notBefore(peercert));
-                    if (string == NULL) {
-                        Tcl_SetResult(interp, "error getting notbefore",
-                                TCL_STATIC);
+                    if (string == NULL) { Tcl_SetResult(interp, "error getting notbefore", TCL_STATIC);
                         status = TCL_ERROR;
                     } else {
                         Tcl_SetResult(interp, string, TCL_DYNAMIC);
@@ -422,8 +411,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 if (peercert != NULL) {
                     string = ValidTime(X509_get_notAfter(peercert));
                     if (string == NULL) {
-                        Tcl_SetResult(interp, "error getting notafter",
-                                TCL_STATIC);
+                        Tcl_SetResult(interp, "error getting notafter", TCL_STATIC);
                         status = TCL_ERROR;
                     } else {
                         Tcl_SetResult(interp, string, TCL_DYNAMIC);
@@ -431,15 +419,11 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj *CONST 
                 }
             } else if (STREQ(Tcl_GetString(objv[2]), "signature_algorithm")) {
                 if (peercert != NULL) {
-                    SetResultToObjectName(interp,
-                            peercert->cert_info->signature->
-                            algorithm);
+                    SetResultToObjectName(interp, peercert->cert_info->signature-> algorithm);
                 }
             } else if (STREQ(Tcl_GetString(objv[2]), "key_algorithm")) {
                 if (peercert != NULL) {
-                    SetResultToObjectName(interp,
-                            peercert->cert_info->key->algor->
-                            algorithm);
+                    SetResultToObjectName(interp, peercert->cert_info->key->algor-> algorithm);
                 }
             } else if (STREQ(Tcl_GetString(objv[2]), "pem")) {
                 if (peercert != NULL) {
@@ -622,7 +606,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
      * "0" otherwise.
      */
 
-    if (Ns_OpenSSLIsPeerCertValid(sslconn)) {
+    if (Ns_OpenSSLX509CertVerify(sslconn->ssl)) {
         Tcl_AppendElement(interp, "1");
     } else {
         Tcl_AppendElement(interp, "0");
@@ -755,7 +739,7 @@ NsTclOpenSSLSockAcceptObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
      * it? 
      */
 
-    if (Ns_OpenSSLIsPeerCertValid(sslconn)) {
+    if (Ns_OpenSSLX509CertVerify(sslconn)) {
         Tcl_AppendElement(interp, "1");
     } else {
         Tcl_AppendElement(interp, "0");
@@ -1230,7 +1214,7 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
     if (STREQ(addr, "*")) {
         addr = NULL;
     }
-    lcbPtr = ns_malloc(sizeof(SockListenCallback));
+    lcbPtr         = ns_malloc(sizeof(SockListenCallback));
     lcbPtr->server = thisServer->server;
     lcbPtr->script = strdup(Tcl_GetString(objv[3]));
     if (objc == 5) {
@@ -1307,7 +1291,6 @@ EnterDup(Tcl_Interp *interp, SOCKET sock)
     return EnterSock(interp, sock);
 }
 
-#if 0
 static int
 EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
 {
@@ -1317,7 +1300,6 @@ EnterDupedSocks(Tcl_Interp *interp, SOCKET sock)
     }                    
     return TCL_OK;
 }   
-#endif
 
 
 /*
@@ -1530,7 +1512,8 @@ ChanOutputProc(ClientData arg, char *buf, int towrite,
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
     int            rc      = 0;
 
-    rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
+    //rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
+    rc = NsOpenSSLConnOp(sslconn->ssl, (void *) buf, towrite, NSOPENSSL_SEND);
 
     return rc;
 }
@@ -1561,7 +1544,8 @@ ChanInputProc(ClientData arg, char *buf, int bufSize,
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
     int            rc      = 0;
 
-    rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
+    //rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
+    rc = NsOpenSSLConnOp(sslconn->ssl, (void *) buf, bufSize, NSOPENSSL_RECV);
 
     return rc;
 }
@@ -1707,7 +1691,8 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     int                  status    = TCL_ERROR;
     int                  objc      = 0;
 
-    interp = Ns_TclAllocateInterp(lcbPtr->server);
+Ns_Log(Debug, "*** SockListenCallbackProc running");
+    interp  = Ns_TclAllocateInterp(lcbPtr->server);
     sslconn = Ns_OpenSSLSockAccept(sock, lcbPtr->sslcontext);
     if (sslconn == NULL) {
         Tcl_AppendResult(interp, "SSL accept failed \"", NULL);
@@ -1716,19 +1701,21 @@ SSLSockListenCallbackProc(SOCKET sock, void *arg, int why)
     status = CreateTclChannel(sslconn, interp);
     if (status == TCL_OK) {
         listPtr = Tcl_GetObjResult(interp);
-        if (Tcl_ListObjGetElements(interp, listPtr, &objc, &objv) == TCL_OK && objc == 2) {
+        if (Tcl_ListObjGetElements(interp, listPtr, &objc, &objv) == TCL_OK && objc == 1) {
             Tcl_DStringInit(&script);
             Tcl_DStringAppend(&script, lcbPtr->script, -1);
             Tcl_DStringAppendElement(&script, Tcl_GetString(objv[0]));
-            Tcl_DStringAppendElement(&script, Tcl_GetString(objv[1]));
             /* XXX shouldn't we use TCL_EVAL_DIRECT or TCL_EVAL_GLOBAL as flag? */
             status = Tcl_EvalEx(interp, script.string, script.length, 0);
+            if (status != TCL_OK) {
+                Ns_Log(Debug, "*** script STATUS not TCL_OK: %d", status);
+            }
             Tcl_DStringFree(&script);
         }
-    }
-    if (status != TCL_OK) {
+    } else {
         Ns_TclLogError(interp);
     }
+Ns_Log(Debug, "*** Before Dealloc");
     Ns_TclDeAllocateInterp(interp);
 
     return NS_TRUE;

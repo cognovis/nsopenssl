@@ -43,7 +43,7 @@ VER_ = $(subst .,_,$(VER))
 MODNAME  = nsopenssl
 
 LIB      = nsopenssl
-LIBOBJS  = sslcontext.o ssl.o tclcmds.o
+LIBOBJS  = sslcontext.o ssl.o tclcmds.o x509.o
 LIBLIBS  = -L$(OPENSSL)/lib -lssl -lcrypto 
 
 MOD      = nsopenssl.so

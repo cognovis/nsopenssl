@@ -1111,9 +1111,11 @@ OpenSSLProc(Ns_DriverCmd cmd, Ns_Sock *sock, struct iovec *bufs, int nbufs)
             total = 0;
             do {
                 if (cmd == DriverSend) {
-                    n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                  //  n = NsOpenSSLConnSend(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    n = NsOpenSSLConnOp(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len, NSOPENSSL_SEND);
                 } else {
-                    n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                  //  n = NsOpenSSLConnRecv(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len);
+                    n = NsOpenSSLConnOp(sslconn->ssl, bufs->iov_base, (int) bufs->iov_len, NSOPENSSL_RECV);
                 }
                 if (n < 0 && total > 0) {
                     /* NB: Mask error if some bytes were read. */

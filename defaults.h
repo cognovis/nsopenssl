@@ -30,4 +30,5 @@
 #define CONFIG_MODULE_DIR              "ModuleDir"
 #define CONFIG_RANDOM_FILE             "RandomFile"
 #define CONFIG_SEEDBYTES               "SeedBytes"
-
+#define NSOPENSSL_RECV                 0
+#define NSOPENSSL_SEND                 1

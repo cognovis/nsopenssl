@@ -126,6 +126,7 @@ typedef struct NsOpenSSLDriver {
     int                       port;          /* Port the core driver is listening on */
     int                       refcnt;        /* Number of conns tied to this driver */
     struct NsOpenSSLContext  *sslcontext;    /* SSL context assoc with this driver */ 
+    int                       nagle;         /* 0 = use TCP default; 1 = turn off nagle */
 } NsOpenSSLDriver;
 
 /*
@@ -167,7 +168,7 @@ typedef struct Server {
 } Server;
 
 /*
- * sslconn.c
+ * ssl.c
  */
 
 extern NsOpenSSLConn *
@@ -180,17 +181,10 @@ extern int
 NsOpenSSLConnFlush(NsOpenSSLConn *sslconn);
 
 extern int 
-NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread);
-
-extern int 
 NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite);
 
 extern int
-NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn);
-
-/*
- * ssl.c
- */
+NsOpenSSLConnOp(SSL *ssl, void *buffer, int bytes, int type);
 
 extern NsOpenSSLConn *
 Ns_OpenSSLSockConnect(char *server, char *host, int port, int async,
@@ -339,4 +333,12 @@ NsOpenSSLContextTraceGet(char *server, NsOpenSSLContext *sslcontext);
 
 extern int 
 NsOpenSSLModuleInit(char *server);
+
+
+/*
+ * x509.c
+ */
+
+extern int
+Ns_OpenSSLX509CertValid(SSL *ssl);
 

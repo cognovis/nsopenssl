@@ -1,6 +1,13 @@
+2004-04-13  Scott Goodwin  <scott@scottg.net>
+
+      * x509.c: Added x509.c to hold certificate management functions.
+
 2004-04-09  Scott Goodwin  <scott@scottg.net>
 
       * All: Lot's of cleanup, deleting old comments, restructing some code.
+
+      * nsopenssl.h, ssl.c: Merged NsOpenSSLConnSend, NsOpenSSLConnRecv and
+      NsOpenSSLConnHandshake into one function, NsOpenSSLConnOp.
 
       * defaults.h, nsopenssl.h: Pulled default defines out of nsopenssl.h and
       into separate defaults.h file.
