@@ -69,14 +69,13 @@
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
-/* Doesn't work
- * include <openssl/opensslconf.h>
- * 
- * define OPENSSL_THREAD_DEFINES
- * ifndef THREADS
- * error "OpenSSL was not compiled with thread support!"
- * endif
- */
+ include <openssl/opensslconf.h>
+  
+ define OPENSSL_THREAD_DEFINES
+ /* requires newer version of OpenSSL */
+ ifndef OPENSSL_THREADS
+ error "OpenSSL was not compiled with thread support!"
+ endif
 
 #define MODULE                   "nsopenssl"
 
@@ -186,28 +185,10 @@ typedef struct Ns_OpenSSLConn {
 } Ns_OpenSSLConn;
 
 /*
- * Linked lists for managing structures
+ * Tcl Commands 
  */
 
-static Ns_OpenSSLContext *firstSSLContext = NULL;
-static Ns_OpenSSLConn    *firstSSLConn    = NULL;
-static NsOpenSSLDriver   *firstSSLDriver  = NULL;
-
-/*
- * Session cache id management
- */
- 
-typedef struct SessionCacheId {
-	Ns_Mutex lock;
-	int id;
-} SessionCacheId;
-
-static SessionCacheId *nextSessionCacheId;
-
-/*
- * Tcl Commands
- */
-
+/* XXX Move to one of the .c files */
 typedef struct SSLTclCmd {
     char *name;
     Tcl_CmdProc *proc;
@@ -318,8 +299,6 @@ extern int Ns_OpenSSLSockCallback (char *name, SOCKET sock,
 
 extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
 		Ns_SockProc *proc, void *arg);
-
-extern char *NsOpenSSLGetModuleName (void);
 
 extern Ns_OpenSSLContext *NsOpenSSLContextSockServerDefault (void);
 extern Ns_OpenSSLContext *NsOpenSSLContextSockClientDefault (void);
