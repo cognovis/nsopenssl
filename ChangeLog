@@ -3,7 +3,7 @@
 	* Makefile: added 'install: all' directive that overrides the
 	'install: all' directive in Makefile.module so that I can have the
 	install process install https.tcl as well (I need to update the
-	online docs). Thanks to Piotr Szuca.
+	online docs). Thanks to Pierre Asselin.
 
 2002-03-05  Scott S. Goodwin  <scott@scottg.net>
 
