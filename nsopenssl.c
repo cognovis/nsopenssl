@@ -222,36 +222,6 @@ static Ns_DrvProc sockProcs[] = {
 
 NS_EXPORT int Ns_ModuleVersion = 1;
 
-
-
-/* XXX Start of temporary because of incompatiblities between Beta 3 and 4. */
-
-#define ns_sockerrno errno
-#define ns_sockstrerror strerror
-
-static int ns_sockpair(SOCKET sv[2])
-{
-    return socketpair(PF_UNIX, SOCK_STREAM, 0, sv);
-}
-
-static int ns_sockclose(SOCKET sock)
-{
-    /* Need a shutdown() here? */
-    return close(sock);
-}
-
-static int Ns_SockRecv(SOCKET sock, void *buffer, int length, int timeout)
-{
-    return recv(sock, buffer, length, 0);
-}
-
-static int Ns_SockSend(SOCKET sock, void *buffer, int length, int timeout)
-{
-    return send(sock, buffer, length, 0);
-}
-
-/* XXX End of temporary changes */
-
 
 /*
  *----------------------------------------------------------------------
