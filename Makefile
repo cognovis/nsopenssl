@@ -15,6 +15,7 @@ endif
 MOD      =  nsopenssl.so
 OBJS     =  nsopenssl.o config.o init.o ssl.o thread.o tclcmds.o
 HDRS     =  nsopenssl.h tclcmds.h config.h thread.h
+TCLMOD   =  https.tcl
 
 ifdef BSAFE
     MODLIBS  =  -L$(OPENSSL)/lib -L$(BSAFE)/lib -lssl -lcrypto \
@@ -40,6 +41,13 @@ check-env:
 	    echo "** "; \
 	    exit 1; \
 	fi
+
+# This overrides the install directive in $(NSHOME)/include/Makefile.module
+install: all
+	$(RM) $(INSTBIN)/$(MOD)
+	$(CP) $(MOD) $(INSTBIN)
+	$(MKDIR) $(INSTTCL)/$(MODDIR)
+	$(CP) $(TCLMOD) $(INSTTCL)/$(MODDIR)
 
 #################################################################
 # NOTE!!! Solaris users *might* need the following, 

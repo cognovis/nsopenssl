@@ -1,3 +1,10 @@
+2002-04-23  Scott Goodwin  <scott@localhost.localdomain>
+
+	* Makefile: added 'install: all' directive that overrides the
+	'install: all' directive in Makefile.module so that I can have the
+	install process install https.tcl as well (I need to update the
+	online docs). Thanks to Piotr Szuca.
+
 2002-03-05  Scott S. Goodwin  <scott@scottg.net>
 
 	* nsopenssl.c, nsopenssl.c: cleaned up NsOpenSSLDriver and
