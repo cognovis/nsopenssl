@@ -11,8 +11,8 @@
 #define CLIENT_ROLE                    0
 #define DEFAULT_PROTOCOLS              "All"
 #define DEFAULT_CIPHER_LIST            SSL_DEFAULT_CIPHER_LIST
-#define DEFAULT_CERT_FILE              "certificate.pem"
-#define DEFAULT_KEY_FILE               "key.pem"
+//#define DEFAULT_CERT_FILE              "certificate.pem"
+//#define DEFAULT_KEY_FILE               "key.pem"
 #define DEFAULT_CA_FILE                "ca.pem"
 #define DEFAULT_CA_DIR                 "ca"
 #define DEFAULT_PEER_VERIFY            NS_FALSE

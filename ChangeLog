@@ -1,9 +1,18 @@
-2004-06-16 19:06  Dossy Shiobara <dossy@panoptic.com>
+2004-06-23  Scott Goodwin  <scott@scottg.net>
+
+        * sslcontext.c, defaults.h: Merged SSLContextCertInit,
+        SSLContextKeyFileInit, and the key/cert validate function into one.
+        Default certificate and key file paths no longer default to anything:
+        you must specify them specifically. Client SSL contexts no longer
+        fail to load if there is no certificate defined for it: SSL certs are
+        optional for clients.
+
+2004-06-16  Dossy Shiobara <dossy@panoptic.com>
 
 	* https.tcl: throwback from old http.tcl - should use
 	  _ns_https_read and not _ns_http_read
 
-2004-06-16 18:56  Dossy Shiobara <dossy@panoptic.com>
+2004-06-16  Dossy Shiobara <dossy@panoptic.com>
 
 	* https.tcl: new optional 'body' arg to ns_httpspost so the POST
 	  data can be computed before calling ns_httpspost and sent as the

@@ -64,9 +64,6 @@ SSLContextProtocolsInit(NsOpenSSLContext *sslcontext);
 static int
 SSLContextCertFileInit(NsOpenSSLContext *sslcontext);
 
-static int
-SSLContextValidateCertKey(NsOpenSSLContext *sslcontext);
-
 static void
 SSLContextPeerVerifyInit(NsOpenSSLContext *sslcontext);
 
@@ -156,12 +153,16 @@ NsOpenSSLContextCreate(char *server, char *name)
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, NULL);
     sslcontext->moduleDir = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
-    Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CERT_FILE, NULL);
-    sslcontext->certFile = Ns_DStringExport(&ds);
-    Ns_DStringTrunc(&ds, 0);
-    Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_KEY_FILE, NULL);
-    sslcontext->keyFile = Ns_DStringExport(&ds);
-    Ns_DStringTrunc(&ds, 0);
+    //Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CERT_FILE, NULL);
+    //sslcontext->certFile = Ns_DStringExport(&ds);
+    sslcontext->certFile = NULL;
+    //Ns_DStringTrunc(&ds, 0);
+
+    //Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_KEY_FILE, NULL);
+    //sslcontext->keyFile = Ns_DStringExport(&ds);
+    sslcontext->keyFile = NULL;
+    //Ns_DStringTrunc(&ds, 0);
+    
     Ns_HomePath(&ds, "servers", server, "modules", MODULE, DEFAULT_CA_FILE, NULL);
     sslcontext->caFile = Ns_DStringExport(&ds);
     Ns_DStringTrunc(&ds, 0);
@@ -291,7 +292,6 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
     if ( SSLContextCiphersInit(sslcontext)           == NS_ERROR
             || SSLContextProtocolsInit(sslcontext)   == NS_ERROR
             || SSLContextCertFileInit(sslcontext)    == NS_ERROR
-            || SSLContextValidateCertKey(sslcontext) == NS_ERROR
        ) {
         return NS_ERROR;
     }
@@ -1458,16 +1458,17 @@ SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
      * required for SSL servers.
      */
 
+    Ns_Log(Debug, "KeyFile = %s; CertFile = %s", sslcontext->keyFile, sslcontext->certFile);
+
     if (sslcontext->keyFile == NULL || sslcontext->certFile == NULL) {
-        if (sslcontext->role == CLIENT_ROLE) {
-            Ns_Log(Notice, "%s (%s): no cert or key defined for client SSL context %s (this may be ok)"
-                MODULE, sslcontext->server, sslcontext->name);
-            return NS_OK;
-        } else {
+        if (sslcontext->role == SERVER_ROLE) {
             Ns_Log(Error, "%s (%s): certificate and key files must both be defined for server SSL context %s",
                 MODULE, sslcontext->server, sslcontext->name);
             return NS_ERROR;
         }
+        Ns_Log(Notice, "%s (%s): no cert or key defined for client SSL context '%s' (this may be ok)"
+            MODULE, sslcontext->server, sslcontext->name);
+        return NS_OK;
     }
 
     /*
@@ -1502,36 +1503,14 @@ SSLContextCertFileInit(NsOpenSSLContext *sslcontext)
         return NS_ERROR;
     }
 
-    Ns_Log(Notice, "%s (%s): '%s' certificate and key loaded successfully", 
-        MODULE, sslcontext->server, sslcontext->name);
-
-    return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * SSLContextValidateCertKey --
- *
- *       Validates that the certificate and key matches
- *
- * Results:
- *       NS_OK or NS_ERROR
- *
- * Side effects:
- *
- *----------------------------------------------------------------------
- */
-
-static int
-SSLContextValidateCertKey(NsOpenSSLContext *sslcontext)
-{
     if (SSL_CTX_check_private_key(sslcontext->sslctx) == 0) {
         Ns_Log(Error, "%s (%s): '%s' private key does not match certificate",
                 MODULE, sslcontext->server, sslcontext->name);
         return NS_ERROR;
     }
+
+    Ns_Log(Notice, "%s (%s): '%s' certificate and key loaded successfully", 
+        MODULE, sslcontext->server, sslcontext->name);
 
     return NS_OK;
 }
