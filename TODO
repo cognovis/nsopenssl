@@ -1,16 +1,20 @@
 Things that need to be done:
 Scott S. Goodwin - scott@scottg.net
 
-- MSIE 5.x doesn't work with this module yet. It breaks the connection
-  to the server and then prompts you to select the client cert that
-  you want to use, then reconnects. You're supposed to get a
-  passphrase box from MSIE next, and something does popup, but there
-  is nowhere to type in the passphrase. I'm not sure whether the
-  problem is with the nsopenssl or MSIE, but I suspect nsopenssl isn't
-  handling the disconnect properly, because it used to work fine, and
-  I'm not sure what I changed that caused this problem. OpenSSL's
-  s_client works fine, as does Netscape. All three were using the same
-  client certificate.
+- ** It's working ** I'm not sure how or why, but MSIE now works when
+  nsopenssl is in client verify mode. Here's the original problem
+  description:
+
+  MSIE doesn't work with this module yet. It breaks the connection to
+  the server and then prompts you to select the client cert that you
+  want to use, then reconnects. You're supposed to get a passphrase
+  box from MSIE next, and something does popup, but there is nowhere
+  to type in the passphrase. I'm not sure whether the problem is with
+  the nsopenssl or MSIE, but I suspect nsopenssl isn't handling the
+  disconnect properly, because it used to work fine, and I'm not sure
+  what I changed that caused this problem. OpenSSL's s_client works
+  fine, as does Netscape. All three were using the same client
+  certificate.
 
 - Add more Tcl commands for examining the server's cert, generating
   keypairs and CSRs etc.
