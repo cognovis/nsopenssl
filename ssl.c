@@ -31,9 +31,7 @@
  * version of this file under either the License or the GPL.
  */
 
-static const char *RCSID =
-    "@(#) $Header$, compiled: "
-    __DATE__ " " __TIME__;
+static const char *RCSID = "@(#) $Header$, compiled: " __DATE__ " " __TIME__;
 
 #ifndef WIN32
 #include <sys/time.h>
@@ -47,30 +45,30 @@ static const char *RCSID =
 #define BUFSIZE 2048
 
 typedef struct Stream {
-    Ns_OpenSSLConn *ccPtr;
-    int error;
-    int cnt;
-    char *ptr;
-    char buf[BUFSIZE + 1];
+    Ns_OpenSSLConn    *ccPtr;
+    int                 error;
+    int                 cnt;
+    char               *ptr;
+    char                buf[BUFSIZE+1];
 } Stream;
 
 /*
  * Local functions defined in this file
  */
 
-static int CreateSSL (Ns_OpenSSLConn * ccPtr);
-static int CreateBIOStack (Ns_OpenSSLConn * ccPtr);
-static int RunSSLHandshake (Ns_OpenSSLConn * ccPtr);
-static int RunServerSSLHandshake (Ns_OpenSSLConn * ccPtr);
+static int            CreateSSL(Ns_OpenSSLConn *ccPtr);
+static int            CreateBIOStack(Ns_OpenSSLConn *ccPtr);
+static int            RunSSLHandshake(Ns_OpenSSLConn *ccPtr);
+static int            RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr);
 
-static Ns_OpenSSLConn *CreateSSLSockConn (int role, int conntype);
-static void DestroySSLSockConn (Ns_OpenSSLConn * ccPtr);
-static int GetLine (Stream * sPtr, Ns_DString * dsPtr);
-static int FillBuf (Stream * sPtr);
 
-#if 0				/* XXX not used right now, but may be later */
-static int SetNonBlocking (Ns_OpenSSLConn * ccPtr, int flag);
-#endif
+static Ns_OpenSSLConn *CreateSSLSockConn(int role, int conntype);
+static void           DestroySSLSockConn(Ns_OpenSSLConn *ccPtr);
+static int            GetLine(Stream *sPtr, Ns_DString *dsPtr);
+static int            FillBuf(Stream *sPtr);
+
+static int            SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag);
+
 
 /*
  *----------------------------------------------------------------------
@@ -91,23 +89,25 @@ static int SetNonBlocking (Ns_OpenSSLConn * ccPtr, int flag);
  */
 
 int
-NsOpenSSLCreateConn (Ns_OpenSSLConn * ccPtr)
+NsOpenSSLCreateConn(Ns_OpenSSLConn *ccPtr)
 {
-    if (CreateSSL (ccPtr) == NS_ERROR
-	|| CreateBIOStack (ccPtr) == NS_ERROR
-	|| RunSSLHandshake (ccPtr) == NS_ERROR) {
-	Ns_Log (Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
-		ccPtr->type);
-	SSL_set_shutdown (ccPtr->ssl,
-			  SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
-	NsOpenSSLShutdown (ccPtr->ssl);
-	NsOpenSSLDestroyConn (ccPtr);
+    if (
+	CreateSSL(ccPtr)           == NS_ERROR
+	|| CreateBIOStack(ccPtr)   == NS_ERROR
+	|| RunSSLHandshake(ccPtr)  == NS_ERROR
+    ) {
+	Ns_Log(Debug, "%s: %s: NsOpenSSLCreateConn failed", ccPtr->module,
+	    ccPtr->type);
+	SSL_set_shutdown(ccPtr->ssl, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+	NsOpenSSLShutdown(ccPtr->ssl);
+	NsOpenSSLDestroyConn(ccPtr);
 
 	return NS_ERROR;
     }
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -127,64 +127,50 @@ NsOpenSSLCreateConn (Ns_OpenSSLConn * ccPtr)
  */
 
 void
-NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr)
+NsOpenSSLDestroyConn(Ns_OpenSSLConn *ccPtr)
 {
     if (ccPtr->refcnt > 0)
-		return;
+        return;
 
 #if 0
-    Ns_Log (Debug, "%s: destroying conn (%p)",
-	    ccPtr == NULL ? DRIVER_NAME : ccPtr->module, ccPtr);
+    Ns_Log(Debug, "%s: destroying conn (%p)",
+	ccPtr == NULL ? DRIVER_NAME : ccPtr->module, ccPtr);
 #endif
 
     if (ccPtr != NULL) {
-
-	/*
-	 * We disallow sending through the socket,
-	 * since BIO_free_all triggers SSL_shutdown,
-	 * which is sending something (2 bytes).
-	 * It confuses Win32 clients, since they automatically
-	 * close socket on FIN packet
-	 * only if there is no waiting received bytes
-	 * (it gives "connection reset" message in MSIE when
-	 * socket is freed by keepalive thread).
-	 */
-
-        if (ccPtr->sock != INVALID_SOCKET) {
-            shutdown(ccPtr->sock, SHUT_WR);
-        }
-
 	if (ccPtr->peercert != NULL) {
-	    X509_free (ccPtr->peercert);
+	    X509_free(ccPtr->peercert);
 	    ccPtr->peercert = NULL;
 	}
 	if (ccPtr->io != NULL) {
-	    BIO_free_all (ccPtr->io);
+	    BIO_free_all(ccPtr->io);
 	    ccPtr->io = NULL;
 	}
 	if (ccPtr->ssl != NULL) {
-	    SSL_free (ccPtr->ssl);
+	    SSL_free(ccPtr->ssl);
 	    ccPtr->ssl = NULL;
 	}
+
 #ifndef NS_MAJOR_VERSION
 	if (ccPtr->sock != INVALID_SOCKET) {
-	    ns_sockclose (ccPtr->sock);
+	    ns_sockclose(ccPtr->sock);
 	    ccPtr->sock = INVALID_SOCKET;
 	}
 #endif
 
 	/*
 	 * We only free the connection structure if it's an
-	 * SSL socket type not tied to the comm API. If it is
-	 * tied to the comm API, it's freed when the comm driver
-	 * shuts down.
+         * SSL socket type not tied to the comm API. If it is
+         * tied to the comm API, it's freed when the comm driver
+         * shuts down.
 	 */
 
 	if (ccPtr->conntype == CONNTYPE_SSL_SOCK) {
-	    DestroySSLSockConn (ccPtr);
+	    DestroySSLSockConn(ccPtr);
 	}
     }
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -204,31 +190,42 @@ NsOpenSSLDestroyConn (Ns_OpenSSLConn * ccPtr)
  */
 
 int
-NsOpenSSLRecv (Ns_OpenSSLConn * ccPtr, void *buffer, int toread)
+NsOpenSSLRecv(Ns_OpenSSLConn *ccPtr, void *buffer, int toread)
 {
     int rc;
 
-#ifndef NS_MAJOR_VERSION
     do {
-        rc = BIO_read(ccPtr->io, buffer, toread);
+	rc = BIO_read(ccPtr->io, buffer, toread);
+
         /* Check to see if connection has closed */
         if (rc <= 0 && !BIO_should_retry(ccPtr->io)) {
             Ns_Log(Error, "%s: %s: connection closed by peer",
                     ccPtr->module, ccPtr->type);
             return NS_ERROR;
         }
+
+        /* Manage connection timeout explicitly */
+	/* Fixes bug where conn thread gets stuck in read from disconnected host */
+        if (rc == -1) {
+            if (ccPtr->recvtimer == 0) {
+                /* store current time into timer */
+                ccPtr->recvtimer = time(NULL);
+            } else if (time(NULL) > (ccPtr->recvtimer + ccPtr->timeout)) {  
+                /* connection timed out */
+                ccPtr->recvtimer = 0;
+                Ns_Log(Error, "%s: no response from client for %d seconds; assuming lost connection",
+                    DRIVER_NAME, ccPtr->timeout);
+                return NS_ERROR;
+            }
+        } else {
+            /* clear timer */
+            ccPtr->recvtimer = 0;
+        }
     } while (rc < 0);
-#else
-    rc = BIO_read (ccPtr->io, buffer, toread);
-    if (rc < 0 && BIO_should_retry (ccPtr->io)
-	&& Ns_SockWait (ccPtr->sock, NS_SOCK_READ, 2) == NS_OK) {
-	rc = BIO_read (ccPtr->io, buffer, toread);
-    }
-    Ns_Log (Debug, "read: %d %d\n", toread, rc);
-#endif
 
     return rc;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -248,145 +245,46 @@ NsOpenSSLRecv (Ns_OpenSSLConn * ccPtr, void *buffer, int toread)
  */
 
 int
-NsOpenSSLSend (Ns_OpenSSLConn * ccPtr, void *buffer, int towrite)
+NsOpenSSLSend(Ns_OpenSSLConn *ccPtr, void *buffer, int towrite)
 {
-
-#if 0
-    /* XXX how it was done in nsopenssl 1.1c */
-    return SSL_write (ccPtr->ssl, buffer, towrite);
-#endif
-
     int rc;
-    int total;
-
-    total = towrite;
 
     do {
-	rc = SSL_write (ccPtr->ssl, buffer, towrite);
-	if (rc > 0)
+	rc = SSL_write(ccPtr->ssl, buffer, towrite);
+        if (rc > 0)
 	    towrite -= rc;
 
-#if 0
-	/*
-	 * XXX On my Debian Linux box, the ns_openssl_socklisten (1) | connect test
-	 * always generates a SSL_ERROR_SYSCALL. I think that's because I close
-	 * the FD's on the server-side test too soon. The thing works anyway, but I need to
-	 * debug this and make whatever changes necessary to get a clean closure
-	 * for both ends.
-	 */
+        /* Check to see if connection has closed */
+        if (rc <= 0 && !BIO_should_retry(ccPtr->ssl->wbio)) {
+            Ns_Log(Error, "%s: %s: connection closed by peer",
+                    ccPtr->module, ccPtr->type);
+            return NS_ERROR;
+        }
 
-	if (rc <= 0) {
-	    switch (SSL_get_error (ccPtr->ssl, rc)) {
-	    case SSL_ERROR_NONE:
-		/* Perform operations */
-		Ns_Log (Error, "SSL_write failure (%d): SSL_ERROR_NONE", rc);
-		break;
-	    case SSL_ERROR_SSL:
-		/* Perform operations */
-		Ns_Log (Error, "SSL_write failure (%d): SSL_ERROR_SSL", rc);
-		break;
-		/*
-		 * The next four options are used with
-		 * non-blocking semantics. This may not be
-		 * applicable, depending on the underlying
-		 * socket/BIO 
-		 */
-	    case SSL_ERROR_WANT_READ:
-		Ns_Log (Error, "SSL_write failure (%d): SSL_ERROR_WANT_READ",
-			rc);
-		/*
-		 * Read failed because there was no data to read
-		 * and the process/thread was blocked waiting for
-		 * input. Recall SSL_read when data is
-		 * available. The select(2) system call is
-		 * normally used.
-		 */
-		break;
-	    case SSL_ERROR_WANT_WRITE:
-		Ns_Log (Error, "SSL_write failure (%d): SSL_ERROR_WANT_WRITE",
-			rc);
-		/*
-		 * Same as above for write. Because an SSL_read
-		 * occurs does not mean a .WANT_WRITE. error
-		 * will not appear as the SSL protocol involves
-		 * message exchange.
-		 */
-		break;
-	    case SSL_ERROR_WANT_CONNECT:
-		Ns_Log (Error,
-			"SSL_write failure(%d): SSL_ERROR_WANT_CONNECT", rc);
-		/*
-		 * If the application is using a connect BIO 
-		 * eg. BIO_new_connect(), this error can be
-		 * returned. Under Win32, it is possible to
-		 * detect a completing connection. This is not
-		 * as applicable under Unix.
-		 */
-		break;
-	    case SSL_ERROR_WANT_X509_LOOKUP:
-		Ns_Log (Error,
-			"SSL_write failure (%d): SSL_ERROR_WANT_X509_LOOKUP",
-			rc);
-		/*
-		 * This option is only returned if an application
-		 * callback (used to retrieve a certificate)
-		 * sets this condition for failure. The
-		 * application must recall SSL_read() when the
-		 * callback is able to find a certificate.
-		 */
-		break;
-	    case SSL_ERROR_SYSCALL:
-		Ns_Log (Error, "SSL_write failure (%d): SSL_ERROR_SYSCALL",
-			rc);
-		/*
-		 * Call failed because an operating system
-		 * dependent function failed. This is normally
-		 * fatal.  Use SSL_get_error for further
-		 * information.
-		 */
+        /* Manage connection timeout explicitly */
+	/* Fixes bug where conn thread gets stuck in read from disconnected host */
+        if (rc == -1) {
+            if (ccPtr->sendtimer == 0) {
+                /* store current time into timer */
+                ccPtr->sendtimer = time(NULL);
+            } else if (time(NULL) > (ccPtr->sendtimer + ccPtr->timeout)) {  
+                /* connection timed out */
+                ccPtr->sendtimer = 0;
+                Ns_Log(Error, "%s: no response from client for %d seconds; assuming lost connection",
+                    DRIVER_NAME, ccPtr->timeout);
+                return NS_ERROR;
+            }
+        } else {
+            /* clear timer */
+            ccPtr->sendtimer = 0;
+        }
 
-		if (errno == EINTR)
-		    continue;
-		if (errno > 0)
-		    Ns_Log (Error,
-			    "SSL handshake interrupted by system (Stop button pressed in browser?)");
-		else
-		    Ns_Log (Error,
-			    "Spurious SSL handshake interrupt (Usually just one of those OpenSSL confusions)");
-
-		break;
-	    case SSL_ERROR_ZERO_RETURN:
-		Ns_Log (Error,
-			"SSL_write failure (%d): SSL_ERROR_ZERO_RETURN", rc);
-		/*
-		 * Low level operating system call to read/write data
-		 * returned 0. For most operating systems, when using
-		 * sockets, this implies the other end of the socket
-		 * was closed.
-		 */
-		break;
-	    }
-	} else {
-	    towrite -= rc;
-	    Ns_Log (Notice,
-		    "NsOpenSSLSend: bytes written to client on this pass: %d of %d",
-		    rc, total);
-	    if (towrite == 0) {
-		return rc;
-	    } else if (towrite < 0) {
-		Ns_Log (Error,
-			"NsOpenSSLSend: %d bytes left to write, but rc went negative (%d), meaning an error occurred",
-			towrite, rc);
-		return rc;
-	    }
-	}
-#endif
-
-    } while (BIO_should_retry (ccPtr->ssl->wbio) &&
-	     BIO_should_write (ccPtr->ssl->wbio));
+    } while (BIO_should_retry(ccPtr->ssl->wbio) &&
+	     BIO_should_write(ccPtr->ssl->wbio));
 
     return rc;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -405,18 +303,19 @@ NsOpenSSLSend (Ns_OpenSSLConn * ccPtr, void *buffer, int towrite)
  */
 
 int
-NsOpenSSLFlush (Ns_OpenSSLConn * ccPtr)
+NsOpenSSLFlush(Ns_OpenSSLConn *ccPtr)
 {
     if (ccPtr->ssl == NULL) {
 	return NS_ERROR;
     } else {
-	if (BIO_flush (SSL_get_wbio (ccPtr->ssl)) < 1) {
-	    Ns_Log (Error, "%s: BIO returned error on flushing buffer",
-		    ccPtr->module);
-	}
+	if (BIO_flush(SSL_get_wbio(ccPtr->ssl)) < 1) {
+            Ns_Log(Error, "%s: BIO returned error on flushing buffer",
+                ccPtr->module);
+        }
 	return NS_OK;
     }
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -438,7 +337,7 @@ NsOpenSSLFlush (Ns_OpenSSLConn * ccPtr)
  */
 
 int
-NsOpenSSLShutdown (SSL * ssl)
+NsOpenSSLShutdown(SSL *ssl)
 {
     int i;
     int rc;
@@ -448,11 +347,12 @@ NsOpenSSLShutdown (SSL * ssl)
      */
 
     for (i = rc = 0; rc == 0 && i < 4; i++) {
-	rc = SSL_shutdown (ssl);
+        rc = SSL_shutdown(ssl);
     }
 
     return rc;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -471,31 +371,32 @@ NsOpenSSLShutdown (SSL * ssl)
  */
 
 void
-NsOpenSSLTrace (SSL * ssl, int where, int rc)
+NsOpenSSLTrace(SSL *ssl, int where, int rc)
 {
-    Ns_OpenSSLConn *ccPtr;
-    char *alertTypePrefix;
-    char *alertType;
-    char *alertDescPrefix;
-    char *alertDesc;
+    Ns_OpenSSLConn     *ccPtr;
+    char                *alertTypePrefix;
+    char                *alertType;
+    char                *alertDescPrefix;
+    char                *alertDesc;
 
-    ccPtr = (Ns_OpenSSLConn *) SSL_get_app_data (ssl);
+    ccPtr = (Ns_OpenSSLConn *) SSL_get_app_data(ssl);
 
     if (where & SSL_CB_ALERT) {
 	alertTypePrefix = "; alert type = ";
-	alertType = SSL_alert_type_string_long (rc);
+	alertType = SSL_alert_type_string_long(rc);
 	alertDescPrefix = "; alert desc = ";
-	alertDesc = SSL_alert_desc_string_long (rc);
+	alertDesc = SSL_alert_desc_string_long(rc);
     } else {
 	alertTypePrefix = alertType = "";
 	alertDescPrefix = alertDesc = "";
     }
 
-    Ns_Log (Notice, "%s: trace: %s: %s%s%s%s%s", ccPtr->module,
-	    ccPtr->type,
-	    SSL_state_string_long (ssl),
-	    alertTypePrefix, alertType, alertDescPrefix, alertDesc);
+    Ns_Log(Notice, "%s: trace: %s: %s%s%s%s%s", ccPtr->module,
+        ccPtr->type,
+	SSL_state_string_long(ssl),
+	alertTypePrefix, alertType, alertDescPrefix, alertDesc);
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -514,37 +415,38 @@ NsOpenSSLTrace (SSL * ssl, int where, int rc)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
+Ns_OpenSSLSockConnect(char *host, int port, int async, int timeout)
 {
     Ns_OpenSSLConn *ccPtr;
 
-    ccPtr = CreateSSLSockConn (ROLE_SSL_CLIENT, CONNTYPE_SSL_SOCK);
+    ccPtr = CreateSSLSockConn(ROLE_SSL_CLIENT, CONNTYPE_SSL_SOCK);
 
     /*
      * We leave the socket blocking until after the handshake.
      */
 
     if (timeout < 0) {
-	ccPtr->sock = Ns_SockConnect (host, port);
+        ccPtr->sock = Ns_SockConnect(host, port);
     } else {
-	ccPtr->sock = Ns_SockTimedConnect (host, port, timeout);
+        ccPtr->sock = Ns_SockTimedConnect(host, port, timeout);
     }
 
     if (ccPtr->sock == INVALID_SOCKET) {
-	DestroySSLSockConn (ccPtr);
-	return NULL;
+	DestroySSLSockConn(ccPtr);
+        return NULL;
     }
 
-    if (NsOpenSSLCreateConn (ccPtr) == NS_ERROR)
+    if (NsOpenSSLCreateConn(ccPtr) == NS_ERROR)
 	return NULL;
 
     if (async)
-	Ns_SockSetNonBlocking (ccPtr->sock);
+        Ns_SockSetNonBlocking(ccPtr->sock);
 
-    SSL_set_app_data (ccPtr->ssl, ccPtr);
+    SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     return ccPtr;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -564,10 +466,11 @@ Ns_OpenSSLSockConnect (char *host, int port, int async, int timeout)
  */
 
 extern SOCKET
-Ns_OpenSSLSockListen (char *address, int port)
+Ns_OpenSSLSockListen(char *address, int port)
 {
-    return Ns_SockListen (address, port);
+    return Ns_SockListen(address, port);
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -586,26 +489,27 @@ Ns_OpenSSLSockListen (char *address, int port)
  */
 
 Ns_OpenSSLConn *
-Ns_OpenSSLSockAccept (SOCKET sock)
+Ns_OpenSSLSockAccept(SOCKET sock)
 {
     Ns_OpenSSLConn *ccPtr = NULL;
 
     if (sock == INVALID_SOCKET)
-	return NULL;
+        return NULL;
 
-    ccPtr = CreateSSLSockConn (ROLE_SSL_SERVER, CONNTYPE_SSL_SOCK);
+    ccPtr = CreateSSLSockConn(ROLE_SSL_SERVER, CONNTYPE_SSL_SOCK);
     ccPtr->sock = sock;
 
-    if (NsOpenSSLCreateConn (ccPtr) == NS_ERROR) {
+    if (NsOpenSSLCreateConn(ccPtr) == NS_ERROR) {
 	return NULL;
     }
 
-    Ns_SockSetNonBlocking (ccPtr->sock);
+    Ns_SockSetNonBlocking(ccPtr->sock);
 
-    SSL_set_app_data (ccPtr->ssl, ccPtr);
+    SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     return ccPtr;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -633,10 +537,11 @@ Ns_OpenSSLSockAccept (SOCKET sock)
 /* XXX so the developer using the API won't have to */
 
 int
-Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc * proc, void *arg, int when)
+Ns_OpenSSLSockCallback(SOCKET sock, Ns_SockProc *proc, void *arg, int when)
 {
-    return Ns_SockCallback (sock, proc, arg, when);
+    return Ns_SockCallback(sock, proc, arg, when);
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -663,11 +568,11 @@ Ns_OpenSSLSockCallback (SOCKET sock, Ns_SockProc * proc, void *arg, int when)
 /* XXX so the developer using the API won't have to */
 
 extern int
-Ns_OpenSSLSockListenCallback (char *addr, int port, Ns_SockProc * proc,
-			      void *arg)
+Ns_OpenSSLSockListenCallback(char *addr, int port, Ns_SockProc *proc, void *arg)
 {
-    return Ns_SockListenCallback (addr, port, proc, arg);
+    return Ns_SockListenCallback(addr, port, proc, arg);
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -686,9 +591,9 @@ Ns_OpenSSLSockListenCallback (char *addr, int port, Ns_SockProc * proc,
  */
 
 extern int
-Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * ccPtr)
+Ns_OpenSSLIsPeerCertValid(Ns_OpenSSLConn *ccPtr)
 {
-    if (SSL_get_verify_result (ccPtr->ssl) == X509_V_OK) {
+    if (SSL_get_verify_result(ccPtr->ssl) == X509_V_OK) {
 	return NS_TRUE;
     } else {
 	return NS_FALSE;
@@ -719,8 +624,9 @@ Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * ccPtr)
        X509_V_ERR_CERT_CHAIN_TOO_LONG
        X509_V_ERR_CERT_REVOKED
        X509_V_ERR_APPLICATION_VERIFICATION
-     */
+    */
 }
+
 
 /*                     
  *----------------------------------------------------------------------
@@ -739,111 +645,112 @@ Ns_OpenSSLIsPeerCertValid (Ns_OpenSSLConn * ccPtr)
  *
  *----------------------------------------------------------------------
  */
-
+ 
 int
-Ns_OpenSSLFetchURL (Ns_DString * dsPtr, char *url, Ns_Set * headers)
+Ns_OpenSSLFetchURL(Ns_DString *dsPtr, char *url, Ns_Set *headers)
 {
     Ns_OpenSSLConn *ccPtr = NULL;
-    char *p;
-    Ns_DString ds;
-    Stream stream;
-    Ns_Request *request;
-    int status, tosend, n;
-
+    char           *p;
+    Ns_DString      ds;
+    Stream          stream;
+    Ns_Request     *request;
+    int             status, tosend, n;
+ 
     status = NS_ERROR;
-    Ns_DStringInit (&ds);
-
+    Ns_DStringInit(&ds);
+ 
     /*
      * Parse the URL and open a connection.
      */
-
-    Ns_DStringVarAppend (&ds, "GET ", url, " HTTP/1.0", NULL);
-    request = Ns_ParseRequest (ds.string);
+ 
+    Ns_DStringVarAppend(&ds, "GET ", url, " HTTP/1.0", NULL);
+    request = Ns_ParseRequest(ds.string);
     if (request == NULL || request->protocol == NULL ||
-	!STREQ (request->protocol, "https") || request->host == NULL) {
-	Ns_Log (Notice, "urlopen: invalid url '%s'", url);
-	goto done;
+        !STREQ(request->protocol, "https") || request->host == NULL) {
+        Ns_Log(Notice, "urlopen: invalid url '%s'", url);
+        goto done;
     }
     if (request->port == 0) {
-	request->port = 443;
+        request->port = 443;
     }
-    ccPtr = Ns_OpenSSLSockConnect (request->host, request->port, 0, 300);
+    ccPtr = Ns_OpenSSLSockConnect(request->host, request->port, 0, 300);
     if (ccPtr == NULL) {
-	Ns_Log (Error, "Ns_OpenSSLFetchURL: failed to connect to '%s'", url);
-	goto done;
+        Ns_Log(Error, "Ns_OpenSSLFetchURL: failed to connect to '%s'", url);
+        goto done;
     }
 
     /*
      * Send a simple HTTP GET request.
      */
-
-    Ns_DStringTrunc (&ds, 0);
-    Ns_DStringVarAppend (&ds, "GET ", request->url, NULL);
+ 
+    Ns_DStringTrunc(&ds, 0);
+    Ns_DStringVarAppend(&ds, "GET ", request->url, NULL);
     if (request->query != NULL) {
-	Ns_DStringVarAppend (&ds, "?", request->query, NULL);
+        Ns_DStringVarAppend(&ds, "?", request->query, NULL);
     }
-    Ns_DStringAppend (&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
+    Ns_DStringAppend(&ds, " HTTP/1.0\r\nAccept: */*\r\n\r\n");
     p = ds.string;
     tosend = ds.length;
     while (tosend > 0) {
-	n = NsOpenSSLSend (ccPtr, p, tosend);
-	if (n <= 0) {
-	    Ns_Log (Error, "urlopen: failed to send data to '%s'", url);
-	    goto done;
-	}
-	tosend -= n;
-	p += n;
+        n = NsOpenSSLSend(ccPtr, p, tosend);
+        if (n <= 0) {
+            Ns_Log(Error, "urlopen: failed to send data to '%s'",
+                   url);
+            goto done;
+        }
+        tosend -= n;
+        p += n;
     }
-
+ 
     /*
      * Buffer the socket and read the response line and then
      * consume the headers, parsing them into any given header set.
      */
-
+ 
     stream.cnt = 0;
     stream.error = 0;
     stream.ptr = stream.buf;
     stream.ccPtr = (Ns_OpenSSLConn *) ccPtr;
-    if (!GetLine (&stream, &ds)) {
-	goto done;
+    if (!GetLine(&stream, &ds)) {
+        goto done;
     }
-    if (headers != NULL && strncmp (ds.string, "HTTP", 4) == 0) {
-	if (headers->name != NULL) {
-	    ns_free (headers->name);
-	}
-	headers->name = Ns_DStringExport (&ds);
+    if (headers != NULL && strncmp(ds.string, "HTTP", 4) == 0) {
+        if (headers->name != NULL) {
+            ns_free(headers->name);
+        }
+        headers->name = Ns_DStringExport(&ds);
     }
     do {
-	if (!GetLine (&stream, &ds)) {
-	    goto done;
-	}
-	if (ds.length > 0
-	    && headers != NULL
-	    && Ns_ParseHeader (headers, ds.string, Preserve) != NS_OK) {
-	    goto done;
-	}
+        if (!GetLine(&stream, &ds)) {
+            goto done;
+        }
+        if (ds.length > 0
+            && headers != NULL
+            && Ns_ParseHeader(headers, ds.string, Preserve) != NS_OK) {
+            goto done;
+        }
     } while (ds.length > 0);
-
+ 
     /*
      * Without any check on limit or total size, foolishly read
      * the remaining content into the dstring.
      */
-
+ 
     do {
-	Ns_DStringNAppend (dsPtr, stream.ptr, stream.cnt);
-    } while (FillBuf (&stream));
+        Ns_DStringNAppend(dsPtr, stream.ptr, stream.cnt);
+    } while (FillBuf(&stream));
     if (!stream.error) {
-	status = NS_OK;
+        status = NS_OK;
     }
-
-  done:
+ 
+ done:
     if (request != NULL) {
-	Ns_FreeRequest (request);
+        Ns_FreeRequest(request);
     }
     if (ccPtr != NULL) {
-	NsOpenSSLDestroyConn (ccPtr);
+        NsOpenSSLDestroyConn(ccPtr);
     }
-    Ns_DStringFree (&ds);
+    Ns_DStringFree(&ds);
     return status;
 }
 
@@ -865,10 +772,11 @@ Ns_OpenSSLFetchURL (Ns_DString * dsPtr, char *url, Ns_Set * headers)
  */
 
 int
-Ns_OpenSSLFetchPage (Ns_DString * dsPtr, char *url, char *server)
+Ns_OpenSSLFetchPage(Ns_DString *dsPtr, char *url, char *server)
 {
-    return Ns_FetchPage (dsPtr, url, server);
+    return Ns_FetchPage(dsPtr, url, server);
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -887,26 +795,35 @@ Ns_OpenSSLFetchPage (Ns_DString * dsPtr, char *url, char *server)
  */
 
 static Ns_OpenSSLConn *
-CreateSSLSockConn (int role, int conntype)
+CreateSSLSockConn(int role, int conntype)
 {
     Ns_OpenSSLConn *ccPtr = NULL;
 
-    ccPtr = (Ns_OpenSSLConn *) ns_calloc (1, sizeof (Ns_OpenSSLConn));
-    ccPtr->module = NsOpenSSLGetModuleName ();
-    ccPtr->role = role;
-    ccPtr->conntype = conntype;
-    ccPtr->refcnt = 0;
-    ccPtr->sock = INVALID_SOCKET;
-    ccPtr->wsock = INVALID_SOCKET;
+    ccPtr = (Ns_OpenSSLConn *) ns_calloc(1, sizeof(Ns_OpenSSLConn));
+    if (ccPtr == NULL) {
+	Ns_Log(Error, "%s: no memory for SSL socket connection structure",
+	    DRIVER_NAME);
+	return NULL;
+    }
+
+    ccPtr->module    = NsOpenSSLGetModuleName();
+    ccPtr->role      = role;
+    ccPtr->conntype  = conntype;
+    ccPtr->refcnt    = 0;
+    ccPtr->sock      = INVALID_SOCKET;
+    ccPtr->wsock     = INVALID_SOCKET;
+    ccPtr->sendtimer = 0;
+    ccPtr->recvtimer = 0;
 
     if (role == ROLE_SSL_CLIENT) {
-	ccPtr->type = STR_SOCK_CLIENT;
+        ccPtr->type = STR_SOCK_CLIENT;
     } else {
-	ccPtr->type = STR_SOCK_SERVER;
+        ccPtr->type = STR_SOCK_SERVER;
     }
 
     return ccPtr;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -925,23 +842,24 @@ CreateSSLSockConn (int role, int conntype)
  */
 
 static void
-DestroySSLSockConn (Ns_OpenSSLConn * ccPtr)
+DestroySSLSockConn(Ns_OpenSSLConn *ccPtr)
 {
     if (ccPtr->sock != INVALID_SOCKET) {
-	ns_sockclose (ccPtr->sock);
+	ns_sockclose(ccPtr->sock);
 	ccPtr->sock = INVALID_SOCKET;
     }
 
     if (ccPtr->wsock != INVALID_SOCKET) {
-	ns_sockclose (ccPtr->wsock);
+	ns_sockclose(ccPtr->wsock);
 	ccPtr->wsock = INVALID_SOCKET;
     }
-
-    ns_free (ccPtr);
+    
+    ns_free(ccPtr);
     ccPtr = NULL;
 
     return;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -960,25 +878,26 @@ DestroySSLSockConn (Ns_OpenSSLConn * ccPtr)
  */
 
 static int
-FillBuf (Stream * sPtr)
+FillBuf(Stream *sPtr)  
 {
     int n;
 
-    n = NsOpenSSLRecv (sPtr->ccPtr, sPtr->buf, BUFSIZE);
+    n = NsOpenSSLRecv(sPtr->ccPtr, sPtr->buf, BUFSIZE);
     if (n <= 0) {
-	if (n < 0) {
-	    Ns_Log (Error, "Ns_OpenSSLFetchURL: "
-		    "failed to fill socket stream buffer");
-	    sPtr->error = 1;
-	}
-	return NS_FALSE;
-    }
+        if (n < 0) {                  
+            Ns_Log(Error, "Ns_OpenSSLFetchURL: "
+                   "failed to fill socket stream buffer");
+            sPtr->error = 1;
+        }
+        return NS_FALSE;
+    } 
     sPtr->buf[n] = '\0';
     sPtr->ptr = sPtr->buf;
     sPtr->cnt = n;
 
     return NS_TRUE;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -998,36 +917,37 @@ FillBuf (Stream * sPtr)
  */
 
 static int
-GetLine (Stream * sPtr, Ns_DString * dsPtr)
+GetLine(Stream *sPtr, Ns_DString *dsPtr)
 {
     char *eol;
     int n;
-
-    Ns_DStringTrunc (dsPtr, 0);
+    
+    Ns_DStringTrunc(dsPtr, 0);
     do {
-	if (sPtr->cnt > 0) {
-	    eol = strchr (sPtr->ptr, '\n');
-	    if (eol == NULL) {
-		n = sPtr->cnt;
-	    } else {
-		*eol++ = '\0';
-		n = eol - sPtr->ptr;
-	    }
-	    Ns_DStringNAppend (dsPtr, sPtr->ptr, n - 1);
-	    sPtr->ptr += n;
-	    sPtr->cnt -= n;
-	    if (eol != NULL) {
-		n = dsPtr->length;
-		if (n > 0 && dsPtr->string[n - 1] == '\r') {
-		    Ns_DStringTrunc (dsPtr, n - 1);
-		}
-		return NS_TRUE;
-	    }
-	}
-    } while (FillBuf (sPtr));
+        if (sPtr->cnt > 0) {
+            eol = strchr(sPtr->ptr, '\n');
+            if (eol == NULL) {
+                n = sPtr->cnt;
+            } else {
+                *eol++ = '\0';
+                n = eol - sPtr->ptr;
+            }
+            Ns_DStringNAppend(dsPtr, sPtr->ptr, n - 1);
+            sPtr->ptr += n;
+            sPtr->cnt -= n;
+            if (eol != NULL) {
+                n = dsPtr->length;
+                if (n > 0 && dsPtr->string[n-1] == '\r') {
+                    Ns_DStringTrunc(dsPtr, n-1);
+                }
+                return NS_TRUE;
+            }
+        }
+    } while (FillBuf(sPtr));
 
     return NS_FALSE;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1046,7 +966,7 @@ GetLine (Stream * sPtr, Ns_DString * dsPtr)
  */
 
 static int
-CreateSSL (Ns_OpenSSLConn * ccPtr)
+CreateSSL(Ns_OpenSSLConn *ccPtr)
 {
     /*
      * If the connection is managed by nsd's comm API, then
@@ -1055,30 +975,31 @@ CreateSSL (Ns_OpenSSLConn * ccPtr)
 
     if (ccPtr->context == NULL) {
 	if (ccPtr->role == ROLE_SSL_CLIENT) {
-	    ccPtr->context = NsOpenSSLGetSockClientSSLContext ();
+	    ccPtr->context = NsOpenSSLGetSockClientSSLContext();
 	} else if (ccPtr->role == ROLE_SSL_SERVER) {
-	    ccPtr->context = NsOpenSSLGetSockServerSSLContext ();
+	    ccPtr->context = NsOpenSSLGetSockServerSSLContext();
 	}
     }
 
-    ccPtr->ssl = SSL_new (ccPtr->context);
+    ccPtr->ssl = SSL_new(ccPtr->context);
     if (ccPtr->ssl == NULL) {
-	Ns_Log (Error, "%s: error creating new SSL", ccPtr->module);
+	Ns_Log(Error, "%s: error creating new SSL", ccPtr->module);
 	return NS_ERROR;
     }
 
-    SSL_clear (ccPtr->ssl);
+    SSL_clear(ccPtr->ssl);
 
     if (ccPtr->role == ROLE_SSL_SERVER) {
-	SSL_set_accept_state (ccPtr->ssl);
+	SSL_set_accept_state(ccPtr->ssl);
     } else {
-	SSL_set_connect_state (ccPtr->ssl);
+	SSL_set_connect_state(ccPtr->ssl);
     }
 
-    SSL_set_app_data (ccPtr->ssl, ccPtr);
+    SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1098,10 +1019,10 @@ CreateSSL (Ns_OpenSSLConn * ccPtr)
  */
 
 static int
-CreateBIOStack (Ns_OpenSSLConn * ccPtr)
+CreateBIOStack(Ns_OpenSSLConn *ccPtr)
 {
-    BIO *sock_bio;
-    BIO *ssl_bio;
+    BIO    *sock_bio;
+    BIO    *ssl_bio;
 
     /*
      * BIO stack:
@@ -1115,23 +1036,24 @@ CreateBIOStack (Ns_OpenSSLConn * ccPtr)
 
     /* Create socket BIO and attach it to the socket */
 
-    sock_bio = BIO_new_socket (ccPtr->sock, BIO_NOCLOSE);
+    sock_bio = BIO_new_socket(ccPtr->sock, BIO_NOCLOSE);
 
     /* Create SSL BIO */
 
-    ssl_bio = BIO_new (BIO_f_ssl ());
-    BIO_set_ssl (ssl_bio, ccPtr->ssl, BIO_NOCLOSE);
-    BIO_push (ssl_bio, sock_bio);
+    ssl_bio = BIO_new(BIO_f_ssl());
+    BIO_set_ssl(ssl_bio, ccPtr->ssl, BIO_NOCLOSE);
+    BIO_push(ssl_bio, sock_bio);
 
     /* Create buffering BIO */
 
-    ccPtr->io = BIO_new (BIO_f_buffer ());
-    if (!BIO_set_write_buffer_size (ccPtr->io, ccPtr->bufsize))
+    ccPtr->io = BIO_new(BIO_f_buffer());
+    if (!BIO_set_write_buffer_size(ccPtr->io, ccPtr->bufsize))
 	return NS_ERROR;
-    BIO_push (ccPtr->io, ssl_bio);
+    BIO_push(ccPtr->io, ssl_bio);
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1149,28 +1071,26 @@ CreateBIOStack (Ns_OpenSSLConn * ccPtr)
  *----------------------------------------------------------------------
  */
 
-/* XXX not used right now, but may be shortly */
-
 static int
-SetNonBlocking (Ns_OpenSSLConn * ccPtr, int flag)
+SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag)
 {
-    return BIO_socket_nbio (ccPtr->sock, flag) ? NS_OK : NS_ERROR;
-
-#if 0
     int rc;
 
     if (flag) {
-	Ns_SockSetNonBlocking (ccPtr->sock);
+        Ns_SockSetNonBlocking(ccPtr->sock);
     } else {
-	Ns_SockSetBlocking (ccPtr->sock);
+        Ns_SockSetBlocking(ccPtr->sock);
     }
-    rc = BIO_set_nbio (ccPtr->io, flag);
-    Ns_Log (Debug, "Set BIO to BIO_set_nbio = %d", flag);
+    rc = BIO_set_nbio(ccPtr->io, flag);
+    Ns_Log(Debug, "Set BIO to BIO_set_nbio = %d", flag);
 
     return NS_OK;
-#endif
 
+#if 0
+    return BIO_socket_nbio(ccPtr->sock, flag) ? NS_OK : NS_ERROR;
+#endif
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1189,43 +1109,42 @@ SetNonBlocking (Ns_OpenSSLConn * ccPtr, int flag)
  */
 
 static int
-RunSSLHandshake (Ns_OpenSSLConn * ccPtr)
+RunSSLHandshake(Ns_OpenSSLConn *ccPtr)
 {
     int rc;
     char buffer[256];
     char *buf = (char *) &buffer;
 
     if (ccPtr->role == ROLE_SSL_SERVER) {
-	return RunServerSSLHandshake (ccPtr);
+        return RunServerSSLHandshake(ccPtr);
     }
 
     do {
-	rc = BIO_do_handshake (ccPtr->io);
+	rc = BIO_do_handshake(ccPtr->io);
 #if 0
 	if (rc < 0) {
-	    ERR_error_string (ERR_get_error (), buf);
-	    Ns_Log (Error, "%s: %s", ccPtr->module, buf);
+	    ERR_error_string(ERR_get_error(), buf);
+	    Ns_Log(Error, "%s: %s", ccPtr->module, buf);
 	}
 #endif
-    } while (rc < 0 && BIO_should_retry (ccPtr->io));
+    } while (rc < 0 && BIO_should_retry(ccPtr->io));
 
     if (rc < 0) {
 	return NS_ERROR;
     }
 
-    ccPtr->peercert = SSL_get_peer_certificate (ccPtr->ssl);
+    ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
     /* Test cert validity in log file */
-    if (Ns_OpenSSLIsPeerCertValid (ccPtr)) {
-	Ns_Log (Notice, "%s: %s: SERVER's CERT is VALID", ccPtr->module,
-		ccPtr->type);
+    if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
+        Ns_Log(Notice, "%s: %s: SERVER's CERT is VALID", ccPtr->module, ccPtr->type);
     } else {
-	Ns_Log (Notice, "%s: %s: SERVER's CERT is NOT VALID", ccPtr->module,
-		ccPtr->type);
+        Ns_Log(Notice, "%s: %s: SERVER's CERT is NOT VALID", ccPtr->module, ccPtr->type);
     }
 
     return NS_OK;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -1244,98 +1163,89 @@ RunSSLHandshake (Ns_OpenSSLConn * ccPtr)
  */
 
 static int
-RunServerSSLHandshake (Ns_OpenSSLConn * ccPtr)
+RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
 {
-    int rc;
-    int error;
-    time_t endtime;
-    struct timeval tv;
-    int n;
-    fd_set *wfds;
-    fd_set *rfds;
-    fd_set fds;
+    int             rc;
+    int             error;
+    time_t          endtime;
+    struct timeval  tv;
+    int             n;
+    fd_set         *wfds;
+    fd_set         *rfds;
+    fd_set          fds;
 
-    if (SetNonBlocking (ccPtr, 1) == NS_ERROR) {
-	Ns_Log (Warning,
-		"%s: could not put socket in non-blocking mode; "
-		"timeout may not be enforced: %s",
-		ccPtr->module, ns_sockstrerror (errno));
-    }
+#if 0
+    Ns_SockSetNonBlocking(ccPtr->sock);
+    rc = BIO_set_nbio(ccPtr->io, flag);
+#endif
 
-    endtime = time (NULL) + ccPtr->timeout + 1;
-    FD_ZERO (&fds);
+    endtime = time(NULL) + ccPtr->timeout + 1;
+    FD_ZERO(&fds);
 
     while (1) {
 
-	rc = SSL_accept (ccPtr->ssl);
+        rc = SSL_accept(ccPtr->ssl);
 
-	if (rc == 1) {
-	    break;
-	}
+        if (rc == 1) {
+            break;
+        }
 
-	error = SSL_get_error (ccPtr->ssl, rc);
+        error = SSL_get_error(ccPtr->ssl, rc);
 
-	if (error == SSL_ERROR_SYSCALL) {
-	    if (rc == 0) {
-		Ns_Log (Error, "%s: EOF during SSL handshake", ccPtr->module);
-	    } else {
-		Ns_Log (Error, "%s: error during SSL handshake: %s",
-			ccPtr->module, ns_sockstrerror (errno));
-	    }
-	    return NS_ERROR;
+        if (error == SSL_ERROR_SYSCALL) {
+            if (rc == 0) {
+                Ns_Log(Error, "%s: EOF during SSL handshake",
+                    ccPtr->module);
+            } else {
+                Ns_Log(Error, "%s: error during SSL handshake: %s",
+                    ccPtr->module, ns_sockstrerror(errno));
+            }
+            return NS_ERROR;
 
-	} else if (error == SSL_ERROR_WANT_READ) {
-	    rfds = &fds;
-	    wfds = NULL;
+        } else if (error == SSL_ERROR_WANT_READ) {
+            rfds = &fds;
+            wfds = NULL;
 
-	} else if (error == SSL_ERROR_WANT_WRITE) {
-	    rfds = NULL;
-	    wfds = &fds;
+        } else if (error == SSL_ERROR_WANT_WRITE) {
+            rfds = NULL;
+            wfds = &fds;
 
-	} else {
-	    Ns_Log (Error, "%s: error %d/%d during SSL handshake",
-		    ccPtr->module, rc, error);
-	    return NS_ERROR;
-	}
+        } else {
+            Ns_Log(Error, "%s: error %d/%d during SSL handshake",
+                ccPtr->module, rc, error);
+            return NS_ERROR;
+        }
 
-	FD_SET (ccPtr->sock, &fds);
+        FD_SET(ccPtr->sock, &fds);
 
-	do {
-	    tv.tv_sec = endtime - time (NULL);
-	    tv.tv_usec = 0;
-	    n = select (ccPtr->sock + 1, rfds, wfds, NULL, &tv);
-	} while (n < 0 && errno == EINTR);
+        do {
+            tv.tv_sec = endtime - time(NULL);
+            tv.tv_usec = 0;
+            n = select(ccPtr->sock + 1, rfds, wfds, NULL, &tv);
+        } while (n < 0 && errno == EINTR);
 
-	if (n < 0) {
-	    Ns_Log (Error, "%s: select failed: %s",
-		    ccPtr->module, ns_sockstrerror (errno));
-	    return NS_ERROR;
-	}
+        if (n < 0) {
+            Ns_Log(Error, "%s: select failed: %s",
+                ccPtr->module, ns_sockstrerror(errno));
+            return NS_ERROR;
+        }
 
-	if (n == 0) {
-	    Ns_Log (Notice, "%s: SSL handshake timeout", ccPtr->module);
-	    return NS_ERROR;
-	}
+        if (n == 0) {
+            Ns_Log(Notice, "%s: SSL handshake timeout",
+                ccPtr->module);
+            return NS_ERROR;
+        }
     }
 
-    ccPtr->peercert = SSL_get_peer_certificate (ccPtr->ssl);
-
-    if (SetNonBlocking (ccPtr, 0) == NS_ERROR) {
-	Ns_Log (Warning,
-		"%s: could not put socket in blocking mode; "
-		"results unpredictable: %s",
-		ccPtr->module, ns_sockstrerror (errno));
-    }
+    ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
 
     /* XXX log if the cert is valid as a test */
 #if 0
     /* Test cert validity in log file */
-    if (Ns_OpenSSLIsPeerCertValid (ccPtr)) {
-	Ns_Log (Notice, "%s: %s: CLIENT's CERT is VALID", ccPtr->module,
-		ccPtr->type);
+    if (Ns_OpenSSLIsPeerCertValid(ccPtr)) {
+        Ns_Log(Notice, "%s: %s: CLIENT's CERT is VALID", ccPtr->module, ccPtr->type);
     } else {
-	Ns_Log (Notice, "%s: %s: CLIENT's CERT is NOT VALID", ccPtr->module,
-		ccPtr->type);
+        Ns_Log(Notice, "%s: %s: CLIENT's CERT is NOT VALID", ccPtr->module, ccPtr->type);
     }
 #endif
 

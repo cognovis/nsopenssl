@@ -1,43 +1,28 @@
-2003-05-21  Scott S. Goodwin  <scott@scottg.net>
+2003-12-24  Scott S. Goodwin  <scott@scottg.net>
 
-        * nsopenssl.h, nsopenssl.c: Added C API for setting SSL context
-          structure values.
+        * Released nsopenssl 2.1b
 
-2003-05-19  Scott S. Goodwin  <scott@scottg.net>
+	* ssl.c, nsopenssl.h: Added timeouts to Send and Recv functions that
+	are tied to the connection structure. These timers will kill the
+	connection if the client does not respond within the timeout period.
+	This prevents a connection from being tied up in a read loop when the
+	client has been disconnected. Servers serving dialup connections would
+	experience this problem to the extent that eventually all conns would
+	be tied in read loops and CPU usage would be at 100%.
 
-        * nsopenssl.h, nsopenssl.c, init.c, config.h: Added
-          Ns_OpenSSLContextCreate, LoadSSLContexts, LoadSSLContext.
+2003-07-31  Scott S. Goodwin  <scott@scottg.net>
 
-2003-05-18  Scott S. Goodwin  <scott@scottg.net>
+        * nsopenssl.h, tclcmds.c: Simplified the OpenSSL version info.
+        ns_openssl info now returns a regular string instead of a list. The
+        string looks like: "OpenSSL 0.9.7b 10 Apr 2003". The date is the date
+        you compiled the library, not the date it was released.
 
-        * nsopenssl.h, nsopenssl.c, init.c: Added NsOpenSSLServers structure
-          to manage per-virtual server information.
-
-        * nsopenssl.c, init.c: Moved Tcl API initializion from nsopenssl.c to
-          init.c.
-
-2003-05-17  Scott S. Goodwin  <scott@scottg.net>
-
-        * Makefile: cleaned up tagging and file release targets.
-
-        * init.c, nsopenssl.c: Added NsOpenSSLInit; cleaned up InitOpenSSL and
-          SeedPRNG; got rid of PRNGIsSeeded, AddEntropyFromRandomFile. Added a
-          global nsopenssl section to the config file that sets parameters
-          that are non-virtual server specific, and it looks like this:
-
-          ns_section "ns/module/nsopenssl"
-          ns_param RandomFile /tmp/random
-          ns_param SeedBytes  1024
-          ns_param MaxSeedBytes  1024000
-
+        * thread.c: Removed checking for whether OpenSSL was compiled with
+        thread support.
+	
 2003-05-08  Scott S. Goodwin  <scott@scottg.net>
 
         * Released nsopenssl 2.1a
-
-        NOTE: nsopenssl 2.1a was released as a fix based on code up to
-        2002-02-13 in this ChangeLog. All entries after 2002-02-13 are changes
-        I made to a local development copy. I'm now merging this into the
-        v2_1_bp and working in 2.2. 
 
         * ssl.c: fixed problem where if an nsopenssl connection was broken
         during a file upload or other POST request, the thread would
@@ -47,156 +32,6 @@
         duplicate it so I could fix it. Special thanks to Wayport for
         hammering it under a tremendous load to see if it would break (it
         didn't).
-
-
-2002-11-21  Scott Goodwin  <scott@scottg.net>
-
-	* Makefile: Add a definition for $(CP). AOLserver 4.x uses the
-	install program instead of CP like AOLserver 3.x. Need to update
-	nsopenssl to compile using the appropriate method for 3.x and 4.x.
-
-	* nsopenssl.h: Moved Ns_OpenSSLConn's 'struct NsOpenSSLDriver
-	sdPtr' so that it is used for both 3.x and 4.x
-
-	* nsopenssl.c: Moved declaration of 'static NsOpenSSLDriver
-	firstSSLDriverPtr' so it is compiled with both 3.x and 4.x. Moved
-	OpenSSLProc's conn initializer outside of the switch statement so
-	that it runs first (might be a problem as this should probably
-	only pertain to DriverSends and Receives. Changed OpenSSLProc to
-	use recvmsg and sendmsg the same way nssock's SockProc does.
-
-
-2002-10-28  Scott Goodwin  <scott@scottg.net>
-
-	* https.tcl: Added ability to pass multiple files with ns_httpspost:
-
-        "filesets" is a list of ns_sets, each ns_set contains information
-	about each file to upload and has four keys:
-
-               name:         the name of the form element for this file
-               filename:     the name of the file
-               content:      the actual contents of the file
-               content-type: the type of contents in the file, such as text/plain
-        
-        filesets are only used with multipart/form-data
-
-	The filesets parameter has been added to the parameters passed in:
-		
-	ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30}}
-
-	IF YOU USE timeout IN YOUR CURRENT ns_httpspost CODE, YOU MUST
-	CHANGE YOUR CALL.
-
-	Also modified ns_httpspost to accept "" to mean the default timeout.
-
-2002-10-18  Scott Goodwin  <scott@scottg.net>
-
-	* ca, tests: Moved the tests and ca to a separate test
-	harness. Decided it would be best to keep all tests in the test
-	harness rather that the module, at least until tests for all the
-	modules and the core server are written. A decision can be made at
-	that time whether to integrate the testing framework into the core
-	and modules.
-
-2002-10-07  Scott Goodwin  <scott@scottg.net>
-
-	* ca: Created the 'ca' directory to generate and hold test CA
-	certs, web server certs, and client certs.
-
-	* tests: Added more files to the tests directory.
-
-2002-10-04  Scott Goodwin  <scott@scottg.net>
-
-	* TODO: Added back to the repository.
-
-	* Makefile: Updated with new targets for tagging and releasing
-	code (stolen from Rob Mayoff's nscache Makefile :)
-
-2002-05-28  Scott Goodwin  <scott@scottg.net>
-
-	* init.c: added some user-friendly error messages when key fails
-	to load in LoadKey routine.
-
-2002-05-27  Scott Goodwin  <scott@scottg.net>
-
-	* ssl.c: in NsOpenSSLDestroyConn, if socket is valid, we shut it
-	down before freeing the ccPtr datastructures. Apparently, the
-	BIO_free_all causes two bytes to be sent over the socket that
-	confuses Win32 clients. Thanks to Piotr Szuca
-	<pszuca@radix.com.pl> for this addition.
-
-2002-04-23  Scott Goodwin  <scott@scottg.net>
-
-	* Makefile: added 'install: all' directive that overrides the
-	'install: all' directive in Makefile.module so that I can have the
-	install process install https.tcl as well (I need to update the
-	online docs). Thanks to Pierre Asselin.
-
-2002-03-05  Scott S. Goodwin  <scott@scottg.net>
-
-	* nsopenssl.c, nsopenssl.c: cleaned up NsOpenSSLDriver and
-	Ns_OpenSSLConn structures some more, and cleaned up the
-	initialization of an Ns_OpenSSLConn in SockThread. Some items
-	weren't being initialized (they aren't yet being used, but should
-	still be initialized). Tag: nsopenssl-2_2_beta_4.
-
-	* nsopenssl.c, nsopenssl.h, tclcmds.c: rearranged the
-	NsOpenSSLDriver and Ns_OpenSSLConn structures to make it clearer
-	what items needed to be freed by what routines. Also changed port
-	to peerport in Ns_OpenSSLConn, and added the 'ns_openssl peerport'
-	command, which is the same as the 'ns_openssl port' command.  Tag:
-	nsopenssl-2_2_beta_3.
-
-	* all: ran *.c and *.h through indent: indent -i2 -br -brs -ce
-	-hnl -psl -sob <filename.c>.
-
-2002-03-04  Scott S. Goodwin  <scott@scottg.net>
-
-	* ssl.c, nsopenssl.c, nsopenssl.h, tclcmds.c: Added 'ns_openssl
-	module name' and 'ns_openssl module port' commands. The first
-	tells you what the name of the loaded module is for the current
-	connection (you may have more than one copy of nsopenssl
-	loaded). The second tells you which port your current connection's
-	nsopenssl driver is listening on. This would allow you to do
-	access control by determining what module name and or module port
-	the connection is coming through.
-
-2002-02-18  Scott S. Goodwin  <scott@scottg.net>
-
-	* tclcmds.c: added ns_openssl port command. It returns the
-	scPtr->port value, which happens to be the local port the conn is
-	using, not the port the server is listening on. I need to do a
-	query on the port the server is listening on by grabbing the port
-	number from the nsd.tcl based on the module name (as you may have
-	multiple instances of nsopenssl up and running).
-
-2002-02-15  Scott S. Goodwin  <scott@scottg.net>
-
-	* ssl.c: I was decrementing towrite by rc bytes. Problem is that
-	if rc < 0 which it will be on SSL_write error, towrite will get
-	bigger. This was a late night error. The #if'd out debug portion
-	worked properly. Adam Zell pointed this out.
-
-	* dumb: The previous two changes were made once before. The
-	tclcmd.c fix reverted when I received a fix for some other problem
-	in tclcmd.c; I neglected to do a diff between my copy and the
-	fixed one that was sent to me. In the case of init.c, I'm
-	uncertain how that creeped back in. Thanks to Adam Zell for
-	pointing these out. Lessons learned: Always commit your changes
-	right after your tests work. Always diff a file sent to you
-	against your current working copy from the repository. There may
-	be changes you made to your file that aren't in the contributed
-	file.
-
-	* init.c: Fixed NsOpenSSLCreateDriver; sdPtr->randomFile wasn't
-	set before being possibly used.
-
-	* tclcmds.c: Fixed SSLSockListenCallback so that the interp was
-	initialized before it was possibly used.
-
-2002-02-14  Scott S. Goodwin  <scott@scottg.net>
-
-	* nsopenssl 2.1 released.
 
 2002-02-13  Scott S. Goodwin  <scott@scottg.net>
 
