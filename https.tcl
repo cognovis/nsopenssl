@@ -202,7 +202,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 # Side effects:
 #
 
-proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30}} {
+proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30} {body ""}} {
     #
     # Build the request. Since we're posting, we have to set
     # content-type and content-length ourselves. We'll add these to
@@ -242,13 +242,6 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30
     set querystring ""
 
     if {$type == "multipart/form-data"} {
-
-	#
-	# Default to no content at all
-	#
-
-	set querystring ""
-
 	#
 	# Set the standard POST form parameters
 	#
@@ -310,8 +303,7 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30
 	append querystring "--${boundary}--\n"
 	ns_set put $rqset "Content-length" [string length $querystring]
 
-    } else {
-	if {![string match "" $qsset]} {
+    } elseif {![string match "" $qsset]} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
 		set key [ns_set key $qsset $i]
 		set value [ns_set value $qsset $i]
@@ -324,6 +316,11 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {filesets ""} {timeout 30
 	} else {
 	    ns_set put $rqset "Content-length" "0"
 	}
+    } else {
+	#
+	# Send $body as the POST request data.
+	#
+	set querystring $body
     }
 
     #
