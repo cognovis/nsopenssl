@@ -53,16 +53,15 @@ static
 SSLConnection *NsSSLAbortConn (SSLConnection * conPtr);
 
 static int
-SSL_smart_shutdown (SSL * ssl);
+  SSL_smart_shutdown (SSL * ssl);
 
 static int
-NsSSLClientVerify (int num);
+  NsSSLClientVerify (int num);
 
 int count, i;
 int clientverify;
 
 static char server_session_id_context[] = "nsopenssl/OpenSSL";	/* anything will do */
-
 
 /*
  *----------------------------------------------------------------------
@@ -166,7 +165,8 @@ NsSSLCreateServer (SSLConf * config)
 
 	/* Set the cipher suite that we support.  */
 
-	if (SSL_CTX_set_cipher_list (srvPtr->context, srvPtr->ciphersuite) == 0) {
+	if (SSL_CTX_set_cipher_list (srvPtr->context, srvPtr->ciphersuite) ==
+	    0) {
 	    Ns_Log (Error, "Unable to configure permitted SSL ciphers (%s).",
 		    srvPtr->ciphersuite);
 	    NsSSLDestroyServer (srvPtr);
@@ -193,6 +193,9 @@ NsSSLCreateServer (SSLConf * config)
 					  NULL);
 #endif
 
+	Ns_Log (Debug, "Setting client verify mode");
+	SSL_CTX_set_verify (srvPtr->context, srvPtr->clientverify, NULL);
+
 	/*
 	 * Set up the trusted CA list. There are a couple of methods
 	 * you can use here. The easiest is to concatenate all your
@@ -204,39 +207,13 @@ NsSSLCreateServer (SSLConf * config)
 	 * more info. Both methods can work at the same time.
 	 */
 
-	if (!SSL_CTX_load_verify_locations
-	    (srvPtr->context, config->cacertfile, config->cacertpath)) {
-	    Ns_Log (Error, "Failed to load CA certificates");
-	    return NULL;
-	}
-
-#if 0
-	/*
-	 * TODO: FEATURE: Someday I'll come back and fix this to print
-	 * out the list of CAs for verifying clients with...  Doing a
-	 * SSL_CTX_load_verify_locations actually gives the server a
-	 * CA list to verify clients with, but that list doesn't show
-	 * up with this SSL_CTX_get_client_CA_list call until you use
-	 * SSL_CTX_add_client_CA to add each CA. I'm not sure why it
-	 * works this way.  */
-
-	client_ca_stack = SSL_CTX_get_client_CA_list (srvPtr->context);
-	if ((client_ca_stack != NULL)
-	    && (sk_X509_NAME_num (client_ca_stack) > 0)) {
-	    Ns_Log (Debug, "--- Acceptable client certificate CA names\n");
-	    for (i = 0; i < sk_X509_NAME_num (client_ca_stack); i++) {
-		xn = sk_X509_NAME_value (client_ca_stack, i);
-		X509_NAME_oneline (xn, buf, sizeof (buf));
-		Ns_Log (Debug, "CA: %s", buf);
+	if (srvPtr->clientverify != SSL_VERIFY_NONE) {
+	    if (!SSL_CTX_load_verify_locations
+		(srvPtr->context, config->cacertfile, config->cacertpath)) {
+		Ns_Log (Error, "Failed to load CA certificates");
+		return NULL;
 	    }
-	} else {
-	    Ns_Log (Debug, "--- No client certificate CA names sent");
 	}
-#endif
-
-	Ns_Log (Debug, "Setting client verify mode");
-
-	SSL_CTX_set_verify (srvPtr->context, srvPtr->clientverify, NULL);
 
 	/*
 	 * The two valid values for session cache mode are
@@ -292,7 +269,8 @@ NsSSLCreateServer (SSLConf * config)
 	 * the server cannot be started.
 	 */
 
-	Ns_Log (Notice, "Loading SSL certificate '%s'", config->certfile);
+	Ns_Log (Notice, "Loading SSL server certificate '%s'",
+		config->certfile);
 	if (SSL_CTX_use_certificate_file
 	    (srvPtr->context, config->certfile, SSL_FILETYPE_PEM) <= 0) {
 	    Ns_Log (Error, "Could not load the certificate %s.",
@@ -301,7 +279,8 @@ NsSSLCreateServer (SSLConf * config)
 	    return NULL;
 	}
 
-	Ns_Log (Notice, "Loading SSL private key '%s'", config->keyfile);
+	Ns_Log (Notice, "Loading SSL server private key '%s'",
+		config->keyfile);
 	if (SSL_CTX_use_PrivateKey_file
 	    (srvPtr->context, config->keyfile, SSL_FILETYPE_PEM) <= 0) {
 	    Ns_Log (Error, "Could not load the private key %s.",
@@ -514,8 +493,7 @@ NsSSLCreateConn (SOCKET sock, int timeout, SSLServer * server)
 		    Ns_Log (Notice,
 			    "SSL handshake interrupted by system; browser stop button?");
 		} else {
-		    Ns_Log (Notice,
-			    "Spurious SSL handshake interrupt");
+		    Ns_Log (Notice, "Spurious SSL handshake interrupt");
 		}
 	    } else {
 		Ns_Log (Notice, "Error: Unknown error");
@@ -600,7 +578,6 @@ NsSSLAbortConn (SSLConnection * conPtr)
 	BIO_free (conPtr->io);
 	conPtr->io = NULL;
     }
-
 #if 0
     /* TODO: BUG: Do NOT use SSL_free to free conPtr->ssl or BIO_free
        to free conPtr->ssl_bio here!!! Depending on where in the
@@ -776,7 +753,6 @@ NsSSLDestroyConn (SSLConnection * conn)
     if (conn->clientcert != NULL) {
 	X509_free (conn->clientcert);
     }
-
 #if 0
     /* I would have thought this would work, but it doesn't. When I do
        this, the server hangs after the first connection has completed

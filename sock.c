@@ -149,7 +149,8 @@ Ns_ModuleInit (char *server, char *module)
 
     path = Ns_ConfigGetPath (server, module, NULL);
 
-    Ns_Log (Debug, "Entering Ns_ModuleInit() - Initializing global SSL stuff");
+    Ns_Log (Debug,
+	    "Entering Ns_ModuleInit() - Initializing global SSL stuff");
 
     /*
      * Global SSL Initialization.
@@ -242,7 +243,6 @@ Ns_ModuleInit (char *server, char *module)
      */
 
     Ns_DStringInit (&ds);
-
     Ns_ModulePath (&ds, server, module, NULL, NULL);
     Ns_Log (Debug, "Module path: %s", Ns_DStringValue (&ds));
 
@@ -334,7 +334,7 @@ Ns_ModuleInit (char *server, char *module)
 
     config->ciphersuite = Ns_ConfigGetValue (path, CONFIG_CIPHERSUITE);
     if (config->ciphersuite == NULL) {
-	Ns_Log (Notice,	"Using default ciphersuite: %s", DEFAULT_CIPHERSUITE);
+	Ns_Log (Notice, "Using default ciphersuite: %s", DEFAULT_CIPHERSUITE);
 	Ns_Log (Notice, "See CipherSuite parameter in config file");
 	Ns_DStringTrunc (&ds, 0);
 	Ns_DStringAppend (&ds, DEFAULT_CIPHERSUITE);
@@ -351,7 +351,7 @@ Ns_ModuleInit (char *server, char *module)
 
     protocol_list = Ns_ConfigGetValue (path, CONFIG_PROTOCOL_LIST);
     if (protocol_list == NULL) {
-	Ns_Log (Notice,	"Using default protocols: %s", DEFAULT_PROTOCOL_LIST);
+	Ns_Log (Notice, "Using default protocols: %s", DEFAULT_PROTOCOL_LIST);
 	Ns_Log (Notice, "See Protocols parameter in config file");
 	Ns_DStringTrunc (&ds, 0);
 	Ns_DStringAppend (&ds, DEFAULT_PROTOCOL_LIST);
@@ -419,87 +419,6 @@ Ns_ModuleInit (char *server, char *module)
 	return NS_ERROR;
     }
 
-    /* Path to CA Certificate directory */
-
-    config->cacertpath = Ns_ConfigGetValue (path, CONFIG_CACERTPATH);
-    if (config->cacertpath != NULL) {
-	if (Ns_PathIsAbsolute (config->cacertpath) == 0) {
-	    Ns_DStringTrunc (&ds, 0);
-	    Ns_ModulePath (&ds, server, module, config->cacertpath, NULL);
-	    config->cacertpath = Ns_DStringExport (&ds);
-	} else {
-	    config->cacertpath = Ns_StrDup (config->cacertpath);
-	}
-
-	if (stat (config->cacertpath, &st) != 0) {
-	    Ns_Fatal ("nsopenssl: stat(%s) failed: %s", config->cacertpath,
-		      strerror (errno));
-	}
-	if (S_ISDIR (st.st_mode) == 0) {
-	    Ns_Fatal ("nsopenssl: not a directory: %s", config->cacertpath);
-	}
-    } else {
-	if (Ns_PathIsAbsolute (DEFAULT_CACERTPATH) == 0) {
-	    Ns_DStringTrunc (&ds, 0);
-	    Ns_ModulePath (&ds, server, module, DEFAULT_CACERTPATH, NULL);
-	    config->cacertpath = Ns_DStringExport (&ds);
-	} else {
-	    config->cacertpath = DEFAULT_CACERTPATH;
-	}
-
-	if (stat (config->cacertpath, &st) != 0) {
-	    Ns_Log (Notice, "Cannot find %s, %s", config->cacertpath,
-		      strerror (errno));
-	    config->cacertpath = NULL;
-	}
-	if (S_ISDIR (st.st_mode) == 0) {
-	    Ns_Log (Notice, "Not a directory: %s", config->cacertpath);
-	    config->cacertpath = NULL;
-	}
-    }
-    Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTPATH, config->cacertpath);
-
-    /* Path to a CA Certificate file */
-
-    config->cacertfile = Ns_ConfigGetValue (path, CONFIG_CACERTFILE);
-    if (config->cacertfile != NULL) {
-	if (Ns_PathIsAbsolute (config->cacertfile) == 0) {
-	    Ns_DStringTrunc (&ds, 0);
-	    Ns_ModulePath (&ds, server, module, config->cacertfile, NULL);
-	    config->cacertfile = Ns_DStringExport (&ds);
-	} else {
-	    config->cacertfile = Ns_StrDup (config->cacertfile);
-	}
-
-	if (stat (config->cacertfile, &st) != 0) {
-	    Ns_Fatal ("nsopenssl: stat(%s) failed: %s", config->cacertfile,
-		      strerror (errno));
-	}
-	if (S_ISDIR (st.st_mode) != 0) {
-	    Ns_Fatal ("nsopenssl: not a file: %s", config->cacertfile);
-	}
-    } else {
-	if (Ns_PathIsAbsolute (DEFAULT_CACERTFILE) == 0) {
-	    Ns_DStringTrunc (&ds, 0);
-	    Ns_ModulePath (&ds, server, module, DEFAULT_CACERTFILE, NULL);
-	    config->cacertfile = Ns_DStringExport (&ds);
-	} else {
-	    config->cacertfile = DEFAULT_CACERTFILE;
-	}
-
-	if (stat (config->cacertfile, &st) != 0) {
-	    Ns_Log (Notice, "Cannot find %s, %s", config->cacertfile,
-		      strerror (errno));
-	    config->cacertfile = NULL;
-	}
-	if (S_ISDIR (st.st_mode) != 0) {
-	    Ns_Log (Notice, "Not a file: %s", config->cacertfile,
-		      strerror (errno));
-	    config->cacertfile = NULL;
-	}
-    }
-    Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTFILE, config->cacertfile);
-
     /*
      * Set client verification mode. Affects the SSL handshake
      * process.
@@ -519,8 +438,9 @@ Ns_ModuleInit (char *server, char *module)
      * override the verification result of the built-in verification
      */
 
-    if (Ns_ConfigGetBool (path, CONFIG_CLIENTVERIFY, &tmp) == NS_TRUE && tmp == NS_TRUE) {
-        Ns_Log (Notice, "Client certificate processing is turned on");
+    if (Ns_ConfigGetBool (path, CONFIG_CLIENTVERIFY, &tmp) == NS_TRUE
+	&& tmp == NS_TRUE) {
+	Ns_Log (Notice, "Client certificate processing is turned on");
 	config->clientverifymode = SSL_VERIFY_PEER;
 	if (Ns_ConfigGetBool (path, CONFIG_CLIENTVERIFYONCE, &tmp) == NS_TRUE) {
 	    config->clientverifymode |= SSL_VERIFY_CLIENT_ONCE;
@@ -531,29 +451,113 @@ Ns_ModuleInit (char *server, char *module)
 		    "Client certificate will be re-verified for each connection even if you are using session caching");
 	}
 
-        /* Get verification depth */
+	/* Path to CA Certificate directory */
+
+	config->cacertpath = Ns_ConfigGetValue (path, CONFIG_CACERTPATH);
+	if (config->cacertpath != NULL) {
+	    if (Ns_PathIsAbsolute (config->cacertpath) == 0) {
+		Ns_DStringTrunc (&ds, 0);
+		Ns_ModulePath (&ds, server, module, config->cacertpath, NULL);
+		config->cacertpath = Ns_DStringExport (&ds);
+	    } else {
+		config->cacertpath = Ns_StrDup (config->cacertpath);
+	    }
+
+	    if (stat (config->cacertpath, &st) != 0) {
+		Ns_Fatal ("nsopenssl: stat(%s) failed: %s",
+			  config->cacertpath, strerror (errno));
+	    }
+	    if (S_ISDIR (st.st_mode) == 0) {
+		Ns_Fatal ("nsopenssl: not a directory: %s",
+			  config->cacertpath);
+	    }
+	} else {
+	    if (Ns_PathIsAbsolute (DEFAULT_CACERTPATH) == 0) {
+		Ns_DStringTrunc (&ds, 0);
+		Ns_ModulePath (&ds, server, module, DEFAULT_CACERTPATH, NULL);
+		config->cacertpath = Ns_DStringExport (&ds);
+	    } else {
+		config->cacertpath = DEFAULT_CACERTPATH;
+	    }
+
+	    if (stat (config->cacertpath, &st) != 0) {
+		Ns_Log (Notice, "Cannot find %s, %s", config->cacertpath,
+			strerror (errno));
+		config->cacertpath = NULL;
+	    }
+	    if (S_ISDIR (st.st_mode) == 0) {
+		Ns_Log (Notice, "Not a directory: %s", config->cacertpath);
+		config->cacertpath = NULL;
+	    }
+	}
+	Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTPATH, config->cacertpath);
+
+	/* Path to a CA Certificate file */
+
+	config->cacertfile = Ns_ConfigGetValue (path, CONFIG_CACERTFILE);
+	if (config->cacertfile != NULL) {
+	    if (Ns_PathIsAbsolute (config->cacertfile) == 0) {
+		Ns_DStringTrunc (&ds, 0);
+		Ns_ModulePath (&ds, server, module, config->cacertfile, NULL);
+		config->cacertfile = Ns_DStringExport (&ds);
+	    } else {
+		config->cacertfile = Ns_StrDup (config->cacertfile);
+	    }
+
+	    if (stat (config->cacertfile, &st) != 0) {
+		Ns_Fatal ("nsopenssl: stat(%s) failed: %s",
+			  config->cacertfile, strerror (errno));
+	    }
+	    if (S_ISDIR (st.st_mode) != 0) {
+		Ns_Fatal ("nsopenssl: not a file: %s", config->cacertfile);
+	    }
+	} else {
+	    if (Ns_PathIsAbsolute (DEFAULT_CACERTFILE) == 0) {
+		Ns_DStringTrunc (&ds, 0);
+		Ns_ModulePath (&ds, server, module, DEFAULT_CACERTFILE, NULL);
+		config->cacertfile = Ns_DStringExport (&ds);
+	    } else {
+		config->cacertfile = DEFAULT_CACERTFILE;
+	    }
+
+	    if (stat (config->cacertfile, &st) != 0) {
+		Ns_Log (Notice, "Cannot find %s, %s", config->cacertfile,
+			strerror (errno));
+		config->cacertfile = NULL;
+	    }
+	    if (S_ISDIR (st.st_mode) != 0) {
+		Ns_Log (Notice, "Not a file: %s", config->cacertfile,
+			strerror (errno));
+		config->cacertfile = NULL;
+	    }
+	}
+	Ns_Log (Debug, "%s = '%s'", CONFIG_CACERTFILE, config->cacertfile);
+
+	/* Get verification depth */
 
 	config->clientverifydepth = DEFAULT_CLIENTVERIFYDEPTH;
 	tmp = 0;
 	if (Ns_ConfigGetInt (path, CONFIG_CLIENTVERIFYDEPTH, &tmp) == NS_TRUE) {
 	    config->clientverifydepth = tmp;
 	}
-	Ns_Log (Notice, "Client verify depth is set to %d", config->clientverifydepth);
+	Ns_Log (Notice, "Client verify depth is set to %d",
+		config->clientverifydepth);
 
 	/* Get client verify default. The idea behind this is that if
-         * a client has no certificate or their certificate is
-         * invalid, we might not simply want to abort the connection,
-         * but instead set a couple of flags in SSLConnection struct
-         * and continue processing. This effectively passes the
-         * decision of what to do to from nsopenssl to the
-         * application's code. e.g. you might want to offer the end
-         * user a nice error page instead of chopping him off at the
-         * knees -- he might not know his cert is invalid.
+	 * a client has no certificate or their certificate is
+	 * invalid, we might not simply want to abort the connection,
+	 * but instead set a couple of flags in SSLConnection struct
+	 * and continue processing. This effectively passes the
+	 * decision of what to do to from nsopenssl to the
+	 * application's code. e.g. you might want to offer the end
+	 * user a nice error page instead of chopping him off at the
+	 * knees -- he might not know his cert is invalid.
 	 */
 
 	config->clientverifydefault = NS_FALSE;
-        tmp = NS_FALSE;
-	if (Ns_ConfigGetBool (path, CONFIG_CLIENTVERIFYDEFAULT, &tmp) == NS_TRUE) {
+	tmp = NS_FALSE;
+	if (Ns_ConfigGetBool (path, CONFIG_CLIENTVERIFYDEFAULT, &tmp) ==
+	    NS_TRUE) {
 	    config->clientverifydefault = tmp;
 	}
 
@@ -563,17 +567,18 @@ Ns_ModuleInit (char *server, char *module)
 	    Ns_Log (Notice,
 		    "This means your application will have to handle these cases!!!");
 	}
+
+        /* Warn if client verification is on but no CAs loaded */
+
+        if (config->cacertpath == NULL && config->cacertfile == NULL
+	    && (config->clientverifymode & SSL_VERIFY_PEER)) {
+	    Ns_Log (Notice,
+		    "No CAs loaded, which means you will not be able to verify client certificates");
+	}
+
     } else {
 	config->clientverifymode = SSL_VERIFY_NONE;
-        Ns_Log (Notice, "Client certificate processing is turned off");
-    }
-
-    /* Warn if client verification is on but no CAs loaded */
-
-    if (config->cacertpath == NULL && config->cacertfile == NULL
-	&& (config->clientverifymode & SSL_VERIFY_PEER)) {
-	Ns_Log (Notice,
-		"No CAs loaded, which means you will not be able to verify client certificates");
+	Ns_Log (Notice, "Client certificate processing is turned off");
     }
 
     /*
