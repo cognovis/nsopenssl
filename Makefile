@@ -23,9 +23,9 @@ ifdef BSAFE
     MODLIBS  =  -L$(OPENSSL)/lib -L$(BSAFE)/lib -lssl -lcrypto \
 	-lBSAFEglue -lcrypto -lbsafe -lBSAFEglue
 else
-#    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
-# NOTE!!! Solaris need the following, but you'll need to modify it to point to where your libgcc.a sits:
-    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto -L/usr/local/products/gcc-2.95/lib/gcc-lib/sparc-sun-solaris2.5.1/2.95 -lgcc
+    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto 
+# NOTE!!! Solaris users *might* need the following, but you'll need to modify it to point to where your libgcc.a sits:
+#    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto -L/usr/local/products/gcc-2.95/lib/gcc-lib/sparc-sun-solaris2.5.1/2.95 -lgcc
 
 endif
 

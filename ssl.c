@@ -59,13 +59,15 @@ typedef struct Stream {
 static int            CreateSSL(Ns_OpenSSLConn *ccPtr);
 static int            CreateBIOStack(Ns_OpenSSLConn *ccPtr);
 static int            RunSSLHandshake(Ns_OpenSSLConn *ccPtr);
+static int            RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr);
+
 
 static Ns_OpenSSLConn *CreateSSLSockConn(int role, int conntype);
 static void           DestroySSLSockConn(Ns_OpenSSLConn *ccPtr);
 static int            GetLine(Stream *sPtr, Ns_DString *dsPtr);
 static int            FillBuf(Stream *sPtr);
 
-#if 0 /* XXX This SetNonBlocking function not implemented */
+#if 0 /* XXX not used right now, but may be later */
 static int            SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag);
 #endif
 
@@ -476,6 +478,7 @@ Ns_OpenSSLSockAccept(SOCKET sock)
     }
 
     Ns_SockSetNonBlocking(ccPtr->sock);
+
     SSL_set_app_data(ccPtr->ssl, ccPtr);
 
     return ccPtr;
@@ -1038,11 +1041,13 @@ CreateBIOStack(Ns_OpenSSLConn *ccPtr)
  *----------------------------------------------------------------------
  */
 
-#if 0 /* XXX This SetNonBlocking function not implemented */
-
+#if 0 /* XXX not used right now, but may be shortly */
 static int
 SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag)
 {
+    return BIO_socket_nbio(ccPtr->sock, flag) ? NS_OK : NS_ERROR;
+
+#if 0
     int rc;
 
     if (flag) {
@@ -1054,10 +1059,8 @@ SetNonBlocking(Ns_OpenSSLConn *ccPtr, int flag)
     Ns_Log(Debug, "Set BIO to BIO_set_nbio = %d", flag);
 
     return NS_OK;
-
-#if 0 /* XXX SetNonBlocking: maybe use BIO_socket_nbio to set blocking/non on socket? */
-    return BIO_socket_nbio(ccPtr->sock, flag) ? NS_OK : NS_ERROR;
 #endif
+
 }
 #endif
 
@@ -1085,6 +1088,10 @@ RunSSLHandshake(Ns_OpenSSLConn *ccPtr)
     char buffer[256];
     char *buf = (char *) &buffer;
 
+    if (ccPtr->role == ROLE_SSL_SERVER) {
+        return RunServerSSLHandshake(ccPtr);
+    }
+
     do {
 	rc = BIO_do_handshake(ccPtr->io);
 #if 0
@@ -1104,3 +1111,95 @@ RunSSLHandshake(Ns_OpenSSLConn *ccPtr)
     return NS_OK;
 }
 
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * RunServerSSLHandshake --
+ *
+ *      Run the Server SSL handshake sequence.
+ *
+ * Results:
+ *      NS_OK or NS_ERROR.
+ *
+ * Side effects:
+ *      None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static int
+RunServerSSLHandshake(Ns_OpenSSLConn *ccPtr)
+{
+    int             rc;
+    int             error;
+    time_t          endtime;
+    struct timeval  tv;
+    int             n;
+    fd_set         *wfds;
+    fd_set         *rfds;
+    fd_set          fds;
+
+    endtime = time(NULL) + ccPtr->timeout + 1;
+    FD_ZERO(&fds);
+
+    while (1) {
+
+        rc = SSL_accept(ccPtr->ssl);
+
+        if (rc == 1) {
+            break;
+        }
+
+        error = SSL_get_error(ccPtr->ssl, rc);
+
+        if (error == SSL_ERROR_SYSCALL) {
+            if (rc == 0) {
+                Ns_Log(Error, "%s: EOF during SSL handshake",
+                    ccPtr->module);
+            } else {
+                Ns_Log(Error, "%s: error during SSL handshake: %s",
+                    ccPtr->module, ns_sockstrerror(errno));
+            }
+            return NS_ERROR;
+
+        } else if (error == SSL_ERROR_WANT_READ) {
+            rfds = &fds;
+            wfds = NULL;
+
+        } else if (error == SSL_ERROR_WANT_WRITE) {
+            rfds = NULL;
+            wfds = &fds;
+
+        } else {
+            Ns_Log(Error, "%s: error %d/%d during SSL handshake",
+                ccPtr->module, rc, error);
+            return NS_ERROR;
+        }
+
+        FD_SET(ccPtr->sock, &fds);
+
+        do {
+            tv.tv_sec = endtime - time(NULL);
+            tv.tv_usec = 0;
+            n = select(ccPtr->sock + 1, rfds, wfds, NULL, &tv);
+        } while (n < 0 && errno == EINTR);
+
+        if (n < 0) {
+            Ns_Log(Error, "%s: select failed: %s",
+                ccPtr->module, ns_sockstrerror(errno));
+            return NS_ERROR;
+        }
+
+        if (n == 0) {
+            Ns_Log(Notice, "%s: SSL handshake timeout",
+                ccPtr->module);
+            return NS_ERROR;
+        }
+    }
+
+    ccPtr->peercert = SSL_get_peer_certificate(ccPtr->ssl);
+
+    return NS_OK;
+
+}

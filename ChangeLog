@@ -1,4 +1,22 @@
+2001-08-09  Scott S. Goodwin  <scott@scottg.net>
+
+	* nsopenssl 2.0 released.
+
+	* tests: tested with OpenSSL 0.9.6a Solaris.
+
+	* tests: tested with OpenSSL 0.9.6, 0.9.6a and 0.9.6b on Linux.
+
+	* ssl.c: Had to return to the non-BIO method of running the SSL
+	server handshake. Solaris *hates* the BIO method. Where normally
+	it'll try to read the client cert twice (even if you've told it
+	not to ask for a client cert!), with the BIO method, it attempts
+	to read the client cert up to 60 times!
+
 2001-08-08  Scott S. Goodwin  <scott@scottg.net>
+
+	* init.c: the OpenSSL PRNG is now seeded at start time when
+        NsOpenSSLCreateDriver is run. This will have no effect on Linux,
+        but it will hopefully ease the pain of Solaris and other users.
 
 	* docs: go see http://scottg.net for the new documentation on
 	nsopenssl.
