@@ -1,5 +1,8 @@
 2001-06-12  Scott S. Goodwin  <scott@scottg.net>
 
+	* nsopenssl-client-test.htm: added this file to test connectivity
+	for the nsopenssl client code.
+
 	* Makefile: removed old CLIENTVERIFY test preprocessor stuff.
 
 	* all: changed #ifdef AS3 to #ifndef NS_MAJOR_VERSION. This means
