@@ -63,23 +63,25 @@ FillBuf(Stream *sPtr);
  *
  * NsOpenSSLConnCreate --
  *
- *	Create an SSL connection. The socket has already been accept()ed
- *      and is ready for reading/writing.
+ * Create an SSL connection. The socket has already been accept()ed and is
+ * ready for reading/writing. Used to use OpenSSL's BIO abstraction to build a
+ * BIO stack that looked like this:
  *
- *      BIO stack:
+ *     nsopenssl module
+ *     buffering BIO
+ *     SSL BIO
+ *     socket BIO
+ *     TCP socket to client
  *
- *        nsopenssl module
- *        buffering BIO
- *        SSL BIO
- *        socket BIO
- *        TCP socket to client
- *
+ * I switched back to straight SSL to simplify the code and to improve
+ * performance. Though I don't have any evidence, I suspect BIOs add some
+ * performance overhead and I'm not sure they work well on every platform.
+ * 
  * Results:
- *      sslconn, which might be NULL
+ *     sslconn, which might be NULL
  *
  * Side effects:
- *      If the SSL connection was open then it will be forced to close
- *      first.
+ *     If the SSL connection was open then it will be forced to close first.
  *
  *----------------------------------------------------------------------
  */
@@ -106,11 +108,11 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 
     sslconn->server          = sslcontext->server;
     sslconn->sslcontext      = sslcontext;
+    sslconn->socket          = socket;
     sslconn->wsock           = INVALID_SOCKET;
     sslconn->ssl             = NULL;
     sslconn->sslctx          = NULL;
     sslconn->peerport        = -1;
-    sslconn->socket          = socket;
 
     /*
      * It's the caller's responsibility to increment the reference count; the
@@ -586,7 +588,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
     NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
     SOCKET         socket  = SSL_get_fd(ssl);
 
-    //Ns_Log(Debug, "Send(%d): START: towrite = %d, wrote = %d", socket, towrite, total);
+    Ns_Log(Debug, "Send(%d): START: towrite = %d, wrote = %d", socket, towrite, total);
 
     /*
      * We loop until all bytes are written. We can call NsOpenSSLRecv() at any
@@ -595,7 +597,9 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
      */
 
     while (total < towrite) {
-        rc = SSL_write(ssl, (char *) (buffer + total), (towrite - total));
+
+        //rc = SSL_write(ssl, (char *) (buffer + total), (towrite - total));
+        rc = SSL_write(ssl, (char *) buffer, towrite);
 
         if (rc > 0) {
             total += rc;
@@ -606,47 +610,47 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
         switch(SSL_get_error(ssl, rc)) {
 
             case SSL_ERROR_NONE:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_NONE             (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_NONE             (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
             case SSL_ERROR_WANT_WRITE:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
             case SSL_ERROR_WANT_READ:
                 /* We want to read but socket's nothing to read yet */
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
             case SSL_ERROR_WANT_X509_LOOKUP:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_X509_LOOKUP (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_WANT_X509_LOOKUP (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 SSL_renegotiate(ssl);
                 SSL_write(ssl, NULL, 0);
                 break;
 
             case SSL_ERROR_SYSCALL:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 // XXX should check for invalid socket here ?
                 break;
 
             case SSL_ERROR_SSL:
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 // XXX should check for invalid socket here ?
                 break;
 
             case SSL_ERROR_ZERO_RETURN:
                 /* We'll never see this error: either some bytes were written or we get a real error */
-                //Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
 
             default:
-                //Ns_Log(Debug, "Send(%d): FALLTHROUGH (error)        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                Ns_Log(Debug, "Send(%d): FALLTHROUGH (error)        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 break;
         }
 
     }
 
-    //Ns_Log(Debug, "Send(%d): END:   towrite = %d, wrote = %d", socket, towrite, total);
+    Ns_Log(Debug, "Send(%d): END:   towrite = %d, wrote = %d", socket, towrite, total);
     return total;
 }
 
@@ -684,189 +688,78 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
      * available. We don't have to worry about overflowing the buffer: SSL read
      * will return SSL_ERROR_NONE if we've read up to the toread limit.
      */
-     
-    //Ns_Log(Debug, "Recv(%d): START: toread = %d, read = %d", socket, toread, total);
+
+    /*
+     * OpenSSL man page for SSL_read() states that if SSL_read() generates an
+     * SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE, you *must* call SSL_read()
+     * again with the same arguments. This means we don't do any buffer
+     * management ourselves, so we don't use an offset into the buffer for
+     * multiple calls to SSL_read().
+     */
+
+
+    Ns_Log(Debug, "Recv(%d): START: toread = %d, read = %d, pending = %d", socket, toread, total, SSL_pending(ssl));
 
     do {
 
-        rc = SSL_read(ssl, (char *) (buffer + total), (toread - total));
+        rc = SSL_read(ssl, (char *) buffer, toread);
 
         if (rc > 0) {
+
             total += rc;
-        }
 
-        switch(SSL_get_error(ssl, rc)) {
+        } else if (rc == 0) {
 
-            case SSL_ERROR_NONE:
-                //Ns_Log(Debug, "Recv(%d): SSL_ERROR_NONE              (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
+            if (SSL_pending(ssl) == 0) {
+                return total;
+            }
 
-            case SSL_ERROR_WANT_WRITE:
-                //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
+        } else {
 
-            case SSL_ERROR_WANT_READ:
-                //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
+            switch(SSL_get_error(ssl, rc)) {
 
-            case SSL_ERROR_WANT_X509_LOOKUP:
-                //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
+                case SSL_ERROR_NONE:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_NONE              (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    break;
 
-            case SSL_ERROR_SYSCALL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                return -1;
-                break;
+                case SSL_ERROR_WANT_WRITE:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    break;
 
-            case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                return -1;
-                break;
+                case SSL_ERROR_WANT_READ:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    break;
 
-            case SSL_ERROR_ZERO_RETURN:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                return -1;
-                break;
+                case SSL_ERROR_WANT_X509_LOOKUP:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    break;
 
-            default:
-                Ns_Log(Debug, "Recv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                return -1;
-                break;
+                case SSL_ERROR_SYSCALL:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    return -1;
+                    break;
 
+                case SSL_ERROR_SSL:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    return -1;
+                    break;
+
+                case SSL_ERROR_ZERO_RETURN:
+                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    return -1;
+                    break;
+
+                default:
+                    Ns_Log(Debug, "Recv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    return -1;
+                    break;
+
+            }
         }
 
     } while (SSL_get_error(ssl, rc) != SSL_ERROR_NONE);
 
-    //Ns_Log(Debug, "Recv(%d): END:   toread = %d, read = %d", socket, toread, total);
-
-    return total;
-}
-
-#if 0
-again:
-    rc = SSL_read(ssl, (char *) buffer, toread);
-    if (rc > 0) {
-        total += rc;
-    } else {
-        //Ns_Log(Debug, "Recv(%d): (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-        switch(SSL_get_error(ssl, rc)) {
-
-            case SSL_ERROR_NONE:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_NONE              (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-
-            case SSL_ERROR_WANT_WRITE:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                goto again;
-                break;
-
-            case SSL_ERROR_WANT_READ:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                goto again;
-                //Ns_Fatal("Quit");
-                break;
-
-            case SSL_ERROR_WANT_X509_LOOKUP:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                goto again;
-                //SSL_renegotiate(ssl);
-                //SSL_write(ssl, NULL, 0);
-                //goto again;
-                break;
-
-            case SSL_ERROR_SYSCALL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                Ns_Fatal("Quit");
-                break;
-
-            case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                Ns_Fatal("Quit");
-                break;
-
-            case SSL_ERROR_ZERO_RETURN:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                Ns_Fatal("Quit");
-                break;
-
-            default:
-                Ns_Log(Debug, "Recv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                Ns_Fatal("Quit");
-                break;
-
-        }
-    }
-
     Ns_Log(Debug, "Recv(%d): END:   toread = %d, read = %d", socket, toread, total);
-    return total;
-}
-#endif
-
-extern int
-NsOpenSSLConnRecv2(SSL *ssl, void *buffer, int toread)
-{
-    int            rc      = 0;
-    int            total   = 0;
-    NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
-
-    SOCKET socket  = INVALID_SOCKET;
-
-    socket = SSL_get_fd(ssl);
-
-    //Ns_Log(Debug, "Recv(%d): START: toread = %d", socket, toread);
-
-    /*
-     * If client is cut off (as in somebody pulled the cable) which is apt to
-     * happen with dialup users, we can get stuck in a read loop where the core
-     * server keeps calling us to read bytes from a connection that is truly
-     * gone (which is why this test comes before the 'again' label). This ties
-     * up the read thread in an infinite loop that chews up the CPU resource.
-     * To handle this we keep track of failed reads. If they hit a magic
-     * number, we return an error to the server, which then closes the
-     * connection properly.
-     */
-
-again:
-    rc = SSL_read(ssl, (char *) buffer, toread);
-    if (rc > 0) {
-        total += rc;
-    } else {
-        Ns_Log(Debug, "Recv(%d): (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-        switch(SSL_get_error(ssl, rc)) {
-            case SSL_ERROR_NONE:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-            case SSL_ERROR_WANT_WRITE:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                goto again;
-                break;
-            case SSL_ERROR_WANT_READ:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                //sleep(3);
-                goto again;
-                //Ns_Fatal("Quit");
-                break;
-            case SSL_ERROR_WANT_X509_LOOKUP:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                goto again;
-                break;
-                //SSL_renegotiate(ssl);
-                //SSL_write(ssl, NULL, 0);
-                //goto again;
-            case SSL_ERROR_SYSCALL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-            case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-            case SSL_ERROR_ZERO_RETURN:
-                Ns_Log(Debug, "Recv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-            default:
-                Ns_Log(Debug, "Recv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                break;
-        }
-    }
 
     return total;
 }

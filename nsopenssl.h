@@ -88,8 +88,6 @@
 #define DEFAULT_BUFFER_SIZE            16384
 #define DEFAULT_SEEDBYTES              1024
 #define DEFAULT_MAXBYTES               1024000
-#define DEFAULT_READ_ABORT_COUNT       1000
-#define DEFAULT_WRITE_ABORT_COUNT      1000
 
 #define CONFIG_MODULE_DIR              "ModuleDir"
 #define CONFIG_RANDOM_FILE             "RandomFile"
@@ -157,13 +155,13 @@ typedef struct NsOpenSSLConn {
     Ns_Mutex                  lock;
     char                     *server;
     int                       peerport;  /* port this connection came in or went out on */
-    int                       peeraddr;  /* IP address of remote side */
+    char                     *peeraddr;  /* String Peer IP from core server */
     char                      peer[16];  /* peer's name */
     struct NsOpenSSLContext  *sslcontext;
     SSL_CTX                  *sslctx;
     SSL                      *ssl;       /* initialized SSL instance itself */
-    //xxx BIO                      *bio;        /* block i/o */
     SOCKET                    socket;
+    /* XXX change the code to use the one socket for both read / write */
     SOCKET                    wsock;
     int                       refcnt;    /* don't ns_free() unless this is 0 */
     int                       timeout;

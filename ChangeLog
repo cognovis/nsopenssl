@@ -1,3 +1,8 @@
+2004-02-16  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.h, ssl.c: Fixed SSL read loop problem; improved processing
+      path.
+
 2004-02-15  Scott Goodwin  <scott@scottg.net>
 
       * ssl.c: Restructured SSL read and write loops; both now take into
