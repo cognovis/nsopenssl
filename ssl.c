@@ -608,7 +608,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
             continue;
         }
 
-        Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
+        //Ns_Log(Debug, "Send(%d): (towrite = %d; total = %d; rc = %d)", socket, towrite, total, rc);
 
         switch(SSL_get_error(ssl, rc)) {
 
@@ -736,7 +736,10 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
 
                 case SSL_ERROR_WANT_READ:
                     //Ns_Log(Debug, "Recv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-                    if (rc < 0 && ns_sockerrno == EWOULDBLOCK && Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait) != NS_OK) {
+                    if (rc < 0 
+                        && ns_sockerrno == EWOULDBLOCK 
+                        && Ns_SockWait(sslconn->socket, NS_SOCK_READ, sslconn->recvwait) != NS_OK) 
+                    {
                         return -1;
                     }
                     break;
