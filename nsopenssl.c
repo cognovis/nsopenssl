@@ -42,13 +42,10 @@ static const char *RCSID =
     "@(#) $Header$, compiled: "
     __DATE__ " " __TIME__;
 
-#include "nsopenssl.h"
 
-/*
- * Initialize SSL Contexts
- */
+#include "nsopenssl.h"
 
-static int InitSSLContexts ();
+/* XXX merge these into the Ns_OpenSSLContext* equivalents ... */
 static int SetProtocols (Ns_OpenSSLContext *context);
 static int SetCipherSuite (Ns_OpenSSLContext *context);
 static int LoadCertificate (char *module, SSL_CTX *context, char *certFile);
@@ -582,28 +579,6 @@ SessionCacheIdGetNext (void)
 /*
  *----------------------------------------------------------------------
  *
- * Ns_OpenSSLContextModuleDirGet --
- *
- *       Get the module directory for a particular SSL context
- *
- * Results:
- *       String pointer; might be NULL
- *
- * Side effects:
- *       None
- *
- *----------------------------------------------------------------------
- */
-
-char *
-Ns_OpenSSLContextModuleDirGet(server, module, context) {
-    return context->moduledir;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
  * Ns_OpenSSLContextModuleDirSet --
  *
  *       Set the module directory for a particular SSL context
@@ -625,6 +600,27 @@ Ns_OpenSSLContextModuleDirSet(server, module, context, moduleDir)
     context->moduledir = moduleDir;
 
     return NS_OK;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Ns_OpenSSLContextModuleDirGet --
+ *
+ *       Get the module directory for a particular SSL context
+ *
+ * Results:
+ *       String pointer; might be NULL
+ *
+ * Side effects:
+ *       None
+ *
+ *----------------------------------------------------------------------
+ */
+
+char *
+Ns_OpenSSLContextModuleDirGet(server, module, context) {
+    return context->moduledir;
 }
 
 
@@ -742,7 +738,7 @@ Ns_OpenSSLContextKeyFileGet(server, module, context) {
  */
 
 int
-Ns_OpenSSLContextProtocolSet(server, module, context, protocols)
+Ns_OpenSSLContextProtocolsSet(server, module, context, protocols)
 {
     /* XXX validate protocols? */
     context->protocols = protocols;
@@ -768,7 +764,7 @@ Ns_OpenSSLContextProtocolSet(server, module, context, protocols)
  */
 
 char *
-Ns_OpenSSLContextProtocolGet(server, module, context, protocols)
+Ns_OpenSSLContextProtocolsGet(server, module, context)
 {
     return context->protocols;
 }
@@ -1074,7 +1070,7 @@ Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
 
 /* XXX should session cache size be limited to size int? */
 int
-Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
+Ns_OpenSSLContextSessionCacheSizeGet(server, module, context)
 {
     return context->sessionCacheSize;
 }
@@ -1097,10 +1093,10 @@ Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
  */
 
 int
-Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
+Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTimeout)
 {
     /* XXX lock struct */
-    context->sessionCacheSize = sessionCacheSize;
+    context->sessionCacheTimeout = sessionCacheTimeout;
 
     return NS_OK;
 }
@@ -1123,12 +1119,10 @@ Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
  */
 
 int
-Ns_OpenSSLContextSessionCacheTimeoutSet(server, module, context, sessionCacheTimeout)
+Ns_OpenSSLContextSessionCacheTimeoutGet(server, module, context)
 {
     /* XXX lock struct */
-    context->sessionCacheTimeout = sessionCacheTimeout;
-
-    return NS_OK;
+    return context->sessionCacheTimeout;
 }
 
 
@@ -1175,7 +1169,7 @@ Ns_OpenSSLContextTraceSet(server, module, context, trace)
  */
 
 int
-Ns_OpenSSLContextSessionCacheSizeSet(server, module, context, sessionCacheSize)
+Ns_OpenSSLContextTraceGet(server, module, context)
 {
     return context->trace;
 }
@@ -1277,12 +1271,8 @@ Ns_OpenSSLContextCreate (char *server, char *module, char *name, char *desc, cha
     context->keyFile             = NULL; /* XXX DEFAULT_KEYFILE??? */
     context->CAFile              = NULL; /* XXX DEFAULT_CAFILE??? */
     context->CADir               = NULL; /* XXX DEFAULT_CADIR??? */
-    context->CRLFile             = NULL; /* XXX not supported yet */
-    context->CRLDir              = NULL; /* XXX not supported yet */
     context->peerVerify          = DEFAULT_PEER_VERIFY;
     context->peerVerifyDepth     = DEFAULT_PEER_VERIFY_DEPTH;
-    context->peerAbortOnInvalid  = 0;    /* XXX not supported yet */
-    context->peerAbortProc       = NULL; /* XXX not supported yet */
     context->protocols           = DEFAULT_PROTOCOLS;
     context->cipherSuite         = SSL_DEFAULT_CIPHER_LIST;
     context->sessionCache        = DEFAULT_SESSION_CACHE;
@@ -1492,9 +1482,9 @@ SetProtocols (Ns_OpenSSLContext *context)
     char *protocols = NULL;
 
     if (context->protocols == NULL) {
-	Ns_Log (Notice, "%s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
-		MODULE);
-	bits = 1;
+    	Ns_Log (Notice, "%s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
+		    MODULE);
+	    bits = 1;
     } else {
 	    protocols = ns_strdup (context->protocols);
 	    protocols = Ns_StrToLower (protocols);
@@ -1920,11 +1910,11 @@ GetModuleDir (char *server, char *module)
     /* Path not set in config; create default path */
     
     if (path == NULL) {
-	Ns_ModulePath (&ds, server, module, NULL);
-	path = Ns_DStringExport (&ds);
+    	Ns_ModulePath (&ds, server, module, NULL);
+	    path = Ns_DStringExport (&ds);
     } else if (! Ns_PathIsAbsolute (path)) {
-	Ns_DStringVarAppend (&ds, path, value, NULL);
-	path = Ns_DStringExport (&ds);
+	    Ns_DStringVarAppend (&ds, path, value, NULL);
+	    path = Ns_DStringExport (&ds);
     }
 
     Ns_Log (Notice, "Module directory defaults to %s", path);

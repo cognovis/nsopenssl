@@ -125,22 +125,18 @@ typedef struct Ns_OpenSSLContext {
     int                conntype;
     char              *name;
     char              *desc;
-    char              *certfile;             /* Cert file, PEM format */
-    char              *keyfile;              /* Key file, PEM format */
+    char              *certFile;             /* Cert file, PEM format */
+    char              *keyFile;              /* Key file, PEM format */
     char              *protocols;            /* Protocols to use */
-    char              *ciphersuite;          /* OpenSSL-formatted cipher string */
-    char              *cafile;               /* CA file, PEM format, concatenated */
-    char              *cadir;                /* CA dir */
-    char              *crlfile;              /* CRL file */
-    char              *crldir;               /* CRL directory */
-    int                peerverifyon;         /* 0 = peer verify off; 1 = peer verify on */
-    int                peerverifydepth;      /* How deep do we allow a verification path to be? */
-    int                peerabortoninvalid;   /* 1 = abort on invalid peer cert */
-    char              *peerabortproc;        /* Tcl proc that will handle the aborted conn */
-    int                sessioncacheon;       /* 0 = off; 1 = on */
-    int                sessioncacheid;
-    int                sessioncachesize;     /* In bytes */
-    int                sessioncachetimeout;  /* Flush session cache in seconds */
+    char              *cipherSuite;          /* OpenSSL-formatted cipher string */
+    char              *caFile;               /* CA file, PEM format, concatenated */
+    char              *caDir;                /* CA dir */
+    int                peerVerify;           /* 0 = peer verify off; 1 = peer verify on */
+    int                peerVerifyDepth;      /* How deep do we allow a verification path to be? */
+    int                sessionCache;         /* 0 = off; 1 = on */
+    int                sessionCacheId;
+    int                sessionCacheSize;     /* In bytes */
+    int                sessionCacheTimeout;  /* Flush session cache in seconds */
     int                trace;                /* 0 = off; 1 = on */
     SSL_CTX           *sslctx;
 } Ns_OpenSSLContext;
@@ -305,3 +301,67 @@ extern Ns_OpenSSLContext *NsOpenSSLContextSockClientDefault (void);
 
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
 		char *module, char *name, char *desc, char *type);
+
+extern int Ns_OpenSSLContextInit(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextModuleDirSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *moduleDir);
+extern char *Ns_OpenSSLContextModuleDirGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextCertFileSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *certFile);
+extern char *Ns_OpenSSLContextCertFileGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextKeyFileSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *keyFile);
+extern char *Ns_OpenSSLContextKeyFileGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextProtocolSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *protocols);
+extern char *Ns_OpenSSLContextProtocolGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextCAFileSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *CAFile);
+extern char *Ns_OpenSSLContextCAFileGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextCADirSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, char *CADir);
+extern char *Ns_OpenSSLContextCADirGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextPeerVerifySet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int peerVerify);
+extern int Ns_OpenSSLContextPeerVerifyGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int peerVerifyDepth);
+extern int Ns_OpenSSLContextPeerVerifyDepthGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextSessionCacheSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int sessionCache);
+extern int Ns_OpenSSLContextSessionCacheGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int sessionCacheSize);
+extern int Ns_OpenSSLContextSessionCacheSizeGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int sessionCacheTimeout);
+extern int Ns_OpenSSLContextSessionCacheTimeoutGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
+extern int Ns_OpenSSLContextTraceSet(char *server, char *module, 
+        Ns_OpenSSLContext *context, int trace);
+extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
+        Ns_OpenSSLContext *context);
+
