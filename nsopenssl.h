@@ -105,6 +105,9 @@ typedef struct NsServerSSLDriver {
     char                         *keyfile;
     char                         *cafile;
     char                         *cadir;
+    int                          cacheEnabled;
+    int                          cacheSize;
+    long                         cacheTimeout;
     char                         *randomFile;   /* Used to seed PRNG */
 
     /*
@@ -145,6 +148,9 @@ typedef struct NsClientSSLDriver {
     char                         *keyfile;
     char                         *cafile;
     char                         *cadir;
+    int                          cacheEnabled;
+    int                          cacheSize;
+    long                         cacheTimeout;
     char                         *randomFile;   /* Used to seed PRNG */
 
     /*
@@ -179,6 +185,9 @@ typedef struct NsOpenSSLContext {
     char                         *keyfile;
     char                         *cafile;
     char                         *cadir;
+    int                          cacheEnabled;
+    int                          cacheSize;
+    long                         cacheTimeout;
     char                         *randomFile;   /* Used to seed PRNG */
 } NsOpenSSLContext;
 

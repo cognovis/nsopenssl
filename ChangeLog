@@ -1,5 +1,7 @@
 2001-06-16  Scott S. Goodwin  <scott@scottg.net>
 
+	* init.c, nsopenssl.h: cleaned up InitSessionCache.
+
 	* init.c, nsopenssl.h: enormous changes to support client
 	connections. Started moving a lot of the config options into the
 	Driver structures so they are passed to things like LoadKey

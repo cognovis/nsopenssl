@@ -66,6 +66,7 @@ static int s_client_session_id_context = 2;
 
 static int InitializeSSL(void);
 static int MakeModuleDir(char *server, char *module, char **dirp);
+
 /*
  * Functions common to both client and server SSL
  */
@@ -78,11 +79,7 @@ static int LoadCertificate(NsOpenSSLContext *pdPtr);
 static int LoadKey(NsOpenSSLContext *pdPtr);
 static int CheckKey(NsOpenSSLContext *pdPtr);
 static int LoadCACerts(NsOpenSSLContext *pdPtr);
-static int InitSessionCache(NsOpenSSLContext *pdPtr, 
-		 char *configSessCacheLabel, int defaultSessCacheValue,
-		 char *configSessCacheTimeoutLabel, int defaultSessCacheTimeoutValue,
-		 char *configSessCacheSizeLabel, int defaultSessCacheSizeValue,
-		 int sessionCacheIDContext);
+static int InitSessionCache(NsOpenSSLContext *pdPtr);
 
 /*
  * SSL Server-only functions
@@ -256,8 +253,6 @@ NsServerSSLCreateDriver(char *server, char *module,
     sdPtr->refcnt = 1;
     sdPtr->lsock = INVALID_SOCKET;
 
-
-    /* XXX need to check for NS_ERRORs from these */
     sdPtr->certfile = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_CERTFILE, sdPtr->module->dir, DEFAULT_SERVER_CERTFILE);
 
@@ -269,6 +264,16 @@ NsServerSSLCreateDriver(char *server, char *module,
 
     sdPtr->cadir = ConfigPathDefault(sdPtr->module->name, sdPtr->module->configPath,
 			  CONFIG_SERVER_CADIR, sdPtr->module->dir, DEFAULT_SERVER_CADIR);
+
+    sdPtr->cacheEnabled = ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
+                          CONFIG_SERVER_SESSIONCACHE, DEFAULT_SERVER_SESSIONCACHE);
+
+    sdPtr->cacheSize = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
+			  CONFIG_SERVER_SESSIONCACHESIZE, DEFAULT_SERVER_SESSIONCACHESIZE);
+
+    sdPtr->timeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
+			  CONFIG_SERVER_SESSIONTIMEOUT, DEFAULT_SERVER_SESSIONTIMEOUT);
+
 
     if (
 	   ServerMakeContext(sdPtr)
@@ -288,12 +293,8 @@ NsServerSSLCreateDriver(char *server, char *module,
 	|| LoadCACerts((NsOpenSSLContext *) sdPtr)
 	   == NS_ERROR
 
-	|| InitSessionCache((NsOpenSSLContext *) sdPtr,
-	       CONFIG_SERVER_SESSIONCACHE, DEFAULT_SERVER_SESSIONCACHE,
-	       CONFIG_SERVER_SESSIONTIMEOUT, DEFAULT_SERVER_SESSIONTIMEOUT,
-	       CONFIG_SERVER_SESSIONCACHESIZE, DEFAULT_SERVER_SESSIONCACHESIZE,
-	       s_server_session_id_context)
-	   == NS_ERROR
+        || InitSessionCache((NsOpenSSLContext *) sdPtr)
+           == NS_ERROR
 
 	|| ServerInitLocation(sdPtr)
 	   == NS_ERROR
@@ -396,11 +397,7 @@ NsClientSSLCreateDriver(char *server, char *module,
         || LoadCACerts((NsOpenSSLContext *) cdPtr)
 	   == NS_ERROR
 
-	|| InitSessionCache((NsOpenSSLContext *) cdPtr,
-	       CONFIG_CLIENT_SESSIONCACHE, DEFAULT_CLIENT_SESSIONCACHE,
-	       CONFIG_CLIENT_SESSIONTIMEOUT, DEFAULT_CLIENT_SESSIONTIMEOUT,
-	       CONFIG_CLIENT_SESSIONCACHESIZE, DEFAULT_CLIENT_SESSIONCACHESIZE,
-	       s_client_session_id_context)
+        || InitSessionCache((NsOpenSSLContext *) cdPtr)
 	   == NS_ERROR
 
     ) {
@@ -788,57 +785,6 @@ SetProtocols(NsOpenSSLContext *pdPtr, char *configLabel)
 /*
  *----------------------------------------------------------------------
  *
- * ServerInitSessionCache --
- *
- *       Initialize the session cache for the SSL server as specified
- *       in the server config. This is an internal OpenSSL cache, so
- *       we don't do anything other than set a timeout and size.
- *
- * Results:
- *       NS_OK or NS_ERROR.
- *
- * Side effects:
- *       None.
- *
- *----------------------------------------------------------------------
- */
-
-int
-ServerInitSessionCache(NsServerSSLDriver *sdPtr)
-{
-    int cacheEnabled = ConfigBoolDefault(sdPtr->module->name, sdPtr->module->configPath,
-        CONFIG_SERVER_SESSIONCACHE, DEFAULT_SERVER_SESSIONCACHE);
-    int cacheSize;
-    long timeout;
-
-    if (cacheEnabled) {
-
-	SSL_CTX_set_session_cache_mode(sdPtr->context,
-	    SSL_SESS_CACHE_SERVER);
-
-        SSL_CTX_set_session_id_context(sdPtr->context,
-            (void *) &s_server_session_id_context,
-            sizeof(s_server_session_id_context));
-
-	timeout = (long) ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_SERVER_SESSIONTIMEOUT, DEFAULT_SERVER_SESSIONTIMEOUT);
-	SSL_CTX_set_timeout(sdPtr->context, timeout);
-
-	cacheSize = ConfigIntDefault(sdPtr->module->name, sdPtr->module->configPath,
-	    CONFIG_SERVER_SESSIONCACHESIZE, DEFAULT_SERVER_SESSIONCACHESIZE);
-	SSL_CTX_sess_set_cache_size(sdPtr->context, cacheSize);
-
-    } else {
-
-	SSL_CTX_set_session_cache_mode(sdPtr->context, SSL_SESS_CACHE_OFF);
-    }
-
-    return NS_OK;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * InitSessionCache --
  *
  *       Initialize the session cache for the SSL client or server as
@@ -855,38 +801,33 @@ ServerInitSessionCache(NsServerSSLDriver *sdPtr)
  */
 
 int
-InitSessionCache(NsOpenSSLContext *pdPtr,
-		 char *configSessCacheLabel, int defaultSessCacheValue,
-		 char *configSessCacheTimeoutLabel, int defaultSessCacheTimeoutValue,
-		 char *configSessCacheSizeLabel, int defaultSessCacheSizeValue,
-		 int sessionCacheIDContext)
+InitSessionCache(NsOpenSSLContext *pdPtr)
 {
-    int cacheEnabled = ConfigBoolDefault(pdPtr->module->name, pdPtr->module->configPath,
-        configSessCacheLabel, defaultSessCacheValue);
-    int cacheSize;
-    long timeout;
-
-    if (cacheEnabled) {
+    if (pdPtr->cacheEnabled) {
 
 	if (strcmp(pdPtr->type, SERVER_STRING) == 0) {
+
 	    SSL_CTX_set_session_cache_mode(pdPtr->context,
 		SSL_SESS_CACHE_SERVER);
+
+	    SSL_CTX_set_session_id_context(pdPtr->context,
+                (void *) &s_server_session_id_context,
+                sizeof(s_server_session_id_context));
+
 	} else {
+
 	    SSL_CTX_set_session_cache_mode(pdPtr->context,
 		SSL_SESS_CACHE_CLIENT);
+
+	    SSL_CTX_set_session_id_context(pdPtr->context,
+                (void *) &s_client_session_id_context,
+                sizeof(s_client_session_id_context));
+
 	}
 
-        SSL_CTX_set_session_id_context(pdPtr->context,
-            (void *) &sessionCacheIDContext,
-            sizeof(sessionCacheIDContext));
+	SSL_CTX_set_timeout(pdPtr->context, pdPtr->cacheTimeout);
 
-	timeout = (long) ConfigIntDefault(pdPtr->module->name, pdPtr->module->configPath,
-	    configSessCacheTimeoutLabel, defaultSessCacheTimeoutValue);
-	SSL_CTX_set_timeout(pdPtr->context, timeout);
-
-	cacheSize = ConfigIntDefault(pdPtr->module->name, pdPtr->module->configPath,
-	    configSessCacheSizeLabel, defaultSessCacheSizeValue);
-	SSL_CTX_sess_set_cache_size(pdPtr->context, cacheSize);
+	SSL_CTX_sess_set_cache_size(pdPtr->context, pdPtr->cacheSize);
 
     } else {
 
