@@ -1,3 +1,9 @@
+2004-01-17  Scott Goodwin  <scott@scottg.net>
+
+      * nsopenssl.h, ssl.c, tclcmds.c: Ripped out use of BIOs in
+      NsOpenSSLConnSend and NsOpenSSLConnRecv and replaced them with straight
+      SSL methods.
+
 2004-01-16  Scott Goodwin  <scott@scottg.net>
 
       * ssl.c, nsopenssl.h: Merged NsOpenSSLConnConnect and

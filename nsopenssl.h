@@ -200,26 +200,14 @@ extern int
 NsOpenSSLConnFlush(NsOpenSSLConn *sslconn);
 
 extern int 
-NsOpenSSLConnRecv(BIO *bio, void *buffer, int toread);
+NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread);
 
+// XXX const or CONST???
 extern int 
-NsOpenSSLConnSend(BIO *bio, void *buffer, int towrite);
+NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite);
 
 extern int
 NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn);
-
-// XXX remove
-#if 0
-extern int
-NsOpenSSLConnAccept(NsOpenSSLConn *sslconn);
-
-/* XXX test */
-extern int
-NsOpenSSLConnAccept2(NsOpenSSLConn *sslconn);
-
-extern int
-NsOpenSSLConnConnect(NsOpenSSLConn *sslconn);
-#endif
 
 /*
  * ssl.c

@@ -1710,19 +1710,18 @@ CreateTclChannel(NsOpenSSLConn *sslconn, Tcl_Interp *interp)
  *----------------------------------------------------------------------
  */
 
+// XXX see if *buf should be CONST
 static int
-ChanOutputProc(ClientData arg, char *buf, int toWrite,
+ChanOutputProc(ClientData arg, char *buf, int towrite,
 		int *errorCodePtr)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
     int            rc      = 0;
 
-    rc = NsOpenSSLConnSend(sslconn->bio, (void *) buf, toWrite);
-
-#if 0
-    Ns_Log(Debug, "ChanOutputProc: puts (%d) bytes -- supposed to puts (%d) bytes",
-            rc, toWrite);
-#endif
+    //rc = NsOpenSSLConnSend(sslconn->bio, (void *) buf, towrite);
+    Ns_Log(Debug, "ChanOutputProc: trying puts (%d) bytes", towrite);
+    rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
+    Ns_Log(Debug, "ChanOutputProc: actual puts (%d) bytes", rc);
 
     return rc;
 }
@@ -1753,7 +1752,8 @@ ChanInputProc(ClientData arg, char *buf, int bufSize,
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
     int            rc      = 0;
 
-    rc = NsOpenSSLConnRecv(sslconn->bio, (void *) buf, bufSize);
+    rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
+    //rc = NsOpenSSLConnRecv(sslconn->bio, (void *) buf, bufSize);
 
 #if 0
     Ns_Log(Debug, "ChanInputProc: gets got (%d) bytes; sslconn = (%p)",
