@@ -1,3 +1,22 @@
+2003-08-12  Scott Goodwin  <scott@scottg.net>
+
+        * nsopenssl.c: fixed bug when setting protocols; SSL handshake now
+        completes successfully.
+
+2003-08-10  Scott Goodwin  <scott@scottg.net>
+
+        * ssl.c: Got rid of SetNonBlocking(); calling Ns_SockSetNonBlocking
+        and Ns_SockSetBlocking directly.
+
+2003-08-08  Scott Goodwin  <scott@scottg.net>
+
+        * All:
+        - Ripped out AOLserver 3.x comm driver stuff
+        - Added Tcl hash to manage nsopenssl state for each virtual server
+        - OpenSSL library is initialized at first virtual server init
+        - New Ns_DriverInitData structure added (req'd AOLserver mod)
+        - Replaced config.c/h by using AOLserver C API config stuff directly
+
 2003-01-08  Scott Goodwin  <scott@scottg.net>
 
 	* All: Committing back to AOLserver SourceForge area prior to ripping
@@ -6,7 +25,7 @@
 
 2002-12-22  Scott Goodwin  <scott@scottg.net>
 
-	* Changes Today:
+	* thread.c, nsopenss.c:
 	Merged thread.c into nsopenssl.c.
 	
 2002-11-23  Scott Goodwin  <scott@scottg.net>

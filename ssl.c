@@ -58,16 +58,11 @@ typedef struct Stream {
  * Local functions defined in this file
  */
 
-static int CreateBIOStack (Ns_OpenSSLConn *sslconn);
 static int RunSSLHandshake (Ns_OpenSSLConn *sslconn);
 static int RunServerSSLHandshake (Ns_OpenSSLConn *sslconn);
 static void DestroySSLSockConn (Ns_OpenSSLConn *sslconn);
 static int GetLine (Stream *stream, Ns_DString *ds);
 static int FillBuf (Stream *stream);
-
-#if 0				/* XXX not used right now, but may be later */
-static int SetNonBlocking (Ns_OpenSSLConn *sslconn, int flag);
-#endif
 
 
 /*
@@ -93,8 +88,9 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *
         int role)
 {
     Ns_OpenSSLConn *sslconn;
+    BIO *sock_bio;
+    BIO *ssl_bio;
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: enter");
 
     sslconn = ns_calloc(1, sizeof(Ns_OpenSSLConn));
     sslconn->role       = role;
@@ -109,11 +105,7 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *
     sslconn->sock       = sock;
     sslconn->wsock      = INVALID_SOCKET;
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 2");
-
-    /*
-     * Create the SSL struct for a connection.
-     */
+    /* Create the SSL struct for a connection */
 
     sslconn->ssl = SSL_new (sslcontext->sslctx);
     if (sslconn->ssl == NULL) {
@@ -124,24 +116,50 @@ NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *
     SSL_clear (sslconn->ssl);
     SSL_set_app_data (sslconn->ssl, sslconn);
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 3");
-
     if (sslconn->role == ROLE_SERVER) {
     	SSL_set_accept_state (sslconn->ssl);
     } else {
     	SSL_set_connect_state (sslconn->ssl);
     }
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 6");
+    /*
+     * BIO stack:
+     *
+     *   nsopenssl module
+     *   buffering BIO
+     *   SSL BIO
+     *   socket BIO
+     *   TCP socket to client
+     */
 
-    if (CreateBIOStack (sslconn) == NS_ERROR || RunSSLHandshake (sslconn) == NS_ERROR) {
+    /* Create socket BIO and attach it to the socket */
+
+    sock_bio = BIO_new_socket (sslconn->sock, BIO_NOCLOSE);
+
+    /* Create SSL BIO */
+
+    ssl_bio = BIO_new (BIO_f_ssl ());
+    BIO_set_ssl (ssl_bio, sslconn->ssl, BIO_NOCLOSE);
+    BIO_push (ssl_bio, sock_bio);
+
+    /* Create buffering BIO */
+
+    sslconn->io = BIO_new (BIO_f_buffer ());
+    /* XXX using core driver's value for bufsize here */
+    if (!BIO_set_write_buffer_size (sslconn->io, sslconn->sslcontext->bufsize)) {
+        Ns_Log(Error, "%s: BIO_set_write_buffer_size failed", MODULE);
+	return NS_ERROR;
+    }
+    BIO_push (sslconn->io, ssl_bio);
+
+    if (RunSSLHandshake (sslconn) == NS_ERROR) {
+        /* XXX these steps happen often enough; put in NsOpenSSLConnDestroy */
         SSL_set_shutdown (sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
         NsOpenSSLShutdown (sslconn->ssl);
         NsOpenSSLConnDestroy (sslconn);
         return NULL;
     }
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: leave");
     return sslconn;
 }
 
@@ -762,104 +780,6 @@ GetLine (Stream *stream, Ns_DString *ds)
 /*
  *----------------------------------------------------------------------
  *
- * CreateBIOStack --
- *
- *	Create a BIO stack that will be used to read and write to via
- *      SSL.
- *
- * Results:
- *      NS_OK or NS_ERROR.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-static int
-CreateBIOStack (Ns_OpenSSLConn *sslconn)
-{
-    BIO *sock_bio;
-    BIO *ssl_bio;
-
-    Ns_Log(Notice, "CreateBIOStack: enter");
-
-    /*
-     * BIO stack:
-     *
-     *   nsopenssl module
-     *   buffering BIO
-     *   SSL BIO
-     *   socket BIO
-     *   TCP socket to client
-     */
-
-    /* Create socket BIO and attach it to the socket */
-
-    sock_bio = BIO_new_socket (sslconn->sock, BIO_NOCLOSE);
-
-    /* Create SSL BIO */
-
-    ssl_bio = BIO_new (BIO_f_ssl ());
-    BIO_set_ssl (ssl_bio, sslconn->ssl, BIO_NOCLOSE);
-    BIO_push (ssl_bio, sock_bio);
-
-    /* Create buffering BIO */
-
-    sslconn->io = BIO_new (BIO_f_buffer ());
-    /* XXX using core driver's value for bufsize here */
-    if (!BIO_set_write_buffer_size (sslconn->io, sslconn->sslcontext->bufsize)) {
-        Ns_Log(Error, "%s: BIO_set_write_buffer_size failed", MODULE);
-	return NS_ERROR;
-    }
-    BIO_push (sslconn->io, ssl_bio);
-
-    return NS_OK;
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
- * SetNonBlocking --
- *
- *	Put the socket in blocking/nonblocking mode.
- *
- * Results:
- *      NS_OK or NS_ERROR.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-/* XXX not used right now, but may be shortly */
-
-static int
-SetNonBlocking (Ns_OpenSSLConn *sslconn, int flag)
-{
-    return BIO_socket_nbio (sslconn->sock, flag) ? NS_OK : NS_ERROR;
-
-#if 0
-    int rc;
-
-    if (flag) {
-	Ns_SockSetNonBlocking (sslconn->sock);
-    } else {
-	Ns_SockSetBlocking (sslconn->sock);
-    }
-    rc = BIO_set_nbio (sslconn->io, flag);
-    Ns_Log (Debug, "Set BIO to BIO_set_nbio = %d", flag);
-
-    return NS_OK;
-#endif
-}
-
-
-/*
- *----------------------------------------------------------------------
- *
  * RunSSLHandshake --
  *
  *	Run the SSL handshake sequence.
@@ -879,8 +799,6 @@ RunSSLHandshake (Ns_OpenSSLConn *sslconn)
     int rc;
     //char buffer[256];
     //char *buf = (char *) &buffer;
-
-    Ns_Log(Notice, "RunSSLHandshake: enter");
 
     /* XXX reverse these -- server handshakes happen more often */
     if (sslconn->role == ROLE_SERVER) {
@@ -939,27 +857,24 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
     time_t endtime;
     struct timeval tv;
     fd_set *wfds, *rfds, fds;
+    char errstring[132];
 
-    Ns_Log(Notice, "RunServerSSLHandshake: enter");
-
-    if (SetNonBlocking (sslconn, 1) == NS_ERROR) {
-	Ns_Log (Warning,
-		"%s: %s: could not put socket in non-blocking mode; "
-		"timeout may not be enforced: %s",
-		MODULE, sslconn->server, ns_sockstrerror (errno));
-    }
+    Ns_SockSetBlocking(sslconn->sock);
+    /* XXX check this */
+    //BIO_set_nbio (sslconn->io, 0);
 
     /* XXX using core driver's value for sendwait */
     endtime = time (NULL) + sslconn->ssldriver->driver->sendwait + 1;
     FD_ZERO (&fds);
 
-    Ns_Log(Notice, "RunServerSSLHandshake: s1");
     while (1) {
 	rc = SSL_accept (sslconn->ssl);
+
 	if (rc == 1)
 	    break;
 
 	error = SSL_get_error (sslconn->ssl, rc);
+
 	if (error == SSL_ERROR_SYSCALL) {
 	    if (rc == 0) {
 	    	Ns_Log (Error, "%s: %s: EOF during SSL handshake", MODULE, sslconn->server);
@@ -968,12 +883,26 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
                         MODULE, sslconn->server, ns_sockstrerror (errno));
 	    }
 	    return NS_ERROR;
+
 	} else if (error == SSL_ERROR_WANT_READ) {
 	    rfds = &fds;
 	    wfds = NULL;
+
 	} else if (error == SSL_ERROR_WANT_WRITE) {
 	    rfds = NULL;
 	    wfds = &fds;
+
+	} else if (error == SSL_ERROR_ZERO_RETURN) {
+	    Ns_Log (Error, "%s: %s: SSL_ERROR_ZERO_RETURN", MODULE, sslconn->server);
+	} else if (error == SSL_ERROR_NONE) {
+	    Ns_Log (Error, "%s: %s: SSL_ERROR_NONE", MODULE, sslconn->server);
+	} else if (error == SSL_ERROR_WANT_CONNECT) {
+	    Ns_Log (Error, "%s: %s: SSL_ERROR_WANT_CONNECT", MODULE, sslconn->server);
+	} else if (error == SSL_ERROR_WANT_ACCEPT) {
+	    Ns_Log (Error, "%s: %s: SSL_ERROR_WANT_ACCEPT", MODULE, sslconn->server);
+	} else if (error == SSL_ERROR_WANT_X509_LOOKUP) {
+	    Ns_Log (Error, "%s: %s: SSL_ERROR_X509_LOOKUP", MODULE, sslconn->server);
+
 	} else {
 	    Ns_Log (Error, "%s: %s: error %d/%d during SSL handshake",
 		    MODULE, sslconn->server, rc, error);
@@ -1003,11 +932,9 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
 
     sslconn->peercert = SSL_get_peer_certificate (sslconn->ssl);
 
-    if (SetNonBlocking (sslconn, 0) == NS_ERROR) {
-	Ns_Log (Warning, "%s: %s: could not put socket in blocking mode; "
-		"results unpredictable: %s",
-		MODULE, sslconn->server, ns_sockstrerror (errno));
-    }
+    Ns_SockSetNonBlocking(sslconn->sock);
+    /* XXX check this */
+    //BIO_set_nbio (sslconn->io, 1);
 
     /* XXX log if the cert is valid as a test */
 #if 0

@@ -45,7 +45,7 @@ static const char *RCSID =
 
 #include "nsopenssl.h"
 
-Tcl_HashTable NsOpenSSLVirtualServerTable;
+Tcl_HashTable NsOpenSSLServers;
 NsOpenSSLSessionCacheId *nextSessionCacheId;
 
 static int PeerVerifyCallback (int preverify_ok, X509_STORE_CTX *x509_ctx);
@@ -631,44 +631,40 @@ Ns_OpenSSLContextProtocolsSet(char *server, char *module, Ns_OpenSSLContext *ssl
     int bits = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
     char *lprotocols = NULL;
 
-    /* XXX Need to ifdef out the protocols and ciphers that aren't compiled*/
-    /* XXX a particular instance of an OpenSSL library */
-
-    Ns_Log(Debug, "%s: %s: protocols set to %s", MODULE, server, protocols);
-    sslcontext->protocols = protocols;
+    /* XXX Need to ifdef out the protocols and ciphers that aren't compiled into OpenSSL */
 
     if (protocols == NULL) {
-    	Ns_Log (Notice, "%s: %s: Protocol string not set; using all protocols: SSLv2, SSLv3 and TLSv1",
+    	Ns_Log (Notice, "%s: %s: Protocol parameter not set; using all protocols: SSLv2, SSLv3 and TLSv1",
                 MODULE, server);
-	    bits = 1;
+            bits &= ~bits;
     } else {
 	    lprotocols = Ns_StrDup(protocols);
 	    lprotocols = Ns_StrToLower(lprotocols);
 
 	    if (strstr (lprotocols, "all") != NULL) {
-	        bits = 1;
 	        Ns_Log (Notice, "%s: %s: using all protocols: SSLv2, SSLv3 and TLSv1",
                     MODULE, server);
+                bits &= ~bits;
 	    } else {
-	        if (strstr (protocols, "sslv2") != NULL) {
-                    bits &= ~SSL_OP_NO_SSLv2;
+	        if (strstr (lprotocols, "sslv2") != NULL) {
                     Ns_Log (Notice, "%s: %s: Using SSLv2 protocol", MODULE, server);
+                    bits &= ~SSL_OP_NO_SSLv2;
 	        }
-	        if (strstr (protocols, "sslv3") != NULL) {
-                    bits &= ~SSL_OP_NO_SSLv3;
+	        if (strstr (lprotocols, "sslv3") != NULL) {
                     Ns_Log (Notice, "%s: %s: Using SSLv3 protocol", MODULE, server);
+                    bits &= ~SSL_OP_NO_SSLv3;
 	        }
-	        if (strstr (protocols, "tlsv1") != NULL) {
-                    bits &= ~SSL_OP_NO_TLSv1;
+	        if (strstr (lprotocols, "tlsv1") != NULL) {
                     Ns_Log (Notice, "%s: %s: Using TLSv1 protocol",
                         MODULE, server);
+                    bits &= ~SSL_OP_NO_TLSv1;
 	        }
         }
 
     	Ns_Free(lprotocols);
     }
 
-    /* XXX see if there's a simpler way to do this whole function */
+    sslcontext->protocols = protocols;
     SSL_CTX_set_options(sslcontext->sslctx, bits);
 
     return NS_OK;
@@ -1213,7 +1209,7 @@ Ns_OpenSSLContextTraceGet(char *server, char *module, Ns_OpenSSLContext *sslcont
 Ns_OpenSSLContext *
 Ns_OpenSSLContextCreate (char *server, char *module)
 {
-    Ns_OpenSSLContext *sslcontext = NULL;
+    Ns_OpenSSLContext *sslcontext;
     Ns_DString ds;
 
 #if 0
@@ -1242,14 +1238,15 @@ Ns_OpenSSLContextCreate (char *server, char *module)
      * necessary so cache ids don't collide.
      */
 
+    /* XXX see if session cache ids can be alpha-numeric */
     Ns_MutexLock(&nextSessionCacheId->lock);
     sslcontext->sessionCacheId = nextSessionCacheId->id;
     nextSessionCacheId->id++;
     Ns_MutexUnlock(&nextSessionCacheId->lock);
 
     /*
-     * Set initial default values that can be overridden in nsd.tcl, C API and
-     * Tcl API.
+     * First we set initial default values. These can be overridden in nsd.tcl,
+     * C API and Tcl API.
      */
 
     Ns_DStringInit (&ds);
@@ -1290,56 +1287,37 @@ Ns_OpenSSLContextCreate (char *server, char *module)
      * (i.e. these are not configurable via nsd.tcl or Ns_OpenSSL* calls).
      */
 
-    Ns_Log(Notice, "*** SSL_CTX_new: BEFORE");
-
     if (sslcontext->role == ROLE_SERVER) {
         /* XXX should I select this by looking at protocols? */
         sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
-        Ns_Log(Notice, "*** SSL_CTX_new for SERVER");
+        Ns_Log(Debug, "*** SSL_CTX_new for SERVER");
     } else {
         sslcontext->sslctx = SSL_CTX_new(SSLv23_client_method());
-        Ns_Log(Notice, "*** SSL_CTX_new for CLIENT");
+        Ns_Log(Debug, "*** SSL_CTX_new for CLIENT");
     }
    
-        Ns_Log(Notice, "*** ssl_ctx=%p");
+        Ns_Log(Debug, "*** ssl_ctx=%p");
     if (sslcontext->sslctx == NULL) {
         /* XXX FAILURE: clean up and then free the struct */
         return NULL;
     }
 
-    /*
-     * This allows us to get to our context struct within OpenSSL callback
-     * functions.
-     */
-
+    /* Allows us to get context struct from within OpenSSL callbacks */
     SSL_CTX_set_app_data (sslcontext->sslctx, sslcontext);
 
-    /*
-     * Enable SSL bug compatibility.
-     * XXX expand this so user can configure what bug handling options they
-     * want
-     */
-
+    /* Enable SSL bug compatibility */
     SSL_CTX_set_options (sslcontext->sslctx, SSL_OP_ALL);
 
-    /*
-     * This apparently prevents some sort of DH attack.
-     */
-
+    /* This apparently prevents some sort of DH attack */
     SSL_CTX_set_options (sslcontext->sslctx, SSL_OP_SINGLE_DH_USE);
 
-    /*
-     * Temporary key callback required for 40-bit export browsers
-     */
-
+    /* Temporary key callback required for 40-bit export browsers */
     SSL_CTX_set_tmp_rsa_callback (sslcontext->sslctx, IssueTmpRSAKey);
 
-    /*
-     * Insert the context into the linked list. Instead of wasting time looking
-     * for the end of the list, we'll insert it at the front.
-     */
+    /* Insert the context into the linked list */
 
     /* XXX lock firstSSLContext before modifying */
+    /* XXX these need to be merged into virtual server table */
     if (firstSSLContext != NULL) {
 	    /* There are already other contexts */
 	    sslcontext->next = firstSSLContext;
@@ -1375,6 +1353,7 @@ Ns_OpenSSLContextCreate (char *server, char *module)
 int
 Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *sslcontext)
 {
+    /* XXX fill this in */
     return NS_OK;
 }
 
