@@ -433,21 +433,32 @@ SockThread (void *ignored)
 		    }
 
 		    memset (scPtr, 0, sizeof *scPtr);
-		    scPtr->module = sdPtr->module;
-		    scPtr->role = ROLE_SSL_SERVER;
-		    scPtr->conntype = CONNTYPE_SSL_NSD;
-		    scPtr->type = STR_NSD_SERVER;
-		    scPtr->bufsize = sdPtr->bufsize;
-		    scPtr->timeout = sdPtr->timeout;
-		    scPtr->context = sdPtr->context;
-		    scPtr->refcnt = 0;	/* always 0 for server conns */
-		    scPtr->sdPtr = sdPtr;
-		    scPtr->sock = sock;
-		    scPtr->address = sdPtr->address;	/* Do not free - driver frees it */
-		    scPtr->bindaddr = sdPtr->bindaddr;	/* Do not free - driver frees it */
-		    scPtr->port = sdPtr->port;
-		    scPtr->peerport = ntohs (sa.sin_port);
+
+		    /* These are freed by NsOpenSSLFreeDriver */
+		    scPtr->server       = sdPtr->server;
+		    scPtr->module       = sdPtr->module;
+		    scPtr->configPath   = sdPtr->configPath;
+		    scPtr->address      = sdPtr->address;	/* Do not free - driver frees it */
+		    scPtr->bindaddr     = sdPtr->bindaddr;	/* Do not free - driver frees it */
+		    scPtr->port         = sdPtr->port;
+		    scPtr->bufsize      = sdPtr->bufsize;
+		    scPtr->timeout      = sdPtr->timeout;
+
+		    scPtr->context      = sdPtr->context;
+
+		    /* These need to be freed by NsOpenSSLDestroyConn */
+		    scPtr->sdPtr        = sdPtr;
+		    scPtr->refcnt       = 0;	                /* always 0 for server conns */
+		    scPtr->role         = ROLE_SSL_SERVER;      /* ssl server mode */
+		    scPtr->conntype     = CONNTYPE_SSL_NSD;     /* socket driven by core nsd */
+		    scPtr->type         = STR_NSD_SERVER;       /* pretty name for the conntype */
+		    scPtr->sock         = sock;
+		    scPtr->wsock        = INVALID_SOCKET;
+		    scPtr->ssl          = NULL;
+		    scPtr->io           = NULL;
+		    scPtr->peercert     = NULL;
 		    strcpy (scPtr->peer, ns_inet_ntoa (sa.sin_addr));
+		    scPtr->peerport     = ntohs (sa.sin_port);
 
 		    if (Ns_QueueConn (sdPtr->driver, scPtr) != NS_OK) {
 			Ns_Log (Warning, "%s: connection dropped",

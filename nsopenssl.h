@@ -65,7 +65,9 @@
 
 #define SSL_LIBRARY_NAME  "OpenSSL"
 
-#if OPENSSL_VERSION_NUMBER   == 0x0090602fL
+#if OPENSSL_VERSION_NUMBER   == 0x0090603fL
+#  define SSL_LIBRARY_VERSION  "0.9.6c"
+#elif OPENSSL_VERSION_NUMBER   == 0x0090602fL
 #  define SSL_LIBRARY_VERSION  "0.9.6b"
 #elif OPENSSL_VERSION_NUMBER   == 0x0090601fL
 #  define SSL_LIBRARY_VERSION  "0.9.6a"
@@ -90,7 +92,7 @@ typedef struct NsOpenSSLDriver {
     struct Ns_OpenSSLConn *firstFreePtr;
     Ns_Driver driver;
     Ns_Mutex lock;
-    int refcnt;
+    int      refcnt;
 
     char    *server;		/* Server name */
     char    *module;		/* Module name */
@@ -113,30 +115,32 @@ typedef struct NsOpenSSLDriver {
 
 typedef struct Ns_OpenSSLConn {
 	/* These are NOT to be freed by NsOpenSSLDestroyConn */
-    char *server;		/* Server name */
-    char *module;		/* Module name (e.g. 'nsopenssl') */
-    char *configPath;	/* Path to the configuration file */
-    char *dir;			/* Module directory (on disk) */
-    char *location;		/* E.g. https://example.com:8443 */
-    char *address;		/* Advertised address for this module instance */
-    char *bindaddr;		/* Bind address for this module instance - might be 0.0.0.0 */
-    int   port;			/* The port the server is listening on for this module instance */
-    int   bufsize;
-    int   timeout;
+    char    *server;		/* Server name */
+    char    *module;		/* Module name (e.g. 'nsopenssl') */
+    char    *configPath;	/* Path to the configuration file */
+    char    *dir;		/* Module directory (on disk) */
+    char    *location;		/* E.g. https://example.com:8443 */
+    char    *address;		/* Advertised address for this module instance */
+    char    *bindaddr;		/* Bind address for this module instance - might be 0.0.0.0 */
+    int      port;		/* The port the server is listening on for this module instance */
+    int      bufsize;
+    int      timeout;
+
+    SSL_CTX *context;		/* Read-only context for creating SSL structs */
         
     /* These must be freed by NsOpenSSLDestroyConn */
-    int      refcnt;			/* Don't destroy struct if refcnt > 0 (see CreateTclChannel in tclcmds.c) */
-    int      role;			/* client or server */
+    int      refcnt;            /* Don't destroy struct if refcnt > 0 (tclcmds.c) */
+    int      role;		/* client or server */
     int      conntype;		/* nsd server, sock server or client server conn */
-    char    *type;			/* 'nsdserver', 'sockserver', sockclient' */
+    char    *type;		/* 'nsdserver', 'sockserver', sockclient' */
     SOCKET   sock;
     SOCKET   wsock;
-    SSL_CTX *context;		/* Read-only context for creating SSL structs */
     SSL     *ssl;
-    BIO     *io;			/* All SSL i/o goes through this BIO */
+    BIO     *io;		/* All SSL i/o goes through this BIO */
     X509    *peercert;		/* Certificate for peer, may be NULL if no cert */
     char     peer[16];		/* Not used by nsd server conns in 4.x API */
     int      peerport;		/* Not used by nsd server conns in 4.x API */
+
 #ifndef NS_MAJOR_VERSION
     struct Ns_OpenSSLConn *nextPtr;
     struct NsOpenSSLDriver *sdPtr;

@@ -1,10 +1,17 @@
 2002-03-05  Scott S. Goodwin  <scott@scottg.net>
 
+	* nsopenssl.c, nsopenssl.c: cleaned up NsOpenSSLDriver and
+	Ns_OpenSSLConn structures some more, and cleaned up the
+	initialization of an Ns_OpenSSLConn in SockThread. Some items
+	weren't being initialized (they aren't yet being used, but should
+	still be initialized). Tag: nsopenssl-2_2_beta_4.
+
 	* nsopenssl.c, nsopenssl.h, tclcmds.c: rearranged the
 	NsOpenSSLDriver and Ns_OpenSSLConn structures to make it clearer
 	what items needed to be freed by what routines. Also changed port
 	to peerport in Ns_OpenSSLConn, and added the 'ns_openssl peerport'
-	command, which is the same as the 'ns_openssl port' command.
+	command, which is the same as the 'ns_openssl port' command.  Tag:
+	nsopenssl-2_2_beta_3.
 
 	* all: ran *.c and *.h through indent: indent -i2 -br -brs -ce
 	-hnl -psl -sob <filename.c>.
