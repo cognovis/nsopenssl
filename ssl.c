@@ -189,7 +189,7 @@ NsOpenSSLDestroyConn(NsOpenSSLConnection *scPtr)
 	    scPtr->ssl = NULL;
 	}
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
 	if (scPtr->sock != INVALID_SOCKET) {
 	    ns_sockclose(scPtr->sock);
 	    scPtr->sock = INVALID_SOCKET;
@@ -226,7 +226,7 @@ NsOpenSSLRecv(NsOpenSSLConnection *scPtr, void *buffer, int toread)
 again:
 #endif
 
-#if AS3
+#ifndef NS_MAJOR_VERSION
     do {
 	rc = BIO_read(scPtr->io, buffer, toread);
     } while (rc < 0 && BIO_should_retry(scPtr->io));
@@ -544,7 +544,7 @@ RunSSLHandshake(NsOpenSSLConnection *scPtr)
 
     scPtr->clientcert = SSL_get_peer_certificate(scPtr->ssl);
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
     if (SetNonBlocking(scPtr, 0) == NS_ERROR) {
 	Ns_Log(Warning,
 	    "%s: could not put socket in blocking mode; "

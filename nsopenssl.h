@@ -50,13 +50,25 @@
 /*
  * The encryption library may be different. For example, you may have
  * OpenSSL as the LIBRARY but BSAFE 4.3 as the CRYPTO_LIBRARY. There
- * should be ifdef's here that'll handle this later.
+ * should be ifdef's here that'll handle this later. But I haven't set
+ * it up to autodetect BSAFE cryptolib yet.
  */
 
-#define SSL_LIBRARY_NAME               "OpenSSL"
-#define SSL_LIBRARY_VERSION            "0.9.6"
-#define SSL_CRYPTO_LIBRARY_NAME        "OpenSSL"
-#define SSL_CRYPTO_LIBRARY_VERSION     "0.9.6"
+#define SSL_LIBRARY_NAME  "OpenSSL"
+#if OPENSSL_VERSION_NUMBER == 0x0090601fL
+#  define SSL_LIBRARY_VERSION  "0.9.6a"
+#elif OPENSSL_VERSION_NUMBER == 0x0090600fL
+#  define SSL_LIBRARY_VERSION  "0.9.6"
+#elif OPENSSL_VERSION_NUMBER == 0x0090581fL
+#  define SSL_LIBRARY_VERSION  "0.9.5a"
+#elif OPENSSL_VERSION_NUMBER == 0x00905100L
+#  define SSL_LIBRARY_VERSION  "0.9.5"
+#else
+#  define SSL_LIBRARY_VERSION  "Unknown"
+#endif
+
+#define SSL_CRYPTO_LIBRARY_NAME   "OpenSSL"
+#define SSL_CRYPTO_LIBRARY_VERSION  SSL_LIBRARY_VERSION 
 
 struct NsOpenSSLConnection;
 
@@ -91,7 +103,7 @@ typedef struct NsOpenSSLConnection {
     struct NsOpenSSLDriver   *sdPtr;
 
     SOCKET  sock;
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
     char    peer[16];
     int     port;
 #endif
@@ -106,7 +118,7 @@ typedef struct NsOpenSSLConnection {
  * init.c
  */
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
 extern NsOpenSSLDriver *NsOpenSSLCreateDriver(char *server, char *module,
     Ns_DrvProc *procs);
 #else

@@ -85,7 +85,7 @@ NS_EXPORT int Ns_ModuleInit(char *server, char *module);
  * Local functions defined in this file
  */
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
 
 static Ns_ThreadProc SockThread;
 static void SockFreeConn(NsOpenSSLDriver *sdPtr, NsOpenSSLConnection *scPtr);
@@ -162,7 +162,7 @@ Ns_ModuleInit(char *server, char *module)
 	return NS_ERROR;
     }
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
     sdPtr = NsOpenSSLCreateDriver(server, module, sockProcs);
 #else
     sdPtr = NsOpenSSLCreateDriver(server, module);
@@ -172,7 +172,7 @@ Ns_ModuleInit(char *server, char *module)
 	return NS_ERROR;
     }
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
     sdPtr->nextPtr = firstSSLDriverPtr;
     firstSSLDriverPtr = sdPtr;
 
@@ -183,7 +183,7 @@ Ns_ModuleInit(char *server, char *module)
 
 }
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
 
 /*
  *----------------------------------------------------------------------

@@ -87,7 +87,7 @@ static RSA * IssueTmpRSAKey(SSL *ssl, int export, int keylen);
  */
 
 NsOpenSSLDriver *
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
 NsOpenSSLCreateDriver(char *server, char *module, Ns_DrvProc *procs)
 #else
 NsOpenSSLCreateDriver(char *server, char *module)
@@ -137,7 +137,7 @@ NsOpenSSLCreateDriver(char *server, char *module)
     sdPtr->randomFile = ConfigPathDefault(sdPtr->module, sdPtr->configPath,
                                           CONFIG_RANDOMFILE, sdPtr->dir, NULL);
 
-#ifdef AS3
+#ifndef NS_MAJOR_VERSION
     sdPtr->driver = Ns_RegisterDriver(server, module, procs, sdPtr);
     if (sdPtr->driver == NULL) {
 	NsOpenSSLFreeDriver(sdPtr);

@@ -30,11 +30,6 @@ else
 #    MODLIBS  =  -L$(OPENSSL)/lib -lssl -lcrypto -L/usr/local/products/gcc-2.95/lib/gcc-lib/sparc-sun-solaris2.5.1/2.95 -lgcc
 endif
 
-ifdef AS3
-CFLAGS   +=  -DAS3 -I$(OPENSSL)/include
-endif
-
-
 # If you compiled OpenSSL without rc2, rc4, rc5 and idea, then use this instead
 #CFLAGS   +=  -I$(OPENSSL)/include -DNO_RC2 -DNO_RC4 -DNO_RC5 -DNO_IDEA 
 CFLAGS   +=  -I$(OPENSSL)/include
