@@ -221,21 +221,22 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
     # shouldn't.
     #
 
-    ns_log warning "TYPE=$type"
-    set boundary "-----------------------------16931435195472910531915358310"
+    ns_log notice "TYPE=$type"
+    set boundary "simple boundary"
 
     if {[string match "" $rqset]} { 
 	set rqset [ns_set new rqset]
-	ns_set put $rqset "Accept" "*/*\r"
-	ns_set put $rqset "User-Agent" "[ns_info name]-Tcl/[ns_info version]\r"
+	ns_set put $rqset "Accept" "*/*"
+	ns_set put $rqset "User-Agent" "[ns_info name]-Tcl/[ns_info version]"
     }
 
     if {$type == ""} {
-	ns_set put $rqset "Content-type" "application/x-www-form-urlencoded\r"
+	ns_set put $rqset "Content-type" "application/x-www-form-urlencoded"
     } elseif {$type == "multipart/form-data"} {
-	ns_set put $rqset "Content-type" "multipart/form-data, boundary=$boundary\r"
+	# Can't double-quote the boundary value because of form.tcl
+	ns_set put $rqset "Content-type" "multipart/form-data, boundary=$boundary"
     } else {
-	ns_set put $rqset "Content-type" "$type\r"
+	ns_set put $rqset "Content-type" "$type"
     }
 
     #
@@ -249,13 +250,18 @@ proc ns_httpspost {url {rqset ""} {qsset ""} {type ""} {timeout 30}} {
 	    for {set i 0} {$i < [ns_set size $qsset]} {incr i} {
 		set key [ns_set key $qsset $i]
 		set value [ns_set value $qsset $i]
-		append querystring "--${boundary}\n"
-		append querystring "Content-Disposition: form-data; name=\"$key\"\n\n"
-		append querystring "$value\n"
+		append querystring "--${boundary}\r\n"
+		append querystring "Content-Disposition: form-data; name=\"$key\"\r\n\r\n"
+		append querystring "$value\r\n"
 	    }
-	    append querystring "--${boundary}--"
-	    ns_log notice "QS that will be sent is\n$querystring\n"
+	    append querystring "--${boundary}--\n"
+	    ns_log notice "QUERYIS::\n$querystring\n"
 	    ns_set put $rqset "Content-length" [string length $querystring]
+
+	    for { set i 0 } { $i < [ns_set size $rqset] } { incr i } {
+		ns_log Notice "RQSET:: [ns_set key $rqset $i] = [ns_set value $rqset $i]"
+	    }
+
 	} else {
 	    ns_log notice "QS string is empty"
 	    ns_set put $rqset "Content-length" "0"

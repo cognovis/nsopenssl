@@ -1,3 +1,17 @@
+2001-12-12  Scott S. Goodwin  <scott@scottg.net>
+
+	* https.tcl: form.tcl doesn't respect the fact that a boundary
+	value declaration may be wrapped in double quotes. It will work
+	with this:
+
+          multipart/form-data, boundary=--123456789
+
+        but not this:
+
+          multipart/form-data, boundary="--123456789"
+
+	Changed https.tcl to work with form.tcl (for now).
+
 2001-12-02  Scott S. Goodwin  <scott@scottg.net>
 
 	* config.h: Added the CONFIG_MODULEDIR to create the ModuleDir
