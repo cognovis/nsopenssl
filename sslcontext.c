@@ -177,7 +177,7 @@ NsOpenSSLContextCreate(char *server, char *name)
 
     Ns_DStringFree(&ds);
 
-    Ns_Log(Debug, "NsOpenSSLContextCreate: sslcontext = (%p)", sslcontext);
+    //Ns_Log(Debug, "NsOpenSSLContextCreate: sslcontext = (%p)", sslcontext);
 
     return sslcontext;
 }
@@ -269,10 +269,10 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
      */
 
     if (sslcontext->role) {
-        Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_server_method(): sslcontext = (%p)", sslcontext);
+        //Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_server_method(): sslcontext = (%p)", sslcontext);
         sslcontext->sslctx = SSL_CTX_new(SSLv23_server_method());
     } else {
-        Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_client_method(): sslcontext = (%p)", sslcontext);
+        //Ns_Log(Debug, "NsOpenSSLContextInit: SSLv23_client_method(): sslcontext = (%p)", sslcontext);
         sslcontext->sslctx = SSL_CTX_new(SSLv23_client_method());
     }
 
@@ -344,7 +344,7 @@ NsOpenSSLContextInit(char *server, NsOpenSSLContext *sslcontext)
 
     sslcontext->initialized = 1;
 
-    Ns_Log(Debug, "NsOpenSSLContextInit: sslcontext = (%p), sslctx = (%p)", sslcontext, sslcontext->sslctx);
+    //Ns_Log(Debug, "NsOpenSSLContextInit: sslcontext = (%p), sslctx = (%p)", sslcontext, sslcontext->sslctx);
 
     return NS_OK;
 }
@@ -1169,7 +1169,7 @@ NsOpenSSLContextTraceSet(char *server, NsOpenSSLContext *sslcontext,
 {
     Ns_MutexLock(&sslcontext->lock);
     sslcontext->trace = trace;
-    Ns_Log(Debug, "*****>>>>> TRACE = (%d)", trace);
+    //Ns_Log(Debug, "*****>>>>> TRACE = (%d)", trace);
     Ns_MutexUnlock(&sslcontext->lock);
 
     return NS_OK;

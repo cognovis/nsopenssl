@@ -336,7 +336,7 @@ LoadSSLContexts(char *server)
         name = Ns_SetKey(defaults, i);
         value = Ns_ConfigGetValue(path, name);
 
-        Ns_Log(Debug, "LoadSSLContexts: default context name = (%s), value = (%s)", name, value); 
+        //Ns_Log(Debug, "LoadSSLContexts: default context name = (%s), value = (%s)", name, value); 
 
         sslcontext = Ns_OpenSSLServerSSLContextGet(server, value);
         if (sslcontext != NULL) {
@@ -938,7 +938,7 @@ LoadSSLDrivers(char *server)
 
         ssldriver = ns_calloc(1, sizeof(NsOpenSSLDriver));
 
-        Ns_Log(Debug, "LoadSSLDrivers: ssldriver = (%p)", ssldriver);
+        //Ns_Log(Debug, "LoadSSLDrivers: ssldriver = (%p)", ssldriver);
 
         ssldriver->server     = server;
         ssldriver->sslcontext = sslcontext;

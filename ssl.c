@@ -152,8 +152,7 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 	sslconn = NULL;
     }
 
-    Ns_Log(Debug, "NsOpenSSLConnCreate: sslconn = (%p), sslcontext = (%p)",
-	    sslconn, sslcontext);
+    //Ns_Log(Debug, "NsOpenSSLConnCreate: sslconn = (%p), sslcontext = (%p)", sslconn, sslcontext);
 
     return sslconn;
 }
@@ -185,14 +184,14 @@ NsOpenSSLConnDestroy(NsOpenSSLConn *sslconn)
     sslconn->refcnt--;
 
     if (sslconn->refcnt > 0) {
-	Ns_Log(Debug, "NsOpenSSLConnDestroy: SSL conn still active: refcnt = (%d), sslconn = (%p)", sslconn->refcnt, sslconn);
+	//Ns_Log(Debug, "NsOpenSSLConnDestroy: SSL conn still active: refcnt = (%d), sslconn = (%p)", sslconn->refcnt, sslconn);
 	return;
     }
 
     if (sslconn == NULL)
 	return;
 
-    Ns_Log(Debug, "NsOpenSSLConnDestroy: sslconn = (%p)", sslconn);
+    //Ns_Log(Debug, "NsOpenSSLConnDestroy: sslconn = (%p)", sslconn);
 
     if (sslconn->ssl != NULL) {
 	/* XXX review these shutdown procedures w/r to SSL_shutdown man page */
@@ -256,9 +255,9 @@ Ns_OpenSSLSockConnect(char *server, char *host, int port, int async, int timeout
     NsOpenSSLConn *sslconn = NULL;
     SOCKET         socket  = INVALID_SOCKET;
 
-    Ns_Log(Debug, "Ns_OpenSSLSockConnect %s %d", host, port);
-    Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext = (%p)", sslcontext);
-    Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext->initialized = (%d)", sslcontext->initialized);
+    //Ns_Log(Debug, "Ns_OpenSSLSockConnect %s %d", host, port);
+    //Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext = (%p)", sslcontext);
+    //Ns_Log(Debug, "Ns_OpenSSLSockConnect: sslcontext->initialized = (%d)", sslcontext->initialized);
 
     if (timeout < 0) {
         socket = Ns_SockConnect(host, port);
@@ -309,7 +308,7 @@ Ns_OpenSSLSockAccept(SOCKET sock, NsOpenSSLContext *sslcontext)
 {
     NsOpenSSLConn *sslconn = NULL;
 
-    Ns_Log(Debug, "Ns_OpenSSLSockAccept: sslcontext = (%p)", sslcontext);
+    //Ns_Log(Debug, "Ns_OpenSSLSockAccept: sslcontext = (%p)", sslcontext);
 
     if (sock == INVALID_SOCKET) {
         Ns_Log(Error, "%s (%s): attempted accept on invalid socket",

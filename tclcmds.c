@@ -194,10 +194,7 @@ NsOpenSSLTclInit(char *server)
 {
     Server *thisServer = NsOpenSSLServerGet(server);
 
-#if 0
-    Ns_Log(Debug, "NsOpenSSLTclInit: thisServer = (%p); thisServer->server = (%s)",
-	    thisServer, thisServer->server);
-#endif
+    //Ns_Log(Debug, "NsOpenSSLTclInit: thisServer = (%p); thisServer->server = (%s)", thisServer, thisServer->server);
 
     Ns_TclInitInterps(server, AddCmds, (void *) thisServer);
 }
@@ -226,9 +223,8 @@ AddCmds(Tcl_Interp *interp, void *arg)
 
     while (cmd->name != NULL) {
 
-#if 0
-        Ns_Log(Debug, "AddCmds: adding (%s)", cmd->name);
-#endif
+        //Ns_Log(Debug, "AddCmds: adding (%s)", cmd->name);
+
         if (cmd->objProc != NULL) {
             Tcl_CreateObjCommand(interp, cmd->name, cmd->objProc, arg, NULL);
         } else {
@@ -342,9 +338,7 @@ NsTclOpenSSLObjCmd(ClientData arg, Tcl_Interp *interp, int objc, Tcl_Obj **objv)
 
         case CProtocolIdx:
 
-#if 0
-            Ns_Log(Debug, "*** sslconn->ssl = (%d)", &sslconn->ssl->session->ssl_version);
-#endif
+            //Ns_Log(Debug, "*** sslconn->ssl = (%d)", &sslconn->ssl->session->ssl_version);
 
             switch (sslconn->ssl->session->ssl_version) {
                 case SSL2_VERSION:
@@ -648,9 +642,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
         return TCL_ERROR;
     }
 
-#if 0
-    Ns_Log(Debug, "NsTclOpenSSLSockOpenObjCmd: sslconn = (%p)", sslconn);
-#endif
+    //Ns_Log(Debug, "NsTclOpenSSLSockOpenObjCmd: sslconn = (%p)", sslconn);
 
     /*
      * Create the Tcl channel that let's us use gets, puts etc. and layer it on
@@ -660,9 +652,7 @@ NsTclOpenSSLSockOpenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
     if (CreateTclChannel(sslconn, interp) != NS_OK) {
         Ns_Log(Warning, "%s: %s: Tcl channel not available",
                 MODULE, sslconn->server);
-#if 0
-        Ns_Log(Debug, "--->>> BEFORE ConnDestroy: SockOpen");
-#endif
+        //Ns_Log(Debug, "--->>> BEFORE ConnDestroy: SockOpen");
         NsOpenSSLConnDestroy(sslconn);
         return TCL_ERROR;
     }
@@ -723,9 +713,7 @@ NsTclOpenSSLSockListenObjCmd(ClientData arg, Tcl_Interp *interp, int objc,
 
     socket = Ns_OpenSSLSockListen(addr, port);
 
-#if 0
-    Ns_Log(Debug, "NsTclOpenSSLSockListenObjCmd: socket = (%d)", socket);
-#endif
+    //Ns_Log(Debug, "NsTclOpenSSLSockListenObjCmd: socket = (%d)", socket);
 
     if (socket == INVALID_SOCKET) {
         Tcl_AppendResult(interp, "could not listen on \"",
@@ -1014,9 +1002,7 @@ NsTclOpenSSLSockCheckCmd(ClientData arg, Tcl_Interp *interp, int argc, char **ar
         goto done;
     }
 
-#if 0
-    Ns_Log(Debug, "#### SOCKET socket = %d", socket);
-#endif
+    //Ns_Log(Debug, "#### SOCKET socket = %d", socket);
 
     if (send(socket, NULL, 0, 0) != 0) {
         interp->result = "0";
@@ -1346,9 +1332,7 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
     // XXX lcbPtr = ns_malloc(sizeof(SockListenCallback) + Tcl_GetCharLength(objv[3]));
     lcbPtr = ns_malloc(sizeof(SockListenCallback));
     lcbPtr->server = thisServer->server;
-#if 0
-    Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: objv[3] = (%s)", Tcl_GetString(objv[3]));
-#endif
+    //Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: objv[3] = (%s)", Tcl_GetString(objv[3]));
     // XXX (security problem?) strcpy(lcbPtr->script, Tcl_GetString(objv[3]));
     lcbPtr->script = strdup(Tcl_GetString(objv[3]));
 
@@ -1368,9 +1352,7 @@ NsTclOpenSSLSockListenCallbackObjCmd(ClientData arg, Tcl_Interp *interp, int obj
     }
 #endif
 
-#if 0
-    Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: sslcontext = (%p)", lcbPtr->sslcontext);
-#endif
+    //Ns_Log(Debug, "NsTclOpenSSLSockListenCallbackCmd: sslcontext = (%p)", lcbPtr->sslcontext);
 
     if (Ns_SockListenCallback(addr, port, SSLSockListenCallbackProc, lcbPtr) != NS_OK) {
         Ns_Log(Error, "NsTclOpenSSLSockListenCallbackCmd: COULD NOT REGISTER CALLBACK");
@@ -1719,9 +1701,9 @@ ChanOutputProc(ClientData arg, char *buf, int towrite,
     int            rc      = 0;
 
     //rc = NsOpenSSLConnSend(sslconn->bio, (void *) buf, towrite);
-    Ns_Log(Debug, "ChanOutputProc: trying puts (%d) bytes", towrite);
+    //Ns_Log(Debug, "ChanOutputProc: trying puts (%d) bytes", towrite);
     rc = NsOpenSSLConnSend(sslconn->ssl, (void *) buf, towrite);
-    Ns_Log(Debug, "ChanOutputProc: actual puts (%d) bytes", rc);
+    //Ns_Log(Debug, "ChanOutputProc: actual puts (%d) bytes", rc);
 
     return rc;
 }
@@ -1755,10 +1737,7 @@ ChanInputProc(ClientData arg, char *buf, int bufSize,
     rc = NsOpenSSLConnRecv(sslconn->ssl, (void *) buf, bufSize);
     //rc = NsOpenSSLConnRecv(sslconn->bio, (void *) buf, bufSize);
 
-#if 0
-    Ns_Log(Debug, "ChanInputProc: gets got (%d) bytes; sslconn = (%p)",
-            rc, sslconn);
-#endif
+    //Ns_Log(Debug, "ChanInputProc: gets got (%d) bytes; sslconn = (%p)", rc, sslconn);
 
     return rc;
 }
@@ -1791,7 +1770,7 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
-    Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
+    //Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
     //Ns_Log(Debug, "--->>> BEFORE ConnDestroy: ChanCloseProc");
     NsOpenSSLConnDestroy(sslconn);
 
@@ -1879,9 +1858,7 @@ ChanGetHandleProc(ClientData arg, int direction, ClientData *handlePtr)
 static void
 ChanWatchProc(ClientData arg, int mask)
 {
-#if 0				/* XXX ChanWatchProc: arg isn't used here yet */
-    NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
-#endif
+    //NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
     return;
 }
