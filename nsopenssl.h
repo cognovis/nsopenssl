@@ -144,6 +144,8 @@ typedef struct Ns_OpenSSLContext {
     int                sessionCacheSize;     /* In bytes */
     int                sessionCacheTimeout;  /* Flush session cache in seconds */
     int                trace;                /* 0 = off; 1 = on */
+    int                bufsize;
+    int                timeout;
     Ns_Mutex           lock;
     SSL_CTX           *sslctx;
 } Ns_OpenSSLContext;
@@ -152,66 +154,54 @@ typedef struct Ns_OpenSSLContext {
  * Used to manage SSL drivers on top of the AOLserver comm driver.
  */
 
-typedef struct SSLDriver {
+typedef struct NsOpenSSLDriver {
     char                     *server;      
     char                     *module;      
     char                     *name;      
     char                     *path;
     struct Ns_Driver         *driver;        /* Driver that this SSL driver is tied to */
-    struct SSLDriver         *next;          /* pointer to next driver */
-    struct Ns_OpenSSLContext *context;       /* SSL context assoc with this driver */ 
+    struct NsOpenSSLDriver     *next;          /* pointer to next driver */
+    struct Ns_OpenSSLContext *sslcontext;    /* SSL context assoc with this driver */ 
     struct Ns_OpenSSLConn    *firstFreeConn; /* List of unused conn structs */ 
     char                     *dir;
-    /* XXX nsd core driver has location, hostname etc. get rid of them here */
-#if 0
-    char                     *location;
-    char                     *hostname;
-    char                     *address;	
-#endif
     SOCKET                    lsock;
     Ns_Mutex                  lock;
     int                       refcnt;        /* Number of conns tied to this driver */
-    /* XXX these are read by Ns_DriverInit directly from config - don't need them here */
-#if 0
-    int                       port;          /* The port this driver listens on */
-    int                       bufsize;
-    int                       timeout;
-#endif
-} SSLDriver;
+} NsOpenSSLDriver;
 
 /*
  * Used for both core-driven and C/Tcl API-driven conns
  */
 
 typedef struct Ns_OpenSSLConn {
-    char                   *server;
-    char                   *module;
-    int                     role;
-    struct SSLDriver       *ssldriver; /* the driver this conn belongs to */
-    struct Ns_OpenSSLConn  *next;      /* next conn */
-    int                     type;      /* server = 0; client = 1 */
-    int                     peerport;  /* port number of remote side */
-    char                    peer[16];  /* peer's name */
-    X509                   *peercert;  /* peer's cert in PEM format */
-    SSL_CTX                *context;   /* XXX SSL context associated with conn */
-    SSL                    *ssl;       /* initialized SSL instance itself */
-    BIO                    *io;        /* block i/o */
-    SOCKET                  sock;
-    SOCKET                  wsock;
-    Ns_Mutex                lock;
-    int                     refcnt;    /* don't ns_free() unless this is 0 */
+    char                     *server;
+    char                     *module;
+    int                       role;
+    struct NsOpenSSLDriver   *ssldriver; /* the driver this conn belongs to */
+    struct Ns_OpenSSLConn    *next;      /* next conn */
+    struct Ns_OpenSSLContext *sslcontext;
+    int                       type;      /* server = 0; client = 1 */
+    int                       peerport;  /* port number of remote side */
+    char                      peer[16];  /* peer's name */
+    X509                     *peercert;  /* peer's cert in PEM format */
+    SSL_CTX                  *sslctx;
+    SSL                      *ssl;       /* initialized SSL instance itself */
+    BIO                      *io;        /* block i/o */
+    SOCKET                    sock;
+    SOCKET                    wsock;
+    Ns_Mutex                  lock;
+    int                       refcnt;    /* don't ns_free() unless this is 0 */
 } Ns_OpenSSLConn;
 
 /*
- * Store per-server information
+ * Store per-virtual server information
  */
 
 typedef struct Server {
     char            *server;
+    Ns_Mutex         lock;
     Tcl_HashTable    sslcontexts;
-    Ns_RWLock        sslcontextslock;
     Tcl_HashTable    ssldrivers;
-    Ns_RWLock        ssldriverslock;
     Ns_OpenSSLConn  *firstSSLConnPtr;
 } Server;
 
@@ -220,10 +210,10 @@ typedef struct Server {
  * XXX what happens when another module loads that wants to do openssl session caching???
  */
 
-typedef struct SessionCacheId {
+typedef struct NsOpenSSLSessionCacheId {
     Ns_Mutex lock;
     int id;
-} SessionCacheId;
+} NsOpenSSLSessionCacheId;
 
 /*
  * Tcl Commands 
@@ -257,8 +247,8 @@ typedef struct SSLTclCmd {
 #define DEFAULT_SESSION_CACHE_SIZE     128
 #define DEFAULT_SESSION_CACHE_TIMEOUT  300
 #define DEFAULT_TRACE                  NS_FALSE
-#define DEFAULT_SOCKTIMEOUT            30
-#define DEFAULT_BUFFERSIZE             16384
+#define DEFAULT_TIMEOUT                30
+#define DEFAULT_BUFFER_SIZE            16384
 #define CONFIG_MODULE_DIR              "ModuleDir"
 #define CONFIG_RANDOM_FILE             "RandomFile"
 #define CONFIG_SEEDBYTES               "SeedBytes"
@@ -271,7 +261,7 @@ typedef struct SSLTclCmd {
  */
 
 extern Ns_OpenSSLConn *NsOpenSSLConnCreate (SOCKET sock, 
-        SSLDriver *ssldriver, int role);
+        NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *sslcontext, int role);
 extern void NsOpenSSLConnDestroy (Ns_OpenSSLConn *sslconn);
 extern int NsOpenSSLFlush (Ns_OpenSSLConn *sslconn);
 extern int NsOpenSSLRecv (Ns_OpenSSLConn *sslconn, void *buffer, int toread);
@@ -326,62 +316,66 @@ extern int Ns_OpenSSLSockListenCallback (char *addr, int port,
 
 extern Ns_OpenSSLContext *Ns_OpenSSLContextCreate (char *server, 
         char *module);
-extern int Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *context);
+extern int Ns_OpenSSLContextDestroy(Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextInit(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextModuleDirSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *moduleDir);
+        Ns_OpenSSLContext *sslcontext, char *moduleDir);
 extern char *Ns_OpenSSLContextModuleDirGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextCertFileSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *certFile);
+        Ns_OpenSSLContext *sslcontext, char *certFile);
 extern char *Ns_OpenSSLContextCertFileGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextKeyFileSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *keyFile);
+        Ns_OpenSSLContext *sslcontext, char *keyFile);
 extern char *Ns_OpenSSLContextKeyFileGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextProtocolsSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *protocols);
+        Ns_OpenSSLContext *sslcontext, char *protocols);
 extern char *Ns_OpenSSLContextProtocolsGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextCipherSuiteSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *cipherSuite);
+        Ns_OpenSSLContext *sslcontext, char *cipherSuite);
 extern char *Ns_OpenSSLContextCipherSuiteGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextCAFileSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *CAFile);
+        Ns_OpenSSLContext *sslcontext, char *CAFile);
 extern char *Ns_OpenSSLContextCAFileGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextCADirSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, char *CADir);
+        Ns_OpenSSLContext *sslcontext, char *CADir);
 extern char *Ns_OpenSSLContextCADirGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextPeerVerifySet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int peerVerify);
+        Ns_OpenSSLContext *sslcontext, int peerVerify);
 extern int Ns_OpenSSLContextPeerVerifyGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextPeerVerifyDepthSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int peerVerifyDepth);
+        Ns_OpenSSLContext *sslcontext, int peerVerifyDepth);
 extern int Ns_OpenSSLContextPeerVerifyDepthGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int NsOpenSSLSessionCacheInit(void);
 extern int Ns_OpenSSLContextSessionCacheSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int sessionCache);
+        Ns_OpenSSLContext *sslcontext, int sessionCache);
 extern int Ns_OpenSSLContextSessionCacheGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextSessionCacheSizeSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int sessionCacheSize);
+        Ns_OpenSSLContext *sslcontext, int sessionCacheSize);
 extern int Ns_OpenSSLContextSessionCacheSizeGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextSessionCacheTimeoutSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int sessionCacheTimeout);
+        Ns_OpenSSLContext *sslcontext, int sessionCacheTimeout);
 extern int Ns_OpenSSLContextSessionCacheTimeoutGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 extern int Ns_OpenSSLContextTraceSet(char *server, char *module, 
-        Ns_OpenSSLContext *context, int trace);
+        Ns_OpenSSLContext *sslcontext, int trace);
 extern int Ns_OpenSSLContextTraceGet(char *server, char *module, 
-        Ns_OpenSSLContext *context);
+        Ns_OpenSSLContext *sslcontext);
 
 
+
+extern int NsOpenSSLModuleInit(char *server, char *module);
+//extern Tcl_HashTable NsOpenSSLVirtualServerTable;
+//extern NsOpenSSLSessionCacheId *nextSessionCacheId;
 

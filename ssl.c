@@ -75,7 +75,7 @@ static int SetNonBlocking (Ns_OpenSSLConn *sslconn, int flag);
  *
  * NsOpenSSLConnCreate --
  *
- *	    Create an SSL connection. The socket has already been accept()ed
+ *	Create an SSL connection. The socket has already been accept()ed
  *      and is ready for reading/writing.
  *
  * Results:
@@ -89,21 +89,17 @@ static int SetNonBlocking (Ns_OpenSSLConn *sslconn, int flag);
  */
 
 Ns_OpenSSLConn *
-NsOpenSSLConnCreate(SOCKET sock, SSLDriver *ssldriver, int role)
+NsOpenSSLConnCreate(SOCKET sock, NsOpenSSLDriver *ssldriver, Ns_OpenSSLContext *sslcontext,
+        int role)
 {
     Ns_OpenSSLConn *sslconn;
 
-    /*
-     * driver will be only be non-NULL when the conn is driven by the core server.
-     */
-
     Ns_Log(Debug, "NsOpenSSLConnCreate: enter");
 
-    sslconn = (Ns_OpenSSLConn *) ns_calloc(1, sizeof(Ns_OpenSSLConn));
-    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 1");
+    sslconn = ns_calloc(1, sizeof(Ns_OpenSSLConn));
     sslconn->role       = role;
-    sslconn->ssldriver  = ssldriver;
-    sslconn->context    = sslconn->ssldriver->context;
+    sslconn->ssldriver  = ssldriver; /* NULL if not driven by AOLserver comm driver */
+    sslconn->sslcontext = sslcontext;
     sslconn->next       = NULL;
     sslconn->ssl        = NULL;
     sslconn->io         = NULL;
@@ -119,16 +115,16 @@ NsOpenSSLConnCreate(SOCKET sock, SSLDriver *ssldriver, int role)
      * Create the SSL struct for a connection.
      */
 
-    sslconn->ssl = SSL_new (sslconn->context);
-
+    sslconn->ssl = SSL_new (sslcontext->sslctx);
     if (sslconn->ssl == NULL) {
         Ns_Log (Error, ": %s: error creating sslconn->ssl structure",
             MODULE, sslconn->server);
         return NS_ERROR;
     }
-
     SSL_clear (sslconn->ssl);
     SSL_set_app_data (sslconn->ssl, sslconn);
+
+    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 3");
 
     if (sslconn->role == ROLE_SERVER) {
     	SSL_set_accept_state (sslconn->ssl);
@@ -136,6 +132,7 @@ NsOpenSSLConnCreate(SOCKET sock, SSLDriver *ssldriver, int role)
     	SSL_set_connect_state (sslconn->ssl);
     }
 
+    Ns_Log(Debug, "NsOpenSSLConnCreate: mid 6");
 
     if (CreateBIOStack (sslconn) == NS_ERROR || RunSSLHandshake (sslconn) == NS_ERROR) {
         SSL_set_shutdown (sslconn->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
@@ -785,6 +782,8 @@ CreateBIOStack (Ns_OpenSSLConn *sslconn)
     BIO *sock_bio;
     BIO *ssl_bio;
 
+    Ns_Log(Notice, "CreateBIOStack: enter");
+
     /*
      * BIO stack:
      *
@@ -809,7 +808,7 @@ CreateBIOStack (Ns_OpenSSLConn *sslconn)
 
     sslconn->io = BIO_new (BIO_f_buffer ());
     /* XXX using core driver's value for bufsize here */
-    if (!BIO_set_write_buffer_size (sslconn->io, sslconn->ssldriver->driver->bufsize)) {
+    if (!BIO_set_write_buffer_size (sslconn->io, sslconn->sslcontext->bufsize)) {
         Ns_Log(Error, "%s: BIO_set_write_buffer_size failed", MODULE);
 	return NS_ERROR;
     }
@@ -881,6 +880,8 @@ RunSSLHandshake (Ns_OpenSSLConn *sslconn)
     //char buffer[256];
     //char *buf = (char *) &buffer;
 
+    Ns_Log(Notice, "RunSSLHandshake: enter");
+
     /* XXX reverse these -- server handshakes happen more often */
     if (sslconn->role == ROLE_SERVER) {
 	    return RunServerSSLHandshake (sslconn);
@@ -934,14 +935,12 @@ RunSSLHandshake (Ns_OpenSSLConn *sslconn)
 static int
 RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
 {
-    int rc;
-    int error;
+    int rc, error, n;
     time_t endtime;
     struct timeval tv;
-    int n;
-    fd_set *wfds;
-    fd_set *rfds;
-    fd_set fds;
+    fd_set *wfds, *rfds, fds;
+
+    Ns_Log(Notice, "RunServerSSLHandshake: enter");
 
     if (SetNonBlocking (sslconn, 1) == NS_ERROR) {
 	Ns_Log (Warning,
@@ -954,6 +953,7 @@ RunServerSSLHandshake (Ns_OpenSSLConn *sslconn)
     endtime = time (NULL) + sslconn->ssldriver->driver->sendwait + 1;
     FD_ZERO (&fds);
 
+    Ns_Log(Notice, "RunServerSSLHandshake: s1");
     while (1) {
 	rc = SSL_accept (sslconn->ssl);
 	if (rc == 1)
