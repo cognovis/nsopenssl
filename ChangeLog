@@ -1,3 +1,10 @@
+2004-02-13  Scott Goodwin  <scott@scottg.net>
+
+      * ssl.c, nsopenssl.h: Added read and write attempt counts; if a conn
+      read or write fails 1,000 in a row, we consider the conn dead and return
+      an error. Hopefully this is a temporary fix until I can identify a
+      better way to resolve this issue in the core server.
+
 2004-01-19  Scott Goodwin  <scott@scottg.net>
 
       * Makefile: added kerberos headers to CFLAGS to resolve issue when

@@ -86,11 +86,14 @@
 #define DEFAULT_TRACE                  NS_FALSE
 #define DEFAULT_TIMEOUT                30
 #define DEFAULT_BUFFER_SIZE            16384
+#define DEFAULT_SEEDBYTES              1024
+#define DEFAULT_MAXBYTES               1024000
+#define DEFAULT_READ_ABORT_COUNT       1000
+#define DEFAULT_WRITE_ABORT_COUNT      1000
+
 #define CONFIG_MODULE_DIR              "ModuleDir"
 #define CONFIG_RANDOM_FILE             "RandomFile"
 #define CONFIG_SEEDBYTES               "SeedBytes"
-#define DEFAULT_SEEDBYTES              1024
-#define DEFAULT_MAXBYTES               1024000
 
 
 /*
@@ -164,6 +167,8 @@ typedef struct NsOpenSSLConn {
     SOCKET                    wsock;
     int                       refcnt;    /* don't ns_free() unless this is 0 */
     int                       timeout;
+    int                       readabortcount;
+    int                       writeabortcount;
     struct NsOpenSSLDriver   *ssldriver; /* the driver this conn belongs to */
 } NsOpenSSLConn;
 

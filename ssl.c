@@ -104,15 +104,17 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
 	return NULL;
     }
 
-    sslconn->server     = sslcontext->server;
-    sslconn->sslcontext = sslcontext;
-    sslconn->wsock      = INVALID_SOCKET;
-    sslconn->ssl        = NULL;
-    sslconn->sslctx     = NULL;
-    sslconn->peerport   = -1;
-    sslconn->socket     = socket;
+    sslconn->server          = sslcontext->server;
+    sslconn->sslcontext      = sslcontext;
+    sslconn->wsock           = INVALID_SOCKET;
+    sslconn->ssl             = NULL;
+    sslconn->sslctx          = NULL;
+    sslconn->peerport        = -1;
+    sslconn->socket          = socket;
     // XXX set wild timeout for now
-    sslconn->timeout    = 200000;
+    sslconn->timeout         = 200000;
+    sslconn->readabortcount  = 0;
+    sslconn->writeabortcount = 0;
 
     /*
      * It's the caller's responsibility to increment the reference count; the
@@ -581,12 +583,32 @@ done:
 extern int
 NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
 {
-    int    rc     = 0;
-    int    total  = 0;
+    int            rc      = 0;
+    int            total   = 0;
+    NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
+
     //SOCKET socket = INVALID_SOCKET;
 
     //socket = SSL_get_fd(ssl);
     //Ns_Log(Debug, "SSLSend(%d): START (towrite = %d)", socket, towrite);
+
+    /*
+     * If client is cut off (as in somebody pulled the cable) which is apt to
+     * happen with dialup users, we can get stuck in a read loop where the core
+     * server keeps calling us to read bytes from a connection that is truly
+     * gone (which is why this test comes before the 'again' label). This ties
+     * up the read thread in an infinite loop that chews up the CPU resource.
+     * To handle this we keep track of failed reads. If they hit a magic
+     * number, we return an error to the server, which then closes the
+     * connection properly.
+     */
+
+    /* XXX make configurable on global server basis */
+    if (sslconn->writeabortcount > DEFAULT_READ_ABORT_COUNT) {
+        Ns_Log(Error, "%s (%s): aborting connection after %d failed writes: user most likely cut off",
+                MODULE, sslconn->server, sslconn->writeabortcount);
+        return NS_ERROR;
+    }
 
     /*
      * We loop until all bytes are written. We can call NsOpenSSLRecv() at any
@@ -597,43 +619,46 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
 again:
     rc = SSL_write(ssl, (char *) buffer, towrite);
     if (rc > 0) {
+        sslconn->writeabortcount = 0;
         /* We don't need to check for SSL errors if we wrote some bytes */
         total += rc;
     } else {
-	switch(SSL_get_error(ssl, rc)) {
-	    case SSL_ERROR_NONE:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_NONE             (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		break;
-	    case SSL_ERROR_WANT_WRITE:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		goto again;
-		break;
-	    case SSL_ERROR_WANT_READ:
-		/* We want to read but socket's nothing to read yet */
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		goto again;
-		break;
-	    case SSL_ERROR_WANT_X509_LOOKUP:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_X509_LOOKUP (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		SSL_renegotiate(ssl);
-		SSL_write(ssl, NULL, 0);
-		goto again;
-		break;
-	    case SSL_ERROR_SYSCALL:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		// XXX should check for invalid socket here ?
-		break;
-	    case SSL_ERROR_SSL:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		// XXX should check for invalid socket here ?
-		break;
-	    case SSL_ERROR_ZERO_RETURN:
-		//Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		break;
-	    default:
-		//Ns_Log(Debug, "SSLSend(%d): FALLTHROUGH (error)        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
-		break;
-	}
+        sslconn->writeabortcount += 1;
+        //Ns_Log(Debug, "SSLSend(%d): (towrite = %d; total = %d; rc = %d; writeabortcount = %d)", socket, towrite, total, rc, sslconn->writeabortcount);
+        switch(SSL_get_error(ssl, rc)) {
+            case SSL_ERROR_NONE:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_NONE             (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                break;
+            case SSL_ERROR_WANT_WRITE:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_WRITE       (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                goto again;
+                break;
+            case SSL_ERROR_WANT_READ:
+                /* We want to read but socket's nothing to read yet */
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_READ        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                goto again;
+                break;
+            case SSL_ERROR_WANT_X509_LOOKUP:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_WANT_X509_LOOKUP (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                SSL_renegotiate(ssl);
+                SSL_write(ssl, NULL, 0);
+                goto again;
+                break;
+            case SSL_ERROR_SYSCALL:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_SYSCALL          (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                // XXX should check for invalid socket here ?
+                break;
+            case SSL_ERROR_SSL:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                // XXX should check for invalid socket here ?
+                break;
+            case SSL_ERROR_ZERO_RETURN:
+                //Ns_Log(Debug, "SSLSend(%d): SSL_ERROR_ZERO_RETURN      (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                break;
+            default:
+                //Ns_Log(Debug, "SSLSend(%d): FALLTHROUGH (error)        (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                break;
+        }
     }
 
     return total;
@@ -660,56 +685,77 @@ again:
 extern int
 NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
 {
-    int    rc      = 0;
-    int    total   = 0;
-    //SOCKET socket  = INVALID_SOCKET;
+    int            rc      = 0;
+    int            total   = 0;
+    NsOpenSSLConn *sslconn = SSL_get_app_data(ssl);
 
-    //socket = SSL_get_fd(ssl);
+    SOCKET socket  = INVALID_SOCKET;
 
-    //Ns_Log(Debug, "SSLRecv(%d): START: toread = %d", socket, toread);
+    socket = SSL_get_fd(ssl);
+
+    Ns_Log(Debug, "SSLRecv(%d): START: toread = %d", socket, toread);
+
+    /*
+     * If client is cut off (as in somebody pulled the cable) which is apt to
+     * happen with dialup users, we can get stuck in a read loop where the core
+     * server keeps calling us to read bytes from a connection that is truly
+     * gone (which is why this test comes before the 'again' label). This ties
+     * up the read thread in an infinite loop that chews up the CPU resource.
+     * To handle this we keep track of failed reads. If they hit a magic
+     * number, we return an error to the server, which then closes the
+     * connection properly.
+     */
+
+    /* XXX make configurable on global server basis */
+    if (sslconn->readabortcount > DEFAULT_READ_ABORT_COUNT) {
+        Ns_Log(Error, "%s (%s): aborting connection after %d failed reads: user most likely cut off",
+                MODULE, sslconn->server, sslconn->readabortcount);
+        return NS_ERROR;
+    }
 
 again:
-    //Ns_Log(Debug, "SSLRecv(%d): SSL_pending = %d            (toread = %d; total = %d; rc = %d)", socket, pending, toread, total, rc);
     rc = SSL_read(ssl, (char *) buffer, toread);
     if (rc > 0) {
+        sslconn->readabortcount = 0;
         total += rc;
-        /* We don't need to check for SSL errors if we read some bytes */
     } else {
-	switch(SSL_get_error(ssl, rc)) {
-	    case SSL_ERROR_NONE:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		break;
-	    case SSL_ERROR_WANT_WRITE:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		goto again;
-		break;
-	    case SSL_ERROR_WANT_READ:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		//sleep(3);
-		goto again;
-		//Ns_Fatal("Quit");
-		break;
-	    case SSL_ERROR_WANT_X509_LOOKUP:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		goto again;
-		break;
-		//SSL_renegotiate(ssl);
-		//SSL_write(ssl, NULL, 0);
-		//goto again;
-	    case SSL_ERROR_SYSCALL:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		break;
-	    case SSL_ERROR_SSL:
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		break;
-	    case SSL_ERROR_ZERO_RETURN:
-		// XXX ??? socket was closed by client?
-		//Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		break;
-	    default:
-		//Ns_Log(Debug, "SSLRecv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
-		break;
-	}
+        sslconn->readabortcount += 1;
+        //Ns_Log(Debug, "SSLRecv(%d): (toread = %d; total = %d; rc = %d; readabortcount = %d)", socket, toread, total, rc, sslconn->readabortcount);
+        switch(SSL_get_error(ssl, rc)) {
+            case SSL_ERROR_NONE:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                break;
+            case SSL_ERROR_WANT_WRITE:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_WRITE        (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                goto again;
+                break;
+            case SSL_ERROR_WANT_READ:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_READ         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                //sleep(3);
+                goto again;
+                //Ns_Fatal("Quit");
+                break;
+            case SSL_ERROR_WANT_X509_LOOKUP:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_WANT_X509_LOOKUP  (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                goto again;
+                break;
+                //SSL_renegotiate(ssl);
+                //SSL_write(ssl, NULL, 0);
+                //goto again;
+            case SSL_ERROR_SYSCALL:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_SYSCALL           (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                break;
+            case SSL_ERROR_SSL:
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                break;
+            case SSL_ERROR_ZERO_RETURN:
+                // XXX ??? socket was closed by client?
+                //Ns_Log(Debug, "SSLRecv(%d): SSL_ERROR_ZERO_RETURN       (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                break;
+            default:
+                //Ns_Log(Debug, "SSLRecv(%d): FALLTHROUGH (error)         (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                break;
+        }
     }
 
     return total;
@@ -786,7 +832,6 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
 	if (rc == 1) {
 	    return NS_OK;
 	} else {
-
 	    switch(SSL_get_error(sslconn->ssl, rc)) {
 		case SSL_ERROR_NONE:
 		    //Ns_Log(Debug, "SSLHandshake(%d): SSL_ERROR_NONE             (rc = %d)", socket, rc);
