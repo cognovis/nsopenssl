@@ -28,9 +28,21 @@ Compiling the code
 
 To compile this code, just type:
 
+gmake OPENSSL=/usr/local/ssl
+
+or:
+
 export OPENSSL=/usr/local/ssl
 gmake
 gmake install INST=/usr/local/aolserver
+
+To compile with BSAFE make sure your OpenSSL library has been compiled
+with BSAFE, and type:
+
+gmake OPENSSL=/usr/local/openssl-bsafe BSAFE=/path/to/bsafe
+
+(for more information on how to compile with BSAFE, see
+http://scottg.net/aolserver).
 
 To test the server, put the sample configuration from nsd.tcl into
 your server's nsd.tcl, copy the sample *.pem files to
