@@ -642,7 +642,7 @@ NsOpenSSLConnSend(SSL *ssl, const void *buffer, int towrite)
                 break;
 
             case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
+                //Ns_Log(Debug, "Send(%d): SSL_ERROR_SSL              (towrite = %d; total = %d; rc = %d)", socket, total, towrite, rc);
                 // XXX should check for invalid socket here ?
                 break;
 
@@ -754,7 +754,7 @@ NsOpenSSLConnRecv(SSL *ssl, void *buffer, int toread)
                     break;
 
                 case SSL_ERROR_SSL:
-                    Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
+                    //Ns_Log(Debug, "Recv(%d): SSL_ERROR_SSL               (toread = %d; total = %d; rc = %d)", socket, toread, total, rc);
                     return -1;
                     break;
 
@@ -880,7 +880,7 @@ NsOpenSSLConnHandshake(NsOpenSSLConn *sslconn)
                 break;
 
             case SSL_ERROR_SSL:
-                Ns_Log(Debug, "Handshake(%d): SSL_ERROR_SSL              (rc = %d)", socket, rc);
+                //Ns_Log(Debug, "Handshake(%d): SSL_ERROR_SSL              (rc = %d)", socket, rc);
                 return NS_ERROR;
                 break;
 

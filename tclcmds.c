@@ -1766,7 +1766,7 @@ ChanCloseProc(ClientData arg, Tcl_Interp *interp)
 {
     NsOpenSSLConn *sslconn = (NsOpenSSLConn *) arg;
 
-    Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
+    //Ns_Log(Debug, "ChanCloseProc: enter: sslconn = (%p)", sslconn);
     //Ns_Log(Debug, "--->>> BEFORE ConnDestroy: ChanCloseProc");
     Tcl_UnregisterChannel(interp, sslconn->readchan);
     Tcl_UnregisterChannel(interp, sslconn->writechan);
