@@ -74,6 +74,8 @@
 #define CONFIG_CLIENTVERIFY         "ClientVerify"
 #define DEFAULT_CLIENTVERIFY        NS_FALSE
 
+#define CONFIG_RANDOMFILE           "RandomFile"
+
 char *ConfigStringDefault(char *module, char *path, char *name,
     char *def);
 int ConfigBoolDefault(char *module, char *path, char *name,

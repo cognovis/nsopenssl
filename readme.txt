@@ -1,4 +1,3 @@
-
 $Header$
 
 
@@ -8,8 +7,9 @@ SSLv2, SSLv3, TLSv1 Module
 This software is now production-quality. I have load-tested it under
 RedHat 6.x and Debian 2.2 Linux. 
 
-This module *REQUIRES* OpenSSL 0.9.6.
+This module *REQUIRES* OpenSSL 0.9.6 or higher.
 This module also *REQUIRES* that you use nsd8x, not nsd76
+
 
 Feature Highlights
 ------------------
@@ -65,23 +65,10 @@ company are included for testing purposes. Do not use these on a real
 server -- they are for testing only.
 
 
-Compiling nsopenssl with OpenSSL+BSAFE:
----------------------------------------
-
-To compile with RSA's BSAFE Crypto-C libarary, simply make sure your
-OpenSSL library has been compiled with BSAFE, and add another make
-option:
-
-gmake OPENSSL=/usr/local/openssl-bsafe BSAFE=/path/to/bsafe
-
-For more information on how to compile with BSAFE, see
-http://scottg.net.
-
-
 Development Environment
 -----------------------
 
-The code was developed under RedHat 6.2 with OpenSSL 0.9.5a. It will
+The code was developed under Debian 2.2 with OpenSSL 0.9.6. It will
 probably run without too many problems on different flavors of UNIX.
 
 You can see debug output by putting the server itself in debug
@@ -116,13 +103,14 @@ ns_param Protocol                 All
 #ns_param Protocol                 SSLv3
 #ns_param Protocol                 TLSv1
 #ns_param CipherSuite              "ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
-#ns_param SessionCache		  true
+#ns_param SessionCache		   false
 #ns_param SessionCacheSize         512
 #ns_param SessionCacheTimeout      300
 ns_param ClientVerify             true
 ns_param CADir                    ca
 ns_param CAFile                   ca.pem 
 ns_param Trace                    false
+ns_param RandomFile               /some/file
 
 # NOT IMPLEMENTED YET:
 #ns_param VerifyDepth            3
@@ -136,16 +124,19 @@ ns_param nsopenssl    ${bindir}/nsopenssl.${ext}
 Configuration Notes
 -------------------
 
-The cache is disabled by default. This code was modeled on mod_ssl's
-cache. The reason mod_ssl needs it is because the Apache children
-don't share one SSL_CTX. Since nsd threads do share one SSL_CTX, and
-the SSL_CTX has its own session cache anyway, there's no point in
-building our own in this way.
+Session caching enabled by default.
 
-If the client sends an invalid certificate, the connection is still
-accepted. Use 'ns_openssl clientcert valid' in your Tcl code or ADP
+RandomFile isn't necessary, but if you want to use your own random
+bits, you can set this. On Linux, it won't matter: OpenSSL will use
+/dev/urandom to transparently seed the PRNG.
+
+WARNING!!! If the client sends an invalid certificate, the connection
+is still accepted. Use 'ns_openssl clientcert valid' in your Tcl code or ADP
 page to determine if you received a client certificate and if it was
 valid.
+
+NOTE: Your key.pem file must *not* be protected by a passphrase or the server
+won't start.
 
 
 Tcl Interface Commands
@@ -154,6 +145,18 @@ Tcl Interface Commands
 ns_openssl info
   - returns a Tcl list containing the SSL libary name, SSL library version,
     Crypto library name, Crypto library version.
+
+ns_openssl protocol
+  - returns the protocol used by the current connection as a string: 
+    SSLv2, SSLv3, TLSv1 or UNKNOWN
+
+ns_openssl cipher name
+  - returns the name of the cipher being used by the current connection
+    (e.g. RSA_MD5)
+
+ns_openssl cipher strength
+  - returns the strength of the cipher being used by the current connection
+    as a number (e.g. 40, 56, 128 etc.)
 
 ns_openssl clientcert exists
   - returns 0 if no client certificate exists, or a 1 if a client

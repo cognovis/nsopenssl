@@ -16,8 +16,9 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 1999 Stefan Arentz.
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
+ * Copyright (C) 1999 Stefan Arentz.
  *
  * Alternatively, the contents of this file may be used under the terms
  * of the GNU General Public License (the "GPL"), in which case the
@@ -129,7 +130,7 @@ ConfigIntDefault(char *module, char *path, char *name, int def)
  *       it one (relative to the specified directory).
  *
  * Results:
- *       Config value as a string.
+ *       Config value as a string. The default can be NULL.
  *
  * Side effects:
  *       Caller is responsible for freeing the returned value (unlike
@@ -145,9 +146,19 @@ ConfigPathDefault(char *module, char *path, char *name, char *dir, char *def)
     Ns_DString  ds;
 
     value = Ns_ConfigGetValue(path, name);
+#if 0
     if (value == NULL) {
 	value = def;
     }
+#endif
+#if 1
+    if (value == NULL) {
+        if (def == NULL) {
+            return value;
+        }
+	value = def;
+    }
+#endif
 
     if (Ns_PathIsAbsolute(value)) {
 	value = ns_strdup(value);

@@ -24,6 +24,22 @@
 %>
 </td></tr>
 
+<tr><td><font color=red>ns_openssl info</font></td><td>
+<%=[ns_openssl info]%>
+</td></tr>
+
+<tr><td><font color=red>ns_openssl protocol</font></td><td>
+<%=[ns_openssl protocol]%>
+</td></tr>
+
+<tr><td><font color=red>ns_openssl cipher name</font></td><td>
+<%=[ns_openssl cipher name]%>
+</td></tr>
+
+<tr><td><font color=red>ns_openssl cipher strength</font></td><td>
+<%=[ns_openssl cipher strength]%>
+</td></tr>
+
 <tr><td><font color=red>ns_openssl clientcert valid</font></td><td>
 <%
   if {[ns_openssl clientcert valid]} {
@@ -32,10 +48,6 @@
         ns_puts "Client cert is NOT valid"
   }
 %>
-</td></tr>
-
-<tr><td><font color=red>ns_openssl info</font></td><td>
-<%=[ns_openssl info]%>
 </td></tr>
 
 <tr><td><font color=red>ns_openssl clientcert version</font></td><td>

@@ -35,6 +35,7 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
 #ifdef closesocket
@@ -82,7 +83,7 @@ typedef struct NsOpenSSLDriver {
 
     SSL_CTX         *context;
 
-    Ns_Cache        *sessionCache;
+    char            *randomFile;   /* Used to seed PRNG */
 } NsOpenSSLDriver;
 
 typedef struct NsOpenSSLConnection {

@@ -24,6 +24,7 @@ ns_param ClientVerify             true
 ns_param CADir                    ca
 ns_param CAFile                   ca.pem
 ns_param Trace                    false
+ns_param RandomFile               /some/file
 
 ns_section "ns/server/${servername}/modules"
 ns_param nsopenssl    ${bindir}/nsopenssl${ext}

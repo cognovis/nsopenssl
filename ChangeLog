@@ -1,3 +1,36 @@
+2001-04-30  Scott S. Goodwin  <scott@scottg.net>
+
+	* nsd.tcl: added ns_param RandomFile.
+	
+	* 40-bit export browsers now work!!! The recent changes you see
+	were to fix problems with 40-bit export browsers, which could not
+	connect when your server certificate had 1024 public key (which
+	most if not all server certs do).
+
+	* TODO: added link to nsopenssl release info on my site.
+
+	* tclcmds.c, test.adp: Added new Tcl commands to report protocol
+	and cipher name, strength:
+
+	   ns_openssl protocol
+	   ns_openssl cipher name
+	   ns_openssl cipher strength
+
+	* init.c: initialized sdPtr->randomFile from the RandomFile
+	nsd.tcl parameter in NsOpenSSLCreateDriver(). Added
+	AddEntropyFromRandomFile(), PRNGIsSeeded(), SeedPRNG() and
+	IssueTmpRSAKey().
+
+	* config.h: added CONFIG_RANDOM parameter; uses "RandomFile" in
+	nsd.tcl to allow you to specify a file to use as a source of
+	random bits for seeding the PRNG.
+
+	* config.c: modified ConfigPathDefault to allow NULL as a default.
+
+	* nsopenssl.h: removed Ns_Cache pointer from nsopenssl driver
+	structure. Added pointer to file specified with the RandomFile
+	parameter.
+
 2001-04-17  scottg  <scott@scottg.net>
 
 	* TODO: Updated.

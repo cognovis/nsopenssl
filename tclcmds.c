@@ -16,7 +16,7 @@
  * Inc. Portions created by AOL are Copyright (C) 1999 America Online,
  * Inc. All Rights Reserved.
  *
- * Copyright (C) 2000 Scott S. Goodwin
+ * Copyright (C) 2000-2001 Scott S. Goodwin
  * Copyright (C) 2000 Rob Mayoff
  *
  * Alternatively, the contents of this file may be used under the terms
@@ -96,7 +96,9 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 {
     NsOpenSSLConnection *scPtr;
     X509                *clientcert;
+    SSL_CIPHER          *cipher;
     char                *string;
+    int                  integer;
     int                  status;
 
     if (argc < 2) {
@@ -107,6 +109,8 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 	status = TCL_OK;
     }
 
+    scPtr = NsOpenSSLGetConn(interp);
+
     if (STREQ (argv[1], "info")) {
 
 	Tcl_AppendElement(interp, SSL_LIBRARY_NAME);
@@ -114,9 +118,50 @@ NsOpenSSLCmd(ClientData dummy, Tcl_Interp * interp, int argc,
 	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_NAME);
 	Tcl_AppendElement(interp, SSL_CRYPTO_LIBRARY_VERSION);
 
+    } else if (STREQ(argv[1], "protocol")) {
+
+        switch(scPtr->ssl->session->ssl_version) {
+            case SSL2_VERSION:
+                string="SSLv2"; break;
+            case SSL3_VERSION:
+                string="SSLv3"; break;
+            case TLS1_VERSION:
+                string="TLSv1"; break;
+            default:
+                string="UNKNOWN";
+        }
+
+        Tcl_SetResult(interp, string, TCL_VOLATILE);
+
+    } else if (STREQ(argv[1], "cipher")) {
+
+        cipher = SSL_get_current_cipher(scPtr->ssl);
+
+	if (STREQ(argv[2], "name")) {
+
+	    if (argc != 3) {
+		Tcl_AppendResult (interp, "wrong # args:  should be \"",
+				  argv[0], argv[1], " name\"", NULL);
+		status = TCL_ERROR;
+
+	    } else {
+                string = (scPtr->ssl != NULL ? (char *)SSL_CIPHER_get_name(cipher) : NULL);
+                Tcl_SetResult(interp, string, TCL_VOLATILE);
+	    }
+        } else if (STREQ(argv[2], "strength")) { 
+
+            if (argc != 3) {
+                Tcl_AppendResult (interp, "wrong # args:  should be \"",
+                                  argv[0], argv[1], " strength\"", NULL);
+                status = TCL_ERROR;
+            } else {
+                integer = SSL_CIPHER_get_bits(cipher, &integer);
+		sprintf(interp->result, "%d", integer); 
+            }
+        }
+
     } else if (STREQ(argv[1], "clientcert")) {
 
-	scPtr = NsOpenSSLGetConn(interp);
 	clientcert = (scPtr == NULL) ? NULL : scPtr->clientcert;
 
 	if (STREQ(argv[2], "exists")) {
