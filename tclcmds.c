@@ -1244,7 +1244,7 @@ NsOpenSSLGetConn (Tcl_Interp * interp)
     conn = Ns_TclGetConn (interp);
     if (conn != NULL) {
 	name = Ns_ConnDriverName (conn);
-	if (name != NULL && STREQ (name, MODULE_NAME)) {
+	if (name != NULL && STREQ (name, MODULE)) {
 	    return (Ns_OpenSSLConn *) Ns_ConnDriverContext (conn);
 	}
     }

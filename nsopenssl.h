@@ -64,15 +64,19 @@
 #undef closesocket
 #endif
 
-#define OPENSSL_THREAD_DEFINES
-#ifndef THREADS
-#error "OpenSSL was not compiled with thread support!"
-#endif
-
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
+
+/* Doesn't work
+ * include <openssl/opensslconf.h>
+ * 
+ * define OPENSSL_THREAD_DEFINES
+ * ifndef THREADS
+ * error "OpenSSL was not compiled with thread support!"
+ * endif
+ */
 
 #ifdef NS_MAJOR_VERSION
 #define AOLSERVER_4
@@ -80,7 +84,7 @@
 #define AOLSERVER_3
 #endif
 
-#define MODULE_NAME                   "nsopenssl"
+#define MODULE                   "nsopenssl"
 
 /*
  * It is possible to have the encryption library be different
@@ -119,16 +123,12 @@
  * refcnt > 0 and NsOpenSSLContextInit is called, nothing happens.
  */
 
-struct Ns_OpenSSLConn;
-struct Ns_OpenSSLContext;
-struct NsOpenSSLDriver;
-
 typedef struct Ns_OpenSSLContext {
     Ns_Mutex           lock;
     int                refcnt; 
     char              *server; 
     char              *module;
-    Ns_OpenSSLContext *next;
+    struct Ns_OpenSSLContext *next;
     int                conntype;
     char              *name;
     char              *desc;
@@ -157,10 +157,10 @@ typedef struct NsOpenSSLDriver {
     int                refcnt;
     char              *server;      
     char              *module;      
-    NsOpenSSLDriver   *next;       
-    Ns_OpenSSLConn    *firstFree;  
-    Ns_OpenSSLContext *context; 
-    Ns_Driver         *driver;
+    struct NsOpenSSLDriver   *next;       
+    struct Ns_OpenSSLConn    *firstFree;  
+    struct Ns_OpenSSLContext *context; 
+    struct Ns_Driver         *driver;
     char              *configPath;
     char              *dir;
     char              *location;
@@ -178,8 +178,8 @@ typedef struct Ns_OpenSSLConn {
     int              refcnt;
     char            *server;
     char            *module;
-    Ns_OpenSSLConn  *next;
-    NsOpenSSLDriver *driver;
+    struct Ns_OpenSSLConn  *next;
+    struct NsOpenSSLDriver *driver;
     int              conntype;
     int              peerport;
     char             peer[16];

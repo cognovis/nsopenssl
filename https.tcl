@@ -74,7 +74,7 @@ proc ns_httpsopen {method url {rqset ""} {timeout 30} {pdata ""} {module ""}} {
 	    set host "https://[ns_config ns/server/[ns_info server]/module/$module ServerAddress]"
 	} else {
 	    ns_log error "ns_httpsopen: you need to set ServerLocation, \
-ServerHostname or ServerAddress in the configuration file for nsopenssl"
+               ServerHostname or ServerAddress in the configuration file for nsopenssl"
 	}
         set port [ns_config ns/server/[ns_info server]/module/$module ServerPort]   
         if { $port != 443 } {

@@ -137,7 +137,7 @@ NsOpenSSLCreateConn (SOCKET sock, NsOpenSSLDriver * driver, int role, int connty
 	} else {
 	    Ns_Log (Debug, "NsOpenSSLCreateConn -- 4.1.3");
 	    Ns_Log(Error, "%s: Invalid conntype; should be SSL sock or SSL nsd",
-		   MODULE_NAME);
+		   MODULE);
 	}
 	break;
     case ROLE_SSL_CLIENT:
@@ -148,7 +148,7 @@ NsOpenSSLCreateConn (SOCKET sock, NsOpenSSLDriver * driver, int role, int connty
     default:
 	Ns_Log (Debug, "NsOpenSSLCreateConn -- 4.3");
 	Ns_Log(Error, "%s: Invalid role; should be SSL client or SSL server",
-	       MODULE_NAME);
+	       MODULE);
     }
 
     if (CreateSSL (conn) == NS_ERROR
