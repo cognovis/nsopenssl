@@ -191,7 +191,7 @@ SockStart(char *server, char *label, void **drvDataPtr)
 
     sdPtr->lsock = Ns_SockListen(sdPtr->bindaddr, sdPtr->port);
     if (sdPtr->lsock == INVALID_SOCKET) {
-	Ns_Log(Error, "%s: could not listen on %s:%d: %s",
+	Ns_Fatal("%s: could not listen on %s:%d: %s",
 	    sdPtr->module, sdPtr->address ? sdPtr->address : "*",
 	    sdPtr->port, ns_sockstrerror(ns_sockerrno));
 	return NS_ERROR;

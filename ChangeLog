@@ -1,3 +1,14 @@
+2000-12-12  root  <scott@>
+
+	* nsopenssl.c: made it a fatal error to bind to a socket already
+	in use. What sometimes happens is someone will forget to take out
+	nsssl at startup and it'll bind to the https socket
+	first. nsopenssl would just log the error but most people would
+	assume it was working since they could connect via SSL.
+
+	* sock.c: somehow this file was left lying around. All of these
+	functions are in nsopenssl.c, so I removed sock.c.
+
 2000-11-18  root  <scott@>
 
 	* nsopenssl.h: changed library version to 0.9.6. Gotta find a way
