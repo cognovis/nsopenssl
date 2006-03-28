@@ -1870,7 +1870,7 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
     char          *alertType       = NULL;
     char          *alertDescPrefix = NULL;
     char          *alertDesc       = NULL;
-    struct timeval previoustime;
+    struct Tcl_Time previoustime;
     unsigned long  seconds;
     unsigned long  microseconds;
 
@@ -1888,13 +1888,13 @@ OpenSSLTrace(SSL *ssl, int where, int rc)
     previoustime = sslconn->timer;
 
     /* Update the timer */
-    gettimeofday(&sslconn->timer, NULL);
+    Tcl_GetTime(&sslconn->timer);
 
     /* Find the difference in seconds */
-    seconds = sslconn->timer.tv_sec - previoustime.tv_sec;
+    seconds = sslconn->timer.sec - previoustime.sec;
 
     /* Find the difference in microseconds */
-    microseconds = sslconn->timer.tv_usec - previoustime.tv_usec;
+    microseconds = sslconn->timer.usec - previoustime.usec;
 
     /* Convert the difference in seconds to microseconds and add */
     microseconds = microseconds + (seconds * 1000000);

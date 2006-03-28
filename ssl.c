@@ -40,7 +40,11 @@ static const char *RCSID =
 #endif
 
 #include "nsopenssl.h"
+#ifdef _WIN32
+/* Appear not to need <winsock2.h> here. */
+#else
 #include <netinet/tcp.h>
+#endif
 
 /* XXX put into defaults.h */
 #define BUFSIZE 2048
@@ -127,7 +131,7 @@ NsOpenSSLConnCreate(SOCKET socket, NsOpenSSLContext *sslcontext)
     sslconn->refcnt     = 0;
 
     /* It's GMT, but we use this to do time diffs */
-    gettimeofday(&sslconn->timer, NULL);
+    Tcl_GetTime(&sslconn->timer);
 
     /*
      * Instantiate the SSL structure from the sslcontext.

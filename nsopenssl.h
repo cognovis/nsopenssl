@@ -148,7 +148,7 @@ typedef struct NsOpenSSLConn {
     int                       sendwait;
     int                       recvwait;
     int                       type;      /* CORE or TCLAPI */
-    struct timeval            timer;      /* for performance measurement */
+    struct Tcl_Time           timer;     /* for performance measurement */
     struct Ns_Driver         *driver;    /* the core sock driver this conn belongs to */
     struct NsOpenSSLDriver   *ssldriver; /* the SSL driver this conn belongs to */
 
