@@ -59,7 +59,7 @@ static NsOpenSSLContext *LoadSSLContext(char *server, char *name);
 static int      InitSSLDriver(char *server, NsOpenSSLDriver *ssldriver);
 static void     LoadSSLDrivers(char *server);
 
-int Ns_ModuleVersion = 1;
+NS_EXPORT int Ns_ModuleVersion = 1;
 
 
 /*
@@ -77,7 +77,7 @@ int Ns_ModuleVersion = 1;
  *----------------------------------------------------------------------
  */
 
-int
+NS_EXPORT int
 Ns_ModuleInit(char *server, char *module)
 {
     static int  initialized = NS_FALSE;
